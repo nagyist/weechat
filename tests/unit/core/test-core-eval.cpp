@@ -1,7 +1,7 @@
 /*
  * test-core-eval.cpp - test evaluation functions
  *
- * Copyright (C) 2014-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2014-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -26,13 +26,14 @@ extern "C"
 #include <stdio.h>
 #include <string.h>
 #include <regex.h>
-#include "src/core/wee-eval.h"
-#include "src/core/wee-config.h"
-#include "src/core/wee-config-file.h"
-#include "src/core/wee-hashtable.h"
-#include "src/core/wee-secure.h"
-#include "src/core/wee-string.h"
-#include "src/core/wee-version.h"
+#include <time.h>
+#include "src/core/core-eval.h"
+#include "src/core/core-config.h"
+#include "src/core/core-config-file.h"
+#include "src/core/core-hashtable.h"
+#include "src/core/core-secure.h"
+#include "src/core/core-string.h"
+#include "src/core/core-version.h"
 #include "src/gui/gui-buffer.h"
 #include "src/gui/gui-line.h"
 #include "src/gui/gui-color.h"
@@ -97,7 +98,7 @@ TEST(CoreEval, EvalCondition)
     CHECK(options);
     hashtable_set (options, "type", "condition");
 
-    POINTERS_EQUAL(NULL, eval_expression (NULL, NULL, NULL, options));
+    STRCMP_EQUAL(NULL, eval_expression (NULL, NULL, NULL, options));
 
     /* conditions evaluated as false */
     WEE_CHECK_EVAL("0", "");
@@ -453,8 +454,11 @@ TEST(CoreEval, EvalExpression)
 {
     struct t_hashtable *pointers, *extra_vars, *options;
     struct t_config_option *ptr_option;
-    char *value, str_value[256], str_expr[256];
+    struct t_gui_buffer *test_buffer;
+    char *value, str_value[256], str_expr[256], *error;
     const char *ptr_debug_output;
+    long number;
+    time_t time_now;
 
     pointers = hashtable_new (32,
                               WEECHAT_HASHTABLE_STRING,
@@ -478,7 +482,7 @@ TEST(CoreEval, EvalExpression)
                              NULL, NULL);
     CHECK(options);
 
-    POINTERS_EQUAL(NULL, eval_expression (NULL, NULL, NULL, NULL));
+    STRCMP_EQUAL(NULL, eval_expression (NULL, NULL, NULL, NULL));
 
     /* test with simple strings */
     WEE_CHECK_EVAL("", "");
@@ -489,11 +493,88 @@ TEST(CoreEval, EvalExpression)
     WEE_CHECK_EVAL("", "${}");
     WEE_CHECK_EVAL("", "${xyz}");
 
+    /* test raw string with syntax highlighting */
+    WEE_CHECK_EVAL("", "${raw_hl:}");
+    WEE_CHECK_EVAL("test", "${raw_hl:test}");
+    WEE_CHECK_EVAL("\\${", "${raw_hl:\\${");
+    snprintf (str_value, sizeof (str_value),
+              "%s${info:version}%s",
+              gui_color_get_custom (config_eval_syntax_colors[0]),
+              gui_color_get_custom ("reset"));
+    WEE_CHECK_EVAL(str_value, "${raw_hl:${info:version}}");
+    snprintf (str_value, sizeof (str_value),
+              "test_%s${info:version}%s_end",
+              gui_color_get_custom (config_eval_syntax_colors[0]),
+              gui_color_get_custom ("reset"));
+    WEE_CHECK_EVAL(str_value, "test_${raw_hl:${info:version}}_end");
+    snprintf (str_value, sizeof (str_value),
+              "test_%s${cut:3,,%s${rev:%s${info:version}%s}%s}%s_end",
+              gui_color_get_custom (config_eval_syntax_colors[0]),
+              gui_color_get_custom (config_eval_syntax_colors[1]),
+              gui_color_get_custom (config_eval_syntax_colors[2]),
+              gui_color_get_custom (config_eval_syntax_colors[1]),
+              gui_color_get_custom (config_eval_syntax_colors[0]),
+              gui_color_get_custom ("reset"));
+    WEE_CHECK_EVAL(str_value, "test_${raw_hl:${cut:3,,${rev:${info:version}}}}_end");
+    snprintf (str_value, sizeof (str_value),
+              "test_%s${raw:${test}}%s_end",
+              gui_color_get_custom (config_eval_syntax_colors[0]),
+              gui_color_get_custom ("reset"));
+    WEE_CHECK_EVAL(str_value, "test_${raw_hl:${raw:${test}}}_end");
+    snprintf (str_value, sizeof (str_value),
+              "test_%s${if:a==1?%s${yes}%s:%s${no}%s}%s_end",
+              gui_color_get_custom (config_eval_syntax_colors[0]),
+              gui_color_get_custom (config_eval_syntax_colors[1]),
+              gui_color_get_custom (config_eval_syntax_colors[0]),
+              gui_color_get_custom (config_eval_syntax_colors[1]),
+              gui_color_get_custom (config_eval_syntax_colors[0]),
+              gui_color_get_custom ("reset"));
+    WEE_CHECK_EVAL(str_value, "test_${raw_hl:${if:a==1?${yes}:${no}}}_end");
+    snprintf (str_value, sizeof (str_value),
+              "test_%s${a:%s${b:%s${c:%s${d:%s${e:%s${f:%s${g:%s${h:%s${i:}%s}%s}%s}%s}%s}%s}%s}%s}%s_end",
+              gui_color_get_custom (config_eval_syntax_colors[0 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[1 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[2 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[3 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[4 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[5 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[6 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[7 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[8 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[7 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[6 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[5 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[4 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[3 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[2 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[1 % config_num_eval_syntax_colors]),
+              gui_color_get_custom (config_eval_syntax_colors[0 % config_num_eval_syntax_colors]),
+              gui_color_get_custom ("reset"));
+    WEE_CHECK_EVAL(str_value,
+                   "test_${raw_hl:${a:${b:${c:${d:${e:${f:${g:${h:${i:}}}}}}}}}}_end");
+
     /* test raw string */
+    WEE_CHECK_EVAL("", "${raw:}");
+    WEE_CHECK_EVAL("test", "${raw:test}");
+    WEE_CHECK_EVAL("\\${", "${raw:\\${");
     WEE_CHECK_EVAL("${info:version}", "${raw:${info:version}}");
     WEE_CHECK_EVAL("yes", "${if:${raw:test?}==${raw:test?}?yes:no}");
     WEE_CHECK_EVAL("no", "${if:${raw:test?}==${raw:test}?yes:no}");
     WEE_CHECK_EVAL("16", "${length:${raw:${buffer.number}}}");
+
+    /* test string with syntax highlighting */
+    WEE_CHECK_EVAL("", "${hl:}");
+    WEE_CHECK_EVAL("test", "${hl:test}");
+    snprintf (str_value, sizeof (str_value),
+              "%s${info:version}%s",
+              gui_color_get_custom (config_eval_syntax_colors[0]),
+              gui_color_get_custom ("reset"));
+    WEE_CHECK_EVAL("test_weechat_end", "test_${hl:${buffer.name}}_end");
+    snprintf (str_value, sizeof (str_value),
+              "test_%s${buffer.name}%s_end",
+              gui_color_get_custom (config_eval_syntax_colors[0]),
+              gui_color_get_custom ("reset"));
+    WEE_CHECK_EVAL(str_value, "test_${hl:${raw:${buffer.name}}}_end");
 
     /* test eval of substring */
     WEE_CHECK_EVAL("\t", "${eval:${\\t}}");
@@ -538,12 +619,12 @@ TEST(CoreEval, EvalExpression)
     /* test case conversion: to lower case */
     WEE_CHECK_EVAL("", "${lower:}");
     WEE_CHECK_EVAL("this is a test", "${lower:This is a TEST}");
-    WEE_CHECK_EVAL("testÉ testé", "${lower:TESTÉ Testé}");
+    WEE_CHECK_EVAL("testé testé", "${lower:TESTÉ Testé}");
 
     /* test case conversion: to upper case */
     WEE_CHECK_EVAL("", "${upper:}");
     WEE_CHECK_EVAL("THIS IS A TEST", "${upper:This is a TEST}");
-    WEE_CHECK_EVAL("TESTÉ TESTé", "${upper:TESTÉ Testé}");
+    WEE_CHECK_EVAL("TESTÉ TESTÉ", "${upper:TESTÉ Testé}");
 
     /* test hidden chars */
     WEE_CHECK_EVAL("", "${hide:invalid}");
@@ -821,6 +902,13 @@ TEST(CoreEval, EvalExpression)
                              pointers, extra_vars, options);
     LONGS_EQUAL(8, strlen (value));
     free (value);
+    value = eval_expression ("${date:%!}", pointers, extra_vars, options);
+    CHECK(value);
+    error = NULL;
+    number = strtol (value, &error, 10);
+    CHECK(error && !error[0]);
+    time_now = time (NULL);
+    CHECK((number >= time_now - 10) && (number <= time_now + 10));
 
     /* test ternary operator */
     WEE_CHECK_EVAL("1", "${if:5>2}");
@@ -828,6 +916,8 @@ TEST(CoreEval, EvalExpression)
     WEE_CHECK_EVAL("yes", "${if:5>2?yes:no}");
     WEE_CHECK_EVAL("no", "${if:1>7?yes:no}");
     WEE_CHECK_EVAL("yes", "${if:5>2 && 6>3?yes:no}");
+    WEE_CHECK_EVAL("yes", "${if:1?yes:no:test}");
+    WEE_CHECK_EVAL("no:test", "${if:0?yes:no:test}");
     WEE_CHECK_EVAL("yes-yes", "${if:5>2?${if:6>3?yes-yes:yes-no}:${if:9>4?no-yes:no-no}}");
     WEE_CHECK_EVAL("yes-no", "${if:5>2?${if:1>7?yes-yes:yes-no}:${if:9>4?no-yes:no-no}}");
     WEE_CHECK_EVAL("no-yes", "${if:1>7?${if:6>3?yes-yes:yes-no}:${if:9>4?no-yes:no-no}}");
@@ -907,11 +997,35 @@ TEST(CoreEval, EvalExpression)
     WEE_CHECK_EVAL("core", "${plugin}");
     WEE_CHECK_EVAL("weechat", "${name}");
 
+    /* test hdata count */
+    WEE_CHECK_EVAL("0", "${hdata_count:}");
+    WEE_CHECK_EVAL("0", "${hdata_count:xxx}");
+    WEE_CHECK_EVAL("0", "${hdata_count:buffer[xxx]}");
+    WEE_CHECK_EVAL("0", "${hdata_count:buffer[0x0]}");
+    WEE_CHECK_EVAL("1", "${hdata_count:buffer[gui_buffers]}");
+    snprintf (str_expr, sizeof (str_expr),
+              "${hdata_count:buffer[%p]}", gui_buffers);
+    WEE_CHECK_EVAL("1", str_expr);
+    test_buffer = gui_buffer_new (NULL, "test",
+                                  NULL, NULL, NULL,
+                                  NULL, NULL, NULL);
+    CHECK(test_buffer);
+    WEE_CHECK_EVAL("2", "${hdata_count:buffer[gui_buffers]}");
+    snprintf (str_expr, sizeof (str_expr),
+              "${hdata_count:buffer[%p]}", gui_buffers);
+    WEE_CHECK_EVAL("2", "${hdata_count:buffer[gui_buffers]}");
+    snprintf (str_expr, sizeof (str_expr),
+              "${hdata_count:buffer[%p]}", test_buffer);
+    WEE_CHECK_EVAL("1", str_expr);
+    gui_buffer_close (test_buffer);
+    WEE_CHECK_EVAL("0", "${hdata_count:layout[gui_layouts]}");
+
     /* test hdata */
     hashtable_set (pointers, "my_null_pointer", (const void *)0x0);
     hashtable_set (pointers, "my_buffer_pointer", gui_buffers);
     hashtable_set (pointers, "my_other_pointer", (const void *)0x1234abcd);
-    WEE_CHECK_EVAL("x", "x${buffer.number");
+    WEE_CHECK_EVAL("x", "x${buffer.numbe");
+    WEE_CHECK_EVAL("x1", "x${buffer.number");
     WEE_CHECK_EVAL("x${buffer.number}1",
                    "x\\${buffer.number}${buffer.number}");
     WEE_CHECK_EVAL("1", "${buffer.number}");
@@ -921,12 +1035,15 @@ TEST(CoreEval, EvalExpression)
     WEE_CHECK_EVAL("", "${buffer[].full_name}");
     WEE_CHECK_EVAL("", "${buffer[0x0].full_name}");
     WEE_CHECK_EVAL("", "${buffer[0x1].full_name}");
+    WEE_CHECK_EVAL("", "${buffer[0xZ].full_name}");
     WEE_CHECK_EVAL("", "${buffer[unknown_list].full_name}");
     WEE_CHECK_EVAL("", "${unknown_pointer}");
     WEE_CHECK_EVAL("", "${my_null_pointer}");
-    snprintf (str_value, sizeof (str_value),
-              "0x%lx", (long unsigned int)gui_buffers);
+    snprintf (str_value, sizeof (str_value), "%p", gui_buffers);
     WEE_CHECK_EVAL(str_value, "${my_buffer_pointer}");
+    WEE_CHECK_EVAL(str_value, "${buffer}");
+    WEE_CHECK_EVAL("0x0", "${buffer.prev_buffer}");
+    WEE_CHECK_EVAL("0x0", "${buffer.next_buffer}");
     WEE_CHECK_EVAL("0x1234abcd", "${my_other_pointer}");
     WEE_CHECK_EVAL("", "${buffer[unknown_pointer].full_name}");
     WEE_CHECK_EVAL("", "${buffer[my_null_pointer].full_name}");
@@ -934,7 +1051,7 @@ TEST(CoreEval, EvalExpression)
     WEE_CHECK_EVAL("", "${buffer[my_other_pointer].full_name}");
     WEE_CHECK_EVAL("core.weechat", "${buffer[gui_buffers].full_name}");
     snprintf (str_value, sizeof (str_value),
-              "${buffer[0x%lx].full_name}", (long unsigned int)gui_buffers);
+              "${buffer[%p].full_name}", gui_buffers);
     WEE_CHECK_EVAL("core.weechat", str_value);
     snprintf (str_value, sizeof (str_value), "%c", 1);
     WEE_CHECK_EVAL(str_value,
@@ -946,10 +1063,17 @@ TEST(CoreEval, EvalExpression)
     WEE_CHECK_EVAL(str_value,
                    "${window.buffer.own_lines.first_line.data.date}");
     snprintf (str_value, sizeof (str_value),
-              "0x%lx", (long unsigned int)(gui_buffers->local_variables));
+              "%p", gui_buffers->local_variables);
     WEE_CHECK_EVAL(str_value, "${window.buffer.local_variables}");
     WEE_CHECK_EVAL("core", "${window.buffer.local_variables.plugin}");
     WEE_CHECK_EVAL("weechat", "${window.buffer.local_variables.name}");
+    WEE_CHECK_EVAL("name,plugin", "${window.buffer.local_variables.keys_sorted()}");
+    WEE_CHECK_EVAL("name:weechat,plugin:core", "${window.buffer.local_variables.keys_values_sorted()}");
+    WEE_CHECK_EVAL("", "${window.buffer.local_variables.nonexisting_func()}");
+    WEE_CHECK_EVAL("", "${window.buffer.local_variables.nonexisting_func(}");
+    WEE_CHECK_EVAL("", "${window.buffer.local_variables.nonexisting_func)}");
+    WEE_CHECK_EVAL("", "${window.buffer.local_variables.keys( )}");
+    WEE_CHECK_EVAL("", "${window.buffer.local_variables.()}");
     hashtable_remove_all (pointers);
 
     /* test with another prefix/suffix */

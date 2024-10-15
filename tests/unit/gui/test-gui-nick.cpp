@@ -1,7 +1,7 @@
 /*
  * test-gui-nick.cpp - test nick functions
  *
- * Copyright (C) 2019-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2019-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -23,8 +23,8 @@
 
 extern "C"
 {
-#include "src/core/wee-config.h"
-#include "src/core/wee-string.h"
+#include "src/core/core-config.h"
+#include "src/core/core-string.h"
 #include "src/gui/gui-color.h"
 #include "src/gui/gui-nick.h"
 
@@ -54,23 +54,15 @@ extern char *gui_nick_strdup_for_color (const char *nickname);
 
 #define WEE_NICK_STRDUP_FOR_COLOR(__result, __nickname)                 \
     nick = gui_nick_strdup_for_color (__nickname);                      \
-    if (__result)                                                       \
-    {                                                                   \
-        STRCMP_EQUAL(__result, nick);                                   \
-    }                                                                   \
-    else                                                                \
-    {                                                                   \
-        POINTERS_EQUAL(NULL, nick);                                     \
-    }                                                                   \
-    if (nick)                                                           \
-        free (nick);
+    STRCMP_EQUAL(__result, nick);                                       \
+    free (nick);
 
-#define WEE_FIND_COLOR(__result, __nickname, __colors)                  \
-    color = gui_nick_find_color_name (__nickname, __colors);            \
+#define WEE_FIND_COLOR(__result, __nickname, __range, __colors)         \
+    color = gui_nick_find_color_name (__nickname, __range, __colors);   \
     STRCMP_EQUAL(__result, color);                                      \
     free (color);                                                       \
     result_color = gui_color_get_custom (__result);                     \
-    color = gui_nick_find_color (__nickname, __colors);                 \
+    color = gui_nick_find_color (__nickname, __range, __colors);        \
     STRCMP_EQUAL(result_color, color);                                  \
     free (color);
 
@@ -320,18 +312,18 @@ TEST(GuiNick, GetForcedColor)
     config_file_option_set (config_look_nick_color_force,
                             "alice:green;bob:cyan", 1);
 
-    POINTERS_EQUAL(NULL, gui_nick_get_forced_color (NULL));
-    POINTERS_EQUAL(NULL, gui_nick_get_forced_color (""));
+    STRCMP_EQUAL(NULL, gui_nick_get_forced_color (NULL));
+    STRCMP_EQUAL(NULL, gui_nick_get_forced_color (""));
 
-    POINTERS_EQUAL(NULL, gui_nick_get_forced_color ("unknown"));
+    STRCMP_EQUAL(NULL, gui_nick_get_forced_color ("unknown"));
 
     STRCMP_EQUAL("green", gui_nick_get_forced_color ("alice"));
     STRCMP_EQUAL("cyan", gui_nick_get_forced_color ("bob"));
 
-    POINTERS_EQUAL(NULL, gui_nick_get_forced_color ("alice2"));
-    POINTERS_EQUAL(NULL, gui_nick_get_forced_color ("alice_"));
-    POINTERS_EQUAL(NULL, gui_nick_get_forced_color ("bob2"));
-    POINTERS_EQUAL(NULL, gui_nick_get_forced_color ("bob_"));
+    STRCMP_EQUAL(NULL, gui_nick_get_forced_color ("alice2"));
+    STRCMP_EQUAL(NULL, gui_nick_get_forced_color ("alice_"));
+    STRCMP_EQUAL(NULL, gui_nick_get_forced_color ("bob2"));
+    STRCMP_EQUAL(NULL, gui_nick_get_forced_color ("bob_"));
 
     config_file_option_reset (config_look_nick_color_force, 1);
 }
@@ -363,27 +355,41 @@ TEST(GuiNick, FindColor)
     const char *result_color;
     char *color;
 
-    WEE_FIND_COLOR("default", NULL, NULL);
-    WEE_FIND_COLOR("default", "", NULL);
+    WEE_FIND_COLOR("default", NULL, -1, NULL);
+    WEE_FIND_COLOR("default", "", -1, NULL);
 
-    WEE_FIND_COLOR("lightgreen", "abcdef", NULL);
-    WEE_FIND_COLOR("brown", "abcdefghi", NULL);
+    WEE_FIND_COLOR("212", "abcdef", -1, NULL);
+    WEE_FIND_COLOR("92", "abcdefghi", -1, NULL);
 
     /* with forced color */
     config_file_option_set (config_look_nick_color_force,
-                            "abcdef:green;abcdefghi:cyan", 1);
-    WEE_FIND_COLOR("green", "abcdef", NULL);
-    WEE_FIND_COLOR("cyan", "abcdefghi", NULL);
+                            "abcdef:green;abcdefghi:125", 1);
+    WEE_FIND_COLOR("green", "abcdef", -1, NULL);
+    WEE_FIND_COLOR("125", "abcdefghi", -1, NULL);
     config_file_option_reset (config_look_nick_color_force, 1);
 
     /* with custom colors */
-    WEE_FIND_COLOR("yellow", "abcdef", "red,blue,yellow,magenta");
-    WEE_FIND_COLOR("blue", "abcdefghi", "red,blue,yellow,magenta");
+    WEE_FIND_COLOR("214", "abcdef", -1, "red,blue,214,magenta");
+    WEE_FIND_COLOR("blue", "abcdefghi", -1, "red,blue,214,magenta");
 
     /* with forced color and custom colors (forced color is ignored) */
     config_file_option_set (config_look_nick_color_force,
-                            "abcdef:green;abcdefghi:cyan", 1);
-    WEE_FIND_COLOR("yellow", "abcdef", "red,blue,yellow,magenta");
-    WEE_FIND_COLOR("blue", "abcdefghi", "red,blue,yellow,magenta");
+                            "abcdef:green;abcdefghi:125", 1);
+    WEE_FIND_COLOR("214", "abcdef", -1, "red,blue,214,magenta");
+    WEE_FIND_COLOR("blue", "abcdefghi", -1, "red,blue,214,magenta");
     config_file_option_reset (config_look_nick_color_force, 1);
+
+    /* with case range */
+    WEE_FIND_COLOR("176", "ABCDEF]^", -1, NULL);
+    WEE_FIND_COLOR("186", "ABCDEF]^", 0, NULL);
+    WEE_FIND_COLOR("174", "ABCDEF]^", 30, NULL);
+    WEE_FIND_COLOR("148", "ABCDEF]^", 29, NULL);
+    WEE_FIND_COLOR("186", "ABCDEF]^", 26, NULL);
+
+    /* with case range and custom colors */
+    WEE_FIND_COLOR("214", "ABCDEF]^", -1, "red,blue,214,magenta,yellow");
+    WEE_FIND_COLOR("yellow", "ABCDEF]^", 0, "red,blue,214,magenta,yellow");
+    WEE_FIND_COLOR("blue", "ABCDEF]^", 30, "red,blue,214,magenta,yellow");
+    WEE_FIND_COLOR("magenta", "ABCDEF]^", 29, "red,blue,214,magenta,yellow");
+    WEE_FIND_COLOR("yellow", "ABCDEF]^", 26, "red,blue,214,magenta,yellow");
 }

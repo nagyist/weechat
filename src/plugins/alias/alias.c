@@ -1,7 +1,7 @@
 /*
  * alias.c - alias plugin for WeeChat: command aliases
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -36,7 +36,7 @@ WEECHAT_PLUGIN_DESCRIPTION(N_("Alias commands"));
 WEECHAT_PLUGIN_AUTHOR("Sébastien Helleu <flashcode@flashtux.org>");
 WEECHAT_PLUGIN_VERSION(WEECHAT_VERSION);
 WEECHAT_PLUGIN_LICENSE(WEECHAT_LICENSE);
-WEECHAT_PLUGIN_PRIORITY(11000);
+WEECHAT_PLUGIN_PRIORITY(ALIAS_PLUGIN_PRIORITY);
 
 #define ALIAS_IS_ARG_NUMBER(number) ((number >= '1') && (number <= '9'))
 
@@ -84,88 +84,50 @@ alias_search (const char *alias_name)
 {
     struct t_alias *ptr_alias;
 
+    if (!alias_name)
+        return NULL;
+
     for (ptr_alias = alias_list; ptr_alias;
          ptr_alias = ptr_alias->next_alias)
     {
-        if (weechat_strcasecmp (alias_name, ptr_alias->name) == 0)
+        if (strcmp (alias_name, ptr_alias->name) == 0)
             return ptr_alias;
     }
     return NULL;
 }
 
 /*
- * Adds a word to string and increments length.
+ * Adds word (in range) to alias string.
  */
 
 void
-alias_string_add_word (char **alias, int *length, const char *word)
-{
-    int length_word;
-    char *alias2;
-
-    if (!word)
-        return;
-
-    length_word = strlen (word);
-    if (length_word == 0)
-        return;
-
-    if (*alias == NULL)
-    {
-        *alias = malloc (length_word + 1);
-        strcpy (*alias, word);
-    }
-    else
-    {
-        alias2 = realloc (*alias, strlen (*alias) + length_word + 1);
-        if (!alias2)
-        {
-            if (*alias)
-            {
-                free (*alias);
-                *alias = NULL;
-            }
-            return;
-        }
-        *alias = alias2;
-        strcat (*alias, word);
-    }
-    *length += length_word;
-}
-
-/*
- * Adds word (in range) to string and increments length.
- */
-
-void
-alias_string_add_word_range (char **alias, int *length, const char *start,
-                             const char *end)
+alias_string_add_word_range (char **alias, const char *start, const char *end)
 {
     char *word;
 
     word = weechat_strndup (start, end - start);
     if (word)
     {
-        alias_string_add_word (alias, length, word);
+        weechat_string_dyn_concat (alias, word, -1);
         free (word);
     }
 }
 
 /*
- * Adds some arguments to string and increments length.
+ * Adds some arguments to alias string.
  */
 
 void
-alias_string_add_arguments (char **alias, int *length, char **argv, int start,
-                            int end)
+alias_string_add_arguments (char **alias, char **argv,
+                            int arg_start, int arg_end)
 {
     int i;
 
-    for (i = start; i <= end; i++)
+    for (i = arg_start; i <= arg_end; i++)
     {
-        if (i != start)
-            alias_string_add_word (alias, length, " ");
-        alias_string_add_word (alias, length, argv[i]);
+        if (i != arg_start)
+            weechat_string_dyn_concat (alias, " ", -1);
+        weechat_string_dyn_concat (alias, argv[i], -1);
     }
 }
 
@@ -178,7 +140,16 @@ alias_string_add_arguments (char **alias, int *length, char **argv, int start,
  *   $n-  arguments from n to last
  *   $n-m arguments from n to m
  *   $*   all arguments
+ *   $&   all arguments, with double quotes escaped (" replaced by \")
  *   $~   last argument
+ *
+ * Example:
+ *
+ *   Parameters:
+ *     alias_args = "$2 $1 '$3-'"
+ *     user_args  = "abc def ghi jkl"
+ *
+ *   Result = "def abc 'ghi jkl'"
  *
  * Note: result must be freed after use.
  */
@@ -186,9 +157,12 @@ alias_string_add_arguments (char **alias, int *length, char **argv, int start,
 char *
 alias_replace_args (const char *alias_args, const char *user_args)
 {
-    char **argv, *res;
+    char **argv, **result, *temp;
     const char *start, *pos;
-    int n, m, argc, length_res, args_count, offset;
+    int n, m, argc, offset;
+
+    if (!alias_args || !user_args)
+        return NULL;
 
     argv = weechat_string_split (user_args, " ", NULL,
                                  WEECHAT_STRING_SPLIT_STRIP_LEFT
@@ -196,9 +170,7 @@ alias_replace_args (const char *alias_args, const char *user_args)
                                  | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS,
                                  0, &argc);
 
-    res = NULL;
-    length_res = 0;
-    args_count = 0;
+    result = weechat_string_dyn_alloc (128);
     start = alias_args;
     pos = start;
     while (pos && pos[0])
@@ -208,8 +180,8 @@ alias_replace_args (const char *alias_args, const char *user_args)
         if ((pos[0] == '\\') && (pos[1] == '$'))
         {
             offset = 2;
-            alias_string_add_word_range (&res, &length_res, start, pos);
-            alias_string_add_word (&res, &length_res, "$");
+            alias_string_add_word_range (result, start, pos);
+            weechat_string_dyn_concat (result, "$", -1);
         }
         else
         {
@@ -218,47 +190,56 @@ alias_replace_args (const char *alias_args, const char *user_args)
                 if (pos[1] == '*')
                 {
                     /* replace with all arguments */
-                    args_count++;
                     offset = 2;
                     if (pos > start)
-                        alias_string_add_word_range (&res, &length_res, start, pos);
-                    alias_string_add_word (&res, &length_res, user_args);
+                        alias_string_add_word_range (result, start, pos);
+                    weechat_string_dyn_concat (result, user_args, -1);
+                }
+                else if (pos[1] == '&')
+                {
+                    /* replace with all arguments, auto-escaping double quotes */
+                    offset = 2;
+                    if (pos > start)
+                        alias_string_add_word_range (result, start, pos);
+                    temp = weechat_string_replace (user_args, "\"", "\\\"");
+                    if (temp)
+                    {
+                        weechat_string_dyn_concat (result, temp, -1);
+                        free (temp);
+                    }
                 }
                 else if (pos[1] == '~')
                 {
                     /* replace with last argument */
-                    args_count++;
                     offset = 2;
                     if (pos > start)
-                        alias_string_add_word_range (&res, &length_res, start, pos);
+                        alias_string_add_word_range (result, start, pos);
                     if (argc > 0)
-                        alias_string_add_word (&res, &length_res, argv[argc - 1]);
+                        weechat_string_dyn_concat (result, argv[argc - 1], -1);
                 }
                 else if ((pos[1] == '-') && ALIAS_IS_ARG_NUMBER(pos[2]))
                 {
                     /* replace with arguments 1 to m */
-                    args_count++;
                     offset = 3;
                     if (pos > start)
-                        alias_string_add_word_range (&res, &length_res, start, pos);
+                        alias_string_add_word_range (result, start, pos);
                     if (pos[2] - '1' < argc)
                         m = pos[2] - '1';
                     else
                         m = argc - 1;
-                    alias_string_add_arguments (&res, &length_res, argv, 0, m);
+                    alias_string_add_arguments (result, argv, 0, m);
                 }
                 else if (ALIAS_IS_ARG_NUMBER(pos[1]))
                 {
-                    args_count++;
                     n = pos[1] - '1';
                     if (pos > start)
-                        alias_string_add_word_range (&res, &length_res, start, pos);
+                        alias_string_add_word_range (result, start, pos);
                     if (pos[2] != '-')
                     {
                         /* replace with argument n */
                         offset = 2;
                         if (n < argc)
-                            alias_string_add_word (&res, &length_res, argv[n]);
+                            weechat_string_dyn_concat (result, argv[n], -1);
                     }
                     else
                     {
@@ -278,10 +259,7 @@ alias_replace_args (const char *alias_args, const char *user_args)
                             m = argc - 1;
                         }
                         if (n < argc)
-                        {
-                            alias_string_add_arguments (&res, &length_res,
-                                                        argv, n, m);
-                        }
+                            alias_string_add_arguments (result, argv, n, m);
                     }
                 }
             }
@@ -297,12 +275,11 @@ alias_replace_args (const char *alias_args, const char *user_args)
     }
 
     if (pos > start)
-        alias_string_add_word (&res, &length_res, start);
+        weechat_string_dyn_concat (result, start, -1);
 
-    if (argv)
-        weechat_string_free_split (argv);
+    weechat_string_free_split (argv);
 
-    return res;
+    return weechat_string_dyn_free (result, 0);
 }
 
 /*
@@ -322,8 +299,7 @@ alias_run_command (struct t_gui_buffer **buffer, const char *command)
     string = weechat_buffer_string_replace_local_var (*buffer, command);
     weechat_command (*buffer,
                      (string) ? string : command);
-    if (string)
-        free (string);
+    free (string);
 
     /* get new current buffer */
     new_current_buffer = weechat_current_buffer ();
@@ -347,8 +323,8 @@ alias_cb (const void *pointer, void *data,
 {
     struct t_alias *ptr_alias;
     char **commands, **ptr_cmd, **ptr_next_cmd;
-    char *args_replaced, *alias_command;
-    int some_args_replaced, length1, length2;
+    char *args_replaced, **alias_command;
+    int some_args_replaced;
 
     /* make C compiler happy */
     (void) data;
@@ -388,26 +364,18 @@ alias_cb (const void *pointer, void *data,
                  * arguments of the last command in the list (if no $1,$2,..$*)
                  * was found
                  */
-                if ((*ptr_next_cmd == NULL) && argv_eol[1] && (!some_args_replaced))
+                if ((*ptr_next_cmd == NULL) && argv_eol[1] && !some_args_replaced)
                 {
-                    length1 = strlen (*ptr_cmd);
-                    length2 = strlen (argv_eol[1]);
-
-                    alias_command = malloc (1 + length1 + 1 + length2 + 1);
+                    alias_command = weechat_string_dyn_alloc (128);
                     if (alias_command)
                     {
                         if (!weechat_string_is_command_char (*ptr_cmd))
-                            strcpy (alias_command, "/");
-                        else
-                            alias_command[0] = '\0';
-
-                        strcat (alias_command, *ptr_cmd);
-                        strcat (alias_command, " ");
-                        strcat (alias_command, argv_eol[1]);
-
-                        alias_run_command (&buffer,
-                                           alias_command);
-                        free (alias_command);
+                            weechat_string_dyn_concat (alias_command, "/", -1);
+                        weechat_string_dyn_concat (alias_command, *ptr_cmd, -1);
+                        weechat_string_dyn_concat (alias_command, " ", -1);
+                        weechat_string_dyn_concat (alias_command, argv_eol[1], -1);
+                        alias_run_command (&buffer, *alias_command);
+                        weechat_string_dyn_free (alias_command, 1);
                     }
                 }
                 else
@@ -419,97 +387,27 @@ alias_cb (const void *pointer, void *data,
                     }
                     else
                     {
-                        alias_command = malloc (1 + strlen ((args_replaced) ? args_replaced : *ptr_cmd) + 1);
+                        alias_command = weechat_string_dyn_alloc (128);
                         if (alias_command)
                         {
-                            strcpy (alias_command, "/");
-                            strcat (alias_command, (args_replaced) ? args_replaced : *ptr_cmd);
-                            alias_run_command (&buffer,
-                                               alias_command);
-                            free (alias_command);
+                            weechat_string_dyn_concat (alias_command, "/", -1);
+                            weechat_string_dyn_concat (
+                                alias_command,
+                                (args_replaced) ? args_replaced : *ptr_cmd,
+                                -1);
+                            alias_run_command (&buffer, *alias_command);
+                            weechat_string_dyn_free (alias_command, 1);
                         }
                     }
                 }
 
-                if (args_replaced)
-                    free (args_replaced);
+                free (args_replaced);
             }
             ptr_alias->running = 0;
             weechat_string_free_split_command (commands);
         }
     }
     return WEECHAT_RC_OK;
-}
-
-/*
- * Frees an alias and remove it from list.
- */
-
-void
-alias_free (struct t_alias *alias)
-{
-    struct t_alias *new_alias_list;
-
-    if (!alias)
-        return;
-
-    /* remove alias from list */
-    if (last_alias == alias)
-        last_alias = alias->prev_alias;
-    if (alias->prev_alias)
-    {
-        (alias->prev_alias)->next_alias = alias->next_alias;
-        new_alias_list = alias_list;
-    }
-    else
-        new_alias_list = alias->next_alias;
-    if (alias->next_alias)
-        (alias->next_alias)->prev_alias = alias->prev_alias;
-
-    /* free data */
-    if (alias->hook)
-        weechat_unhook (alias->hook);
-    if (alias->name)
-        free (alias->name);
-    if (alias->command)
-        free (alias->command);
-    if (alias->completion)
-        free (alias->completion);
-    free (alias);
-
-    alias_list = new_alias_list;
-}
-
-/*
- * Frees all aliases.
- */
-
-void
-alias_free_all ()
-{
-    while (alias_list)
-    {
-        alias_free (alias_list);
-    }
-}
-
-/*
- * Searches for position of alias (to keep aliases sorted by name).
- */
-
-struct t_alias *
-alias_find_pos (const char *name)
-{
-    struct t_alias *ptr_alias;
-
-    for (ptr_alias = alias_list; ptr_alias; ptr_alias = ptr_alias->next_alias)
-    {
-        if (weechat_strcasecmp (name, ptr_alias->name) < 0)
-            return ptr_alias;
-    }
-
-    /* position not found (we will add to the end of list) */
-    return NULL;
 }
 
 /*
@@ -522,9 +420,15 @@ alias_hook_command (struct t_alias *alias)
     char *str_priority_name, *str_completion;
     int length;
 
+    if (alias->hook)
+    {
+        weechat_unhook (alias->hook);
+        alias->hook = NULL;
+    }
+
     /*
      * build string with priority and name: the alias priority is 2000, which
-     * is higher than default one (1000), so the alias is executed before a
+     * is greater than default one (1000), so the alias is executed before a
      * command (if a command with same name exists in core or in another plugin)
      */
     length = strlen (alias->name) + 16 + 1;
@@ -556,10 +460,163 @@ alias_hook_command (struct t_alias *alias)
                                         (str_completion) ? str_completion : alias->completion,
                                         &alias_cb, alias, NULL);
 
-    if (str_priority_name)
-        free (str_priority_name);
-    if (str_completion)
-        free (str_completion);
+    free (str_priority_name);
+    free (str_completion);
+}
+
+/*
+ * Searches for position of alias (to keep aliases sorted by name).
+ */
+
+struct t_alias *
+alias_find_pos (const char *name)
+{
+    struct t_alias *ptr_alias;
+
+    for (ptr_alias = alias_list; ptr_alias; ptr_alias = ptr_alias->next_alias)
+    {
+        if (weechat_strcmp (name, ptr_alias->name) < 0)
+            return ptr_alias;
+    }
+
+    /* position not found (we will add to the end of list) */
+    return NULL;
+}
+
+/*
+ * Inserts alias in list of aliases.
+ */
+
+void
+alias_insert (struct t_alias *alias)
+{
+    struct t_alias *pos_alias;
+
+    if (alias_list)
+    {
+        pos_alias = alias_find_pos (alias->name);
+        if (pos_alias)
+        {
+            /* insert alias into the list (before alias found) */
+            alias->prev_alias = pos_alias->prev_alias;
+            alias->next_alias = pos_alias;
+            if (pos_alias->prev_alias)
+                (pos_alias->prev_alias)->next_alias = alias;
+            else
+                alias_list = alias;
+            pos_alias->prev_alias = alias;
+        }
+        else
+        {
+            /* add alias to end of list */
+            alias->prev_alias = last_alias;
+            alias->next_alias = NULL;
+            last_alias->next_alias = alias;
+            last_alias = alias;
+        }
+    }
+    else
+    {
+        alias->prev_alias = NULL;
+        alias->next_alias = NULL;
+        alias_list = alias;
+        last_alias = alias;
+    }
+}
+
+/*
+ * Removes alias from list of aliases.
+ */
+
+void
+alias_remove_from_list (struct t_alias *alias)
+{
+    if (last_alias == alias)
+        last_alias = alias->prev_alias;
+    if (alias->prev_alias)
+        (alias->prev_alias)->next_alias = alias->next_alias;
+    else
+        alias_list = alias->next_alias;
+    if (alias->next_alias)
+        (alias->next_alias)->prev_alias = alias->prev_alias;
+}
+
+/*
+ * Renames an alias.
+ *
+ * Returns:
+ *   1: OK
+ *   0: error
+ */
+
+int
+alias_rename (struct t_alias *alias, const char *new_name)
+{
+    struct t_config_option *ptr_option;
+
+    if (!alias || !new_name || !new_name[0] || alias_search (new_name))
+        return 0;
+
+    /* rename options */
+    ptr_option = weechat_config_search_option (
+        alias_config_file,
+        alias_config_section_cmd,
+        alias->name);
+    if (ptr_option)
+        weechat_config_option_rename (ptr_option, new_name);
+    ptr_option = weechat_config_search_option (
+        alias_config_file,
+        alias_config_section_completion,
+        alias->name);
+    if (ptr_option)
+        weechat_config_option_rename (ptr_option, new_name);
+
+    /* rename alias */
+    free (alias->name);
+    alias->name = strdup (new_name);
+
+    /* hook command again */
+    alias_hook_command (alias);
+
+    /* move alias in list (to keep list sorted) */
+    alias_remove_from_list (alias);
+    alias_insert (alias);
+
+    return 1;
+}
+
+/*
+ * Frees an alias and remove it from list.
+ */
+
+void
+alias_free (struct t_alias *alias)
+{
+    if (!alias)
+        return;
+
+    alias_remove_from_list (alias);
+
+    /* free data */
+    weechat_unhook (alias->hook);
+    free (alias->name);
+    free (alias->command);
+    free (alias->completion);
+
+    free (alias);
+}
+
+/*
+ * Frees all aliases.
+ */
+
+void
+alias_free_all ()
+{
+    while (alias_list)
+    {
+        alias_free (alias_list);
+    }
 }
 
 /*
@@ -570,19 +627,16 @@ void
 alias_update_completion (struct t_alias *alias, const char *completion)
 {
     /* update completion in alias */
-    if (alias->completion)
-        free (alias->completion);
+    free (alias->completion);
     alias->completion = (completion) ? strdup (completion) : NULL;
 
-    /* unhook and hook again command, with new completion */
-    weechat_unhook (alias->hook);
-    alias->hook = NULL;
+    /* hook command again, with new completion */
     alias_hook_command (alias);
 }
 
 /*
- * Checks if an alias name is valid: it must not contain any slashes nor
- * any spaces.
+ * Checks if an alias name is valid: it must contain neither slashes nor
+ * spaces.
  *
  * Returns:
  *   1: name is valid
@@ -616,7 +670,7 @@ alias_name_valid (const char *name)
 struct t_alias *
 alias_new (const char *name, const char *command, const char *completion)
 {
-    struct t_alias *new_alias, *ptr_alias, *pos_alias;
+    struct t_alias *new_alias, *ptr_alias;
 
     if (!alias_name_valid (name))
     {
@@ -636,8 +690,7 @@ alias_new (const char *name, const char *command, const char *completion)
     }
 
     ptr_alias = alias_search (name);
-    if (ptr_alias)
-        alias_free (ptr_alias);
+    alias_free (ptr_alias);
 
     new_alias = malloc (sizeof (*new_alias));
     if (new_alias)
@@ -650,36 +703,7 @@ alias_new (const char *name, const char *command, const char *completion)
 
         alias_hook_command (new_alias);
 
-        if (alias_list)
-        {
-            pos_alias = alias_find_pos (name);
-            if (pos_alias)
-            {
-                /* insert alias into the list (before alias found) */
-                new_alias->prev_alias = pos_alias->prev_alias;
-                new_alias->next_alias = pos_alias;
-                if (pos_alias->prev_alias)
-                    (pos_alias->prev_alias)->next_alias = new_alias;
-                else
-                    alias_list = new_alias;
-                pos_alias->prev_alias = new_alias;
-            }
-            else
-            {
-                /* add alias to end of list */
-                new_alias->prev_alias = last_alias;
-                new_alias->next_alias = NULL;
-                last_alias->next_alias = new_alias;
-                last_alias = new_alias;
-            }
-        }
-        else
-        {
-            new_alias->prev_alias = NULL;
-            new_alias->next_alias = NULL;
-            alias_list = new_alias;
-            last_alias = new_alias;
-        }
+        alias_insert (new_alias);
     }
 
     return new_alias;

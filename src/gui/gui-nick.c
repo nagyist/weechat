@@ -1,7 +1,7 @@
 /*
  * gui-nick.c - nick functions (used by all GUI)
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -28,10 +28,10 @@
 #include <string.h>
 
 #include "../core/weechat.h"
-#include "../core/wee-config.h"
-#include "../core/wee-hashtable.h"
-#include "../core/wee-string.h"
-#include "../core/wee-utf8.h"
+#include "../core/core-config.h"
+#include "../core/core-hashtable.h"
+#include "../core/core-string.h"
+#include "../core/core-utf8.h"
 #include "gui-nick.h"
 #include "gui-color.h"
 
@@ -129,7 +129,7 @@ gui_nick_hash_color (const char *nickname, int num_colors)
 
     color_64 = 0;
 
-    switch (CONFIG_INTEGER(config_look_nick_color_hash))
+    switch (CONFIG_ENUM(config_look_nick_color_hash))
     {
         case CONFIG_LOOK_NICK_COLOR_HASH_DJB2:
             /* variant of djb2 hash, using 64-bit integer */
@@ -243,6 +243,10 @@ gui_nick_strdup_for_color (const char *nickname)
 /*
  * Finds a color name for a nick (according to nick letters).
  *
+ * If case_range < 0, nick is case-sensitive.
+ * If case_range == 0, nick is converted to lower case (with string_tolower).
+ * If case_range > 0, nick is converted to lower case (with string_tolower_range).
+ *
  * If colors is NULL (most common case), the color returned is either a forced
  * color (from option "weechat.look.nick_color_force") or a color from option
  * "weechat.color.chat_nick_colors".
@@ -258,16 +262,18 @@ gui_nick_strdup_for_color (const char *nickname)
  */
 
 char *
-gui_nick_find_color_name (const char *nickname, const char *colors)
+gui_nick_find_color_name (const char *nickname, int case_range,
+                          const char *colors)
 {
     int color, num_colors;
-    char *nickname2, **list_colors, *result;
+    char *nickname2, *nickname3, **list_colors, *result;
     const char *forced_color, *ptr_result;
     static char *default_color = "default";
 
     list_colors = NULL;
     num_colors = 0;
     nickname2 = NULL;
+    nickname3 = NULL;
     ptr_result = NULL;
 
     if (!nickname || !nickname[0])
@@ -281,12 +287,13 @@ gui_nick_find_color_name (const char *nickname, const char *colors)
     }
 
     nickname2 = gui_nick_strdup_for_color (nickname);
+    if (!nickname2)
+        goto end;
 
     if (!list_colors)
     {
         /* look if color is forced for the nick */
-        forced_color = gui_nick_get_forced_color (
-            (nickname2) ? nickname2 : nickname);
+        forced_color = gui_nick_get_forced_color (nickname2);
         if (forced_color)
         {
             ptr_result = forced_color;
@@ -299,24 +306,36 @@ gui_nick_find_color_name (const char *nickname, const char *colors)
             goto end;
     }
 
+    if (case_range < 0)
+        nickname3 = strdup (nickname2);
+    else if (case_range == 0)
+        nickname3 = string_tolower (nickname2);
+    else
+        nickname3 = string_tolower_range (nickname2, case_range);
+    if (!nickname3)
+        goto end;
+
     /* hash nickname to get color */
     color = gui_nick_hash_color (
-        (nickname2) ? nickname2 : nickname,
+        nickname3,
         (list_colors) ? num_colors : config_num_nick_colors);
     ptr_result = (list_colors) ?
         list_colors[color] : config_nick_colors[color];
 
 end:
     result = strdup ((ptr_result) ? ptr_result : default_color);
-    if (list_colors)
-        string_free_split (list_colors);
-    if (nickname2)
-        free (nickname2);
+    string_free_split (list_colors);
+    free (nickname2);
+    free (nickname3);
     return result;
 }
 
 /*
  * Finds a color code for a nick (according to nick letters).
+ *
+ * If case_range < 0, nick is case-sensitive.
+ * If case_range == 0, nick is converted to lower case (with string_tolower).
+ * If case_range > 0, nick is converted to lower case (with string_tolower_range).
  *
  * If colors is NULL (most common case), the color returned is either a forced
  * color (from option "weechat.look.nick_color_force") or a color from option
@@ -333,14 +352,13 @@ end:
  */
 
 char *
-gui_nick_find_color (const char *nickname, const char *colors)
+gui_nick_find_color (const char *nickname, int case_range, const char *colors)
 {
     char *color;
     const char *ptr_result;
 
-    color = gui_nick_find_color_name (nickname, colors);
+    color = gui_nick_find_color_name (nickname, case_range, colors);
     ptr_result = gui_color_get_custom (color);
-    if (color)
-        free (color);
+    free (color);
     return (ptr_result) ? strdup (ptr_result) : NULL;
 }

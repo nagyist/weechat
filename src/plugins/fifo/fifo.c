@@ -1,7 +1,7 @@
 /*
  * fifo.c - fifo plugin for WeeChat: remote control with FIFO pipe
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -42,7 +42,7 @@ WEECHAT_PLUGIN_DESCRIPTION(N_("FIFO pipe for remote control"));
 WEECHAT_PLUGIN_AUTHOR("Sébastien Helleu <flashcode@flashtux.org>");
 WEECHAT_PLUGIN_VERSION(WEECHAT_VERSION);
 WEECHAT_PLUGIN_LICENSE(WEECHAT_LICENSE);
-WEECHAT_PLUGIN_PRIORITY(9000);
+WEECHAT_PLUGIN_PRIORITY(FIFO_PLUGIN_PRIORITY);
 
 struct t_weechat_plugin *weechat_fifo_plugin = NULL;
 #define weechat_plugin weechat_fifo_plugin
@@ -83,8 +83,7 @@ fifo_create ()
         fifo_filename = weechat_string_eval_path_home (
             weechat_config_string (fifo_config_file_path),
             NULL, NULL, options);
-        if (options)
-            weechat_hashtable_free (options);
+        weechat_hashtable_free (options);
     }
 
     if (!fifo_filename)
@@ -168,11 +167,8 @@ fifo_remove ()
     }
 
     /* remove any unterminated message */
-    if (fifo_unterminated)
-    {
-        free (fifo_unterminated);
-        fifo_unterminated = NULL;
-    }
+    free (fifo_unterminated);
+    fifo_unterminated = NULL;
 
     /* remove FIFO from disk */
     if (fifo_filename)
@@ -197,7 +193,8 @@ fifo_remove ()
 void
 fifo_exec (const char *text)
 {
-    char *text2, *pos_msg;
+    char *text2, *pos_msg, *command_unescaped;
+    int escaped;
     struct t_gui_buffer *ptr_buffer;
 
     text2 = strdup (text);
@@ -205,20 +202,26 @@ fifo_exec (const char *text)
         return;
 
     pos_msg = NULL;
+    command_unescaped = NULL;
+    escaped = 0;
     ptr_buffer = NULL;
 
     /*
      * look for plugin + buffer name at beginning of text
      * text may be: "plugin.buffer *text" or "*text"
      */
-    if (text2[0] == '*')
+    if (text2[0] == '*' || text2[0] == '\\')
     {
+        escaped = text2[0] == '\\';
         pos_msg = text2 + 1;
         ptr_buffer = weechat_current_buffer ();
     }
     else
     {
         pos_msg = strstr (text2, " *");
+        if (!pos_msg)
+            pos_msg = strstr (text2, " \\");
+
         if (!pos_msg)
         {
             weechat_printf (NULL,
@@ -227,6 +230,8 @@ fifo_exec (const char *text)
             free (text2);
             return;
         }
+
+        escaped = pos_msg[1] == '\\';
         pos_msg[0] = '\0';
         pos_msg += 2;
         ptr_buffer = weechat_buffer_search ("==", text2);
@@ -241,9 +246,17 @@ fifo_exec (const char *text)
         }
     }
 
+    if (escaped)
+    {
+        command_unescaped = weechat_string_convert_escaped_chars (pos_msg);
+        if (command_unescaped)
+            pos_msg = command_unescaped;
+    }
+
     weechat_command (ptr_buffer, pos_msg);
 
     free (text2);
+    free (command_unescaped);
 }
 
 /*
@@ -314,8 +327,7 @@ fifo_fd_cb (const void *pointer, void *data, int fd)
             ptr_buf = next_ptr_buf;
         }
 
-        if (buf2)
-            free (buf2);
+        free (buf2);
     }
     else if (num_read < 0)
     {
@@ -348,6 +360,9 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
     (void) argv;
 
     weechat_plugin = plugin;
+
+    fifo_quiet = 0;
+    fifo_fd = -1;
 
     if (!fifo_config_init ())
         return WEECHAT_RC_ERROR;

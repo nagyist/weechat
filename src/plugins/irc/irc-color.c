@@ -1,7 +1,7 @@
 /*
  * irc-color.c - IRC color decoding/encoding in messages
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -81,7 +81,121 @@ char irc_color_term2irc[IRC_COLOR_TERM2IRC_NUM_COLORS] =
     0,   /*  15     0 (white)        */
 };
 regex_t *irc_color_regex_ansi = NULL;
+int irc_color_index_string_decoded = 0;
+char *irc_color_string_decoded[32];
 
+
+/*
+ * Converts a RGB color to terminal color.
+ *
+ * Returns a terminal color (between 0 and 255), -1 if error.
+ */
+
+int
+irc_color_convert_rgb2term (long rgb)
+{
+    char str_color[64], *info_color, *error;
+    long number;
+
+    if (rgb < 0)
+        return -1;
+
+    snprintf (str_color, sizeof (str_color), "%ld", rgb);
+
+    info_color = weechat_info_get ("color_rgb2term", str_color);
+    if (!info_color || !info_color[0])
+    {
+        free (info_color);
+        return -1;
+    }
+
+    error = NULL;
+    number = strtol (info_color, &error, 10);
+    if (!error || error[0])
+    {
+        free (info_color);
+        return -1;
+    }
+
+    free (info_color);
+
+    return (int)number;
+}
+
+/*
+ * Converts a RGB color to IRC color.
+ *
+ * Returns a IRC color number (between 0 and 15), -1 if error.
+ */
+
+int
+irc_color_convert_rgb2irc (long rgb)
+{
+    char str_color[64], *error, *info_color;
+    long number;
+
+    if (rgb < 0)
+        return -1;
+
+    snprintf (str_color, sizeof (str_color),
+              "%ld,%d",
+              rgb,
+              IRC_COLOR_TERM2IRC_NUM_COLORS);
+
+    info_color = weechat_info_get ("color_rgb2term", str_color);
+    if (!info_color || !info_color[0])
+    {
+        free (info_color);
+        return -1;
+    }
+
+    error = NULL;
+    number = strtol (info_color, &error, 10);
+    if (!error || error[0]
+        || (number < 0) || (number >= IRC_COLOR_TERM2IRC_NUM_COLORS))
+    {
+        free (info_color);
+        return -1;
+    }
+
+    free (info_color);
+
+    return irc_color_term2irc[number];
+}
+
+/*
+ * Converts a terminal color to IRC color.
+ *
+ * Returns a IRC color number (between 0 and 15), -1 if error.
+ */
+
+int
+irc_color_convert_term2irc (int color)
+{
+    char str_color[64], *error, *info_color;
+    long number;
+
+    snprintf (str_color, sizeof (str_color), "%d", color);
+
+    info_color = weechat_info_get ("color_term2rgb", str_color);
+    if (!info_color || !info_color[0])
+    {
+        free (info_color);
+        return -1;
+    }
+
+    error = NULL;
+    number = strtol (info_color, &error, 10);
+    if (!error || error[0] || (number < 0) || (number > 0xFFFFFF))
+    {
+        free (info_color);
+        return -1;
+    }
+
+    free (info_color);
+
+    return irc_color_convert_rgb2irc (number);
+}
 
 /*
  * Replaces IRC colors by WeeChat colors.
@@ -95,11 +209,12 @@ regex_t *irc_color_regex_ansi = NULL;
 char *
 irc_color_decode (const char *string, int keep_colors)
 {
-    char **out, *result;
-    char str_fg[3], str_bg[3], str_color[128], str_key[128], str_to_add[128];
+    char **out, *error;
+    char str_fg[16], str_bg[16], str_color[128], str_key[128], str_to_add[128];
     const char *remapped_color;
     unsigned char *ptr_string;
-    int length, fg, bg, bold, reverse, italic, underline, rc;
+    int length, fg, bg, fg_term, bg_term, bold, reverse, italic, underline;
+    long fg_rgb, bg_rgb;
 
     if (!string)
         return NULL;
@@ -140,9 +255,6 @@ irc_color_decode (const char *string, int keep_colors)
                 reverse = 0;
                 italic = 0;
                 underline = 0;
-                ptr_string++;
-                break;
-            case IRC_COLOR_FIXED_CHAR:
                 ptr_string++;
                 break;
             case IRC_COLOR_REVERSE_CHAR:
@@ -211,19 +323,21 @@ irc_color_decode (const char *string, int keep_colors)
                         bg = -1;
                         if (str_fg[0])
                         {
-                            rc = sscanf (str_fg, "%d", &fg);
-                            if ((rc != EOF) && (rc >= 1))
-                            {
+                            error = NULL;
+                            fg = (int)strtol (str_fg, &error, 10);
+                            if (error && !error[0])
                                 fg %= IRC_NUM_COLORS;
-                            }
+                            else
+                                fg = -1;
                         }
                         if (str_bg[0])
                         {
-                            rc = sscanf (str_bg, "%d", &bg);
-                            if ((rc != EOF) && (rc >= 1))
-                            {
+                            error = NULL;
+                            bg = (int)strtol (str_bg, &error, 10);
+                            if (error && !error[0])
                                 bg %= IRC_NUM_COLORS;
-                            }
+                            else
+                                bg = -1;
                         }
                         /* search "fg,bg" in hashtable of remapped colors */
                         snprintf (str_key, sizeof (str_key), "%d,%d", fg, bg);
@@ -253,6 +367,104 @@ irc_color_decode (const char *string, int keep_colors)
                     }
                 }
                 break;
+            case IRC_COLOR_HEX_COLOR_CHAR:
+                ptr_string++;
+                str_fg[0] = '\0';
+                str_bg[0] = '\0';
+                if (isxdigit (ptr_string[0]))
+                {
+                    /* foreground */
+                    length = 1;
+                    while (isxdigit (ptr_string[length]))
+                    {
+                        length++;
+                        if (length == 6)
+                            break;
+                    }
+                    memcpy (str_fg, ptr_string, length);
+                    str_fg[length] = '\0';
+                    ptr_string += length;
+                }
+                if ((ptr_string[0] == ',') && (isxdigit (ptr_string[1])))
+                {
+                    /* background */
+                    ptr_string++;
+                    length = 1;
+                    while (isxdigit (ptr_string[length]))
+                    {
+                        length++;
+                        if (length == 6)
+                            break;
+                    }
+                    memcpy (str_bg, ptr_string, length);
+                    str_bg[length] = '\0';
+                    ptr_string += length;
+                }
+                if (keep_colors)
+                {
+                    if (str_fg[0] || str_bg[0])
+                    {
+                        fg_rgb = -1;
+                        bg_rgb = -1;
+                        if (str_fg[0])
+                        {
+                            error = NULL;
+                            fg_rgb = strtol (str_fg, &error, 16);
+                            if (!error || error[0])
+                                fg_rgb = -1;
+                        }
+                        if (str_bg[0])
+                        {
+                            error = NULL;
+                            bg_rgb = strtol (str_bg, &error, 16);
+                            if (!error || error[0])
+                                bg_rgb = -1;
+                        }
+                        str_fg[0] = '\0';
+                        str_bg[0] = '\0';
+                        fg_term = -1;
+                        bg_term = -1;
+                        if (fg_rgb >= 0)
+                        {
+                            fg_term = irc_color_convert_rgb2term (fg_rgb);
+                            if (fg_term >= 0)
+                                snprintf (str_fg, sizeof (str_fg), "%d", fg_term);
+                        }
+                        if (bg_rgb >= 0)
+                        {
+                            bg_term = irc_color_convert_rgb2term (bg_rgb);
+                            if (bg_term >= 0)
+                                snprintf (str_bg, sizeof (str_bg), "%d", bg_term);
+                        }
+                        /* search "fg_term,bg_term" in hashtable of remapped colors */
+                        snprintf (str_key, sizeof (str_key),
+                                  "%d,%d", fg_term, bg_term);
+                        remapped_color = weechat_hashtable_get (
+                            irc_config_hashtable_color_term_remap,
+                            str_key);
+                        if (remapped_color)
+                        {
+                            snprintf (str_color, sizeof (str_color),
+                                      "|%s", remapped_color);
+                        }
+                        else
+                        {
+                            snprintf (str_color, sizeof (str_color),
+                                      "|%s%s%s",
+                                      str_fg,
+                                      (str_bg[0]) ? "," : "",
+                                      str_bg);
+                        }
+                        snprintf (str_to_add, sizeof (str_to_add), "%s",
+                                  weechat_color (str_color));
+                    }
+                    else
+                    {
+                        snprintf (str_to_add, sizeof (str_to_add), "%s",
+                                  weechat_color ("resetcolor"));
+                    }
+                }
+                break;
             default:
                 /*
                  * we are not on an IRC color code, just copy the UTF-8 char
@@ -271,10 +483,27 @@ irc_color_decode (const char *string, int keep_colors)
             weechat_string_dyn_concat (out, str_to_add, -1);
     }
 
-    result = *out;
-    weechat_string_dyn_free (out, 0);
+    return weechat_string_dyn_free (out, 0);
+}
 
-    return result;
+/*
+ * Replaces IRC colors by WeeChat colors and returns a pointer to an allocated
+ * string that doesn't need to be freed by the caller.
+ *
+ * If keep_colors == 0: removes any color/style in message otherwise keeps
+ * colors.
+ */
+
+const char *
+irc_color_decode_const (const char *string, int keep_colors)
+{
+    irc_color_index_string_decoded = (irc_color_index_string_decoded + 1) % 32;
+    free (irc_color_string_decoded[irc_color_index_string_decoded]);
+    irc_color_string_decoded[irc_color_index_string_decoded] = irc_color_decode (
+        string, keep_colors);
+    if (!irc_color_string_decoded[irc_color_index_string_decoded])
+        irc_color_string_decoded[irc_color_index_string_decoded] = strdup ("");
+    return (const char *)irc_color_string_decoded[irc_color_index_string_decoded];
 }
 
 /*
@@ -289,7 +518,7 @@ irc_color_decode (const char *string, int keep_colors)
 char *
 irc_color_encode (const char *string, int keep_colors)
 {
-    char **out, *result;
+    char **out;
     unsigned char *ptr_string;
     int length;
 
@@ -367,6 +596,53 @@ irc_color_encode (const char *string, int keep_colors)
                     }
                 }
                 break;
+            case 0x04: /* ^D */
+                if (keep_colors)
+                    weechat_string_dyn_concat (out, IRC_COLOR_HEX_COLOR_STR, -1);
+                ptr_string++;
+                if (isxdigit (ptr_string[0]))
+                {
+                    /* foreground */
+                    length = 1;
+                    while (isxdigit (ptr_string[length]))
+                    {
+                        length++;
+                        if (length == 6)
+                            break;
+                    }
+                    if (keep_colors)
+                    {
+                        weechat_string_dyn_concat (out,
+                                                   (const char *)ptr_string,
+                                                   length);
+                    }
+                    ptr_string += length;
+                }
+                if (ptr_string[0] == ',')
+                {
+                    /* background */
+                    if (keep_colors)
+                        weechat_string_dyn_concat (out, ",", -1);
+                    ptr_string++;
+                    if (isxdigit (ptr_string[0]))
+                    {
+                        length = 1;
+                        while (isxdigit (ptr_string[length]))
+                        {
+                            length++;
+                            if (length == 6)
+                                break;
+                        }
+                        if (keep_colors)
+                        {
+                            weechat_string_dyn_concat (out,
+                                                       (const char *)ptr_string,
+                                                       length);
+                        }
+                        ptr_string += length;
+                    }
+                }
+                break;
             case 0x0F: /* ^O */
                 if (keep_colors)
                     weechat_string_dyn_concat (out, IRC_COLOR_RESET_STR, -1);
@@ -398,84 +674,7 @@ irc_color_encode (const char *string, int keep_colors)
         }
     }
 
-    result = *out;
-    weechat_string_dyn_free (out, 0);
-
-    return result;
-}
-
-/*
- * Converts a RGB color to IRC color.
- *
- * Returns a IRC color number (between 0 and 15), -1 if error.
- */
-
-int
-irc_color_convert_rgb2irc (int rgb)
-{
-    char str_color[64], *error, *info_color;
-    long number;
-
-    snprintf (str_color, sizeof (str_color),
-              "%d,%d",
-              rgb,
-              IRC_COLOR_TERM2IRC_NUM_COLORS);
-
-    info_color = weechat_info_get ("color_rgb2term", str_color);
-    if (!info_color || !info_color[0])
-    {
-        if (info_color)
-            free (info_color);
-        return -1;
-    }
-
-    error = NULL;
-    number = strtol (info_color, &error, 10);
-    if (!error || error[0]
-        || (number < 0) || (number >= IRC_COLOR_TERM2IRC_NUM_COLORS))
-    {
-        free (info_color);
-        return -1;
-    }
-
-    free (info_color);
-
-    return irc_color_term2irc[number];
-}
-
-/*
- * Converts a terminal color to IRC color.
- *
- * Returns a IRC color number (between 0 and 15), -1 if error.
- */
-
-int
-irc_color_convert_term2irc (int color)
-{
-    char str_color[64], *error, *info_color;
-    long number;
-
-    snprintf (str_color, sizeof (str_color), "%d", color);
-
-    info_color = weechat_info_get ("color_term2rgb", str_color);
-    if (!info_color || !info_color[0])
-    {
-        if (info_color)
-            free (info_color);
-        return -1;
-    }
-
-    error = NULL;
-    number = strtol (info_color, &error, 10);
-    if (!error || error[0] || (number < 0) || (number > 0xFFFFFF))
-    {
-        free (info_color);
-        return -1;
-    }
-
-    free (info_color);
-
-    return irc_color_convert_rgb2irc (number);
+    return weechat_string_dyn_free (out, 0);
 }
 
 /*
@@ -742,10 +941,8 @@ irc_color_decode_ansi_cb (void *data, const char *text)
     }
 
 end:
-    if (items)
-        weechat_string_free_split (items);
-    if (text2)
-        free (text2);
+    weechat_string_free_split (items);
+    free (text2);
 
     return (output) ? output : strdup ("");
 }
@@ -776,14 +973,12 @@ irc_color_decode_ansi (const char *string, int keep_colors)
                                     ansi_regex,
                                     REG_EXTENDED) != 0)
         {
-            if (ansi_regex)
-                free (ansi_regex);
+            free (ansi_regex);
             free (irc_color_regex_ansi);
             irc_color_regex_ansi = NULL;
             return NULL;
         }
-        if (ansi_regex)
-            free (ansi_regex);
+        free (ansi_regex);
     }
 
     ansi_state.keep_colors = keep_colors;
@@ -881,16 +1076,33 @@ irc_color_weechat_add_to_infolist (struct t_infolist *infolist)
 }
 
 /*
+ * Initializes IRC colors.
+ */
+
+void
+irc_color_init ()
+{
+    irc_color_index_string_decoded = 0;
+    memset (irc_color_string_decoded, 0, sizeof (irc_color_string_decoded));
+}
+
+/*
  * Ends IRC colors.
  */
 
 void
 irc_color_end ()
 {
+    int i;
+
     if (irc_color_regex_ansi)
     {
         regfree (irc_color_regex_ansi);
         free (irc_color_regex_ansi);
         irc_color_regex_ansi = NULL;
+    }
+    for (i = 0; i < 32; i++)
+    {
+        free (irc_color_string_decoded[i]);
     }
 }

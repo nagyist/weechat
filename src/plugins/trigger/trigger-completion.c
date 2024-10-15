@@ -1,7 +1,7 @@
 /*
  * trigger-completion.c - completion for trigger commands
  *
- * Copyright (C) 2014-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2014-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -80,6 +80,68 @@ trigger_completion_triggers_default_cb (const void *pointer, void *data,
         weechat_completion_list_add (completion,
                                      trigger_config_default_list[i][0],
                                      0, WEECHAT_LIST_POS_SORT);
+    }
+
+    return WEECHAT_RC_OK;
+}
+
+/*
+ * Adds disabled triggers to completion list.
+ */
+
+int
+trigger_completion_triggers_disabled_cb (const void *pointer, void *data,
+                                         const char *completion_item,
+                                         struct t_gui_buffer *buffer,
+                                         struct t_gui_completion *completion)
+{
+    struct t_trigger *ptr_trigger;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) completion_item;
+    (void) buffer;
+
+    for (ptr_trigger = triggers; ptr_trigger;
+         ptr_trigger = ptr_trigger->next_trigger)
+    {
+        if (!weechat_config_boolean (ptr_trigger->options[TRIGGER_OPTION_ENABLED]))
+        {
+            weechat_completion_list_add (completion, ptr_trigger->name,
+                                         0, WEECHAT_LIST_POS_SORT);
+        }
+    }
+
+    return WEECHAT_RC_OK;
+}
+
+/*
+ * Adds enabled triggers to completion list.
+ */
+
+int
+trigger_completion_triggers_enabled_cb (const void *pointer, void *data,
+                                        const char *completion_item,
+                                        struct t_gui_buffer *buffer,
+                                        struct t_gui_completion *completion)
+{
+    struct t_trigger *ptr_trigger;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) completion_item;
+    (void) buffer;
+
+    for (ptr_trigger = triggers; ptr_trigger;
+         ptr_trigger = ptr_trigger->next_trigger)
+    {
+        if (weechat_config_boolean (ptr_trigger->options[TRIGGER_OPTION_ENABLED]))
+        {
+            weechat_completion_list_add (completion, ptr_trigger->name,
+                                         0, WEECHAT_LIST_POS_SORT);
+        }
     }
 
     return WEECHAT_RC_OK;
@@ -555,6 +617,12 @@ trigger_completion_init ()
     weechat_hook_completion ("trigger_names_default",
                              N_("default triggers"),
                              &trigger_completion_triggers_default_cb, NULL, NULL);
+    weechat_hook_completion ("trigger_names_disabled",
+                             N_("disabled triggers"),
+                             &trigger_completion_triggers_disabled_cb, NULL, NULL);
+    weechat_hook_completion ("trigger_names_enabled",
+                             N_("enabled triggers"),
+                             &trigger_completion_triggers_enabled_cb, NULL, NULL);
     weechat_hook_completion ("trigger_options",
                              N_("options for triggers"),
                              &trigger_completion_options_cb, NULL, NULL);

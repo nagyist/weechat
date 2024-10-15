@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -26,13 +26,13 @@ set_target_properties(perl PROPERTIES PREFIX "")
 if(PERL_FOUND)
   if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     # remove "-arch xxx" on macOS
-    STRING(REGEX REPLACE "-arch ppc|-arch i386|-arch x86_64" "" PERL_CFLAGS "${PERL_CFLAGS}")
-    STRING(REGEX REPLACE "-arch ppc|-arch i386|-arch x86_64" "" PERL_LFLAGS "${PERL_LFLAGS}")
+    string(REGEX REPLACE "-arch ppc|-arch i386|-arch x86_64" "" PERL_CFLAGS "${PERL_CFLAGS}")
+    string(REGEX REPLACE "-arch ppc|-arch i386|-arch x86_64" "" PERL_LFLAGS "${PERL_LFLAGS}")
   endif()
   add_definitions(${PERL_CFLAGS})
   include_directories(${PERL_INCLUDE_PATH})
   # ugly hack to force linking against Dynaloader.a
-  string(REGEX MATCH "/[^ $]*/DynaLoader.a" PERL_DYNALOADER ${PERL_LFLAGS})
+  string(REGEX MATCH "/[^ $]*/DynaLoader.a" PERL_DYNALOADER "${PERL_LFLAGS}")
   if(PERL_DYNALOADER)
     string(REPLACE "${PERL_DYNALOADER}" "" PERL_LFLAGS "${PERL_LFLAGS}")
     set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${PERL_LFLAGS}")
@@ -44,4 +44,4 @@ if(PERL_FOUND)
   endif()
 endif()
 
-install(TARGETS perl LIBRARY DESTINATION ${WEECHAT_LIBDIR}/plugins)
+install(TARGETS perl LIBRARY DESTINATION "${WEECHAT_LIBDIR}/plugins")

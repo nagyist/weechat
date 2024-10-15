@@ -1,7 +1,7 @@
 /*
  * test-irc-mode.cpp - test IRC mode functions
  *
- * Copyright (C) 2019-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2019-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -28,16 +28,8 @@ extern "C"
 
 #define WEE_CHECK_GET_ARGS(__result, __arguments)                       \
     str = irc_mode_get_arguments (__arguments);                         \
-    if (__result == NULL)                                               \
-    {                                                                   \
-        POINTERS_EQUAL(NULL, str);                                      \
-    }                                                                   \
-    else                                                                \
-    {                                                                   \
-        STRCMP_EQUAL(__result, str);                                    \
-    }                                                                   \
-    if (str)                                                            \
-        free (str);
+    STRCMP_EQUAL(__result, str);                                        \
+    free (str);
 
 TEST_GROUP(IrcMode)
 {

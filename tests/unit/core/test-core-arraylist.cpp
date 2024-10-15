@@ -1,7 +1,7 @@
 /*
  * test-core-arraylist.cpp - test arraylist functions
  *
- * Copyright (C) 2014-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2014-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -24,8 +24,8 @@
 extern "C"
 {
 #include <string.h>
-#include "src/core/wee-arraylist.h"
-#include "src/core/wee-string.h"
+#include "src/core/core-arraylist.h"
+#include "src/core/core-string.h"
 }
 
 #define TEST_ARRAYLIST_ADD(__result, __value)                           \
@@ -180,7 +180,7 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
     {
         if (allow_duplicates)
         {
-            POINTERS_EQUAL(NULL, arraylist->data[0]);
+            STRCMP_EQUAL(NULL, (const char *)arraylist->data[0]);
             STRCMP_EQUAL(item_abc, (const char *)arraylist->data[1]);
             STRCMP_EQUAL(item_DEF, (const char *)arraylist->data[2]);
             STRCMP_EQUAL(item_def, (const char *)arraylist->data[3]);
@@ -189,19 +189,19 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
             STRCMP_EQUAL(item_zzz, (const char *)arraylist->data[6]);
             for (i = 7; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
         else
         {
-            POINTERS_EQUAL(NULL, arraylist->data[0]);
+            STRCMP_EQUAL(NULL, (const char *)arraylist->data[0]);
             STRCMP_EQUAL(item_abc, (const char *)arraylist->data[1]);
             STRCMP_EQUAL(item_Def, (const char *)arraylist->data[2]);
             STRCMP_EQUAL(item_xxx, (const char *)arraylist->data[3]);
             STRCMP_EQUAL(item_zzz, (const char *)arraylist->data[4]);
             for (i = 5; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
     }
@@ -211,26 +211,26 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
         {
             STRCMP_EQUAL(item_zzz, (const char *)arraylist->data[0]);
             STRCMP_EQUAL(item_xxx, (const char *)arraylist->data[1]);
-            POINTERS_EQUAL(NULL, arraylist->data[2]);
+            STRCMP_EQUAL(NULL, (const char *)arraylist->data[2]);
             STRCMP_EQUAL(item_DEF, (const char *)arraylist->data[3]);
             STRCMP_EQUAL(item_def, (const char *)arraylist->data[4]);
             STRCMP_EQUAL(item_Def, (const char *)arraylist->data[5]);
             STRCMP_EQUAL(item_abc, (const char *)arraylist->data[6]);
             for (i = 7; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
         else
         {
             STRCMP_EQUAL(item_zzz, (const char *)arraylist->data[0]);
             STRCMP_EQUAL(item_xxx, (const char *)arraylist->data[1]);
-            POINTERS_EQUAL(NULL, arraylist->data[2]);
+            STRCMP_EQUAL(NULL, (const char *)arraylist->data[2]);
             STRCMP_EQUAL(item_Def, (const char *)arraylist->data[3]);
             STRCMP_EQUAL(item_abc, (const char *)arraylist->data[4]);
             for (i = 5; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
     }
@@ -329,7 +329,7 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
             STRCMP_EQUAL(item_zzz, (const char *)arraylist->data[3]);
             for (i = 4; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
         else
@@ -338,7 +338,7 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
             STRCMP_EQUAL(item_zzz, (const char *)arraylist->data[1]);
             for (i = 2; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
     }
@@ -352,7 +352,7 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
             STRCMP_EQUAL(item_abc, (const char *)arraylist->data[3]);
             for (i = 4; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
         else
@@ -361,7 +361,7 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
             STRCMP_EQUAL(item_abc, (const char *)arraylist->data[1]);
             for (i = 2; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
     }
@@ -399,7 +399,7 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
             STRCMP_EQUAL(item_zzz, (const char *)arraylist->data[4]);
             for (i = 5; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
         else
@@ -409,7 +409,7 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
             STRCMP_EQUAL(item_zzz, (const char *)arraylist->data[2]);
             for (i = 3; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
     }
@@ -424,7 +424,7 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
             STRCMP_EQUAL(item_abc, (const char *)arraylist->data[4]);
             for (i = 5; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
         else
@@ -434,7 +434,7 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
             STRCMP_EQUAL(item_abc, (const char *)arraylist->data[2]);
             for (i = 3; i < arraylist->size_alloc; i++)
             {
-                POINTERS_EQUAL(NULL, arraylist->data[i]);
+                STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
             }
         }
     }
@@ -452,7 +452,7 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
         CHECK(arraylist->data);
         for (i = 0; i < initial_size; i++)
         {
-            POINTERS_EQUAL(NULL, arraylist->data[i]);
+            STRCMP_EQUAL(NULL, (const char *)arraylist->data[i]);
         }
     }
     else
@@ -480,6 +480,9 @@ test_arraylist (int initial_size, int sorted, int allow_duplicates)
 TEST(CoreArraylist, New)
 {
     int initial_size, sorted, allow_duplicates;
+
+    /* free arraylist with NULL pointer */
+    arraylist_free (NULL);
 
     /*
      * in order to create an arraylist, initial_size must be >= 0 and a

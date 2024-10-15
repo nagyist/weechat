@@ -1,7 +1,7 @@
 /*
  * main.c - entry point for Curses GUI
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -28,6 +28,7 @@
 #include "../../../core/weechat.h"
 #include "../../gui-main.h"
 #include "../gui-curses.h"
+#include "../gui-curses-main.h"
 
 
 /*

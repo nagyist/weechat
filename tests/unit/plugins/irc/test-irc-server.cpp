@@ -1,7 +1,7 @@
 /*
  * test-irc-server.cpp - test IRC protocol functions
  *
- * Copyright (C) 2020-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2020-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -27,10 +27,13 @@ extern "C"
 {
 #include <stdio.h>
 #include <string.h>
+#include "src/core/core-config-file.h"
 #include "src/plugins/plugin.h"
 #include "src/plugins/irc/irc-channel.h"
 #include "src/plugins/irc/irc-server.h"
 
+extern int irc_server_fingerprint_search_algo_with_size (int size);
+extern char *irc_server_eval_fingerprint (struct t_irc_server *server);
 extern char *irc_server_build_autojoin (struct t_irc_server *server);
 }
 
@@ -86,37 +89,19 @@ TEST(IrcServer, Search)
 
 /*
  * Tests functions:
- *   irc_server_casesearch
- */
-
-TEST(IrcServer, CaseSearch)
-{
-    struct t_irc_server *server1, *server2;
-
-    server1 = irc_server_alloc ("srv1");
-    server2 = irc_server_alloc ("abc");
-
-    POINTERS_EQUAL(NULL, irc_server_casesearch (NULL));
-    POINTERS_EQUAL(NULL, irc_server_casesearch ("does_not_exist"));
-
-    POINTERS_EQUAL(server1, irc_server_casesearch ("SRV1"));
-    POINTERS_EQUAL(server2, irc_server_casesearch ("ABC"));
-
-    POINTERS_EQUAL(server1, irc_server_casesearch ("srv1"));
-    POINTERS_EQUAL(server2, irc_server_casesearch ("abc"));
-
-    irc_server_free (server1);
-    irc_server_free (server2);
-}
-
-/*
- * Tests functions:
  *   irc_server_search_option
  */
 
 TEST(IrcServer, SearchOption)
 {
-    /* TODO: write tests */
+    LONGS_EQUAL(-1, irc_server_search_option (NULL));
+    LONGS_EQUAL(-1, irc_server_search_option (""));
+    LONGS_EQUAL(-1, irc_server_search_option ("does_not_exist"));
+
+    CHECK(irc_server_search_option ("addresses") >= 0);
+    CHECK(irc_server_search_option ("ADDRESSES") >= 0);
+    CHECK(irc_server_search_option ("autojoin") >= 0);
+    CHECK(irc_server_search_option ("AUTOJOIN") >= 0);
 }
 
 /*
@@ -126,7 +111,14 @@ TEST(IrcServer, SearchOption)
 
 TEST(IrcServer, SearchCasemapping)
 {
-    /* TODO: write tests */
+    LONGS_EQUAL(-1, irc_server_search_casemapping (NULL));
+    LONGS_EQUAL(-1, irc_server_search_casemapping (""));
+    LONGS_EQUAL(-1, irc_server_search_casemapping ("does_not_exist"));
+
+    CHECK(irc_server_search_casemapping ("rfc1459") >= 0);
+    CHECK(irc_server_search_casemapping ("RFC1459") >= 0);
+    CHECK(irc_server_search_casemapping ("strict-rfc1459") >= 0);
+    CHECK(irc_server_search_casemapping ("STRICT-RFC1459") >= 0);
 }
 
 /*
@@ -136,27 +128,89 @@ TEST(IrcServer, SearchCasemapping)
 
 TEST(IrcServer, SearchUtf8mapping)
 {
-    /* TODO: write tests */
+    LONGS_EQUAL(-1, irc_server_search_utf8mapping (NULL));
+    LONGS_EQUAL(-1, irc_server_search_utf8mapping (""));
+    LONGS_EQUAL(-1, irc_server_search_utf8mapping ("does_not_exist"));
+
+    CHECK(irc_server_search_utf8mapping ("none") >= 0);
+    CHECK(irc_server_search_utf8mapping ("NONE") >= 0);
+    CHECK(irc_server_search_utf8mapping ("rfc8265") >= 0);
+    CHECK(irc_server_search_utf8mapping ("RFC8265") >= 0);
 }
 
 /*
  * Tests functions:
  *   irc_server_strcasecmp
+ *   irc_server_strncasecmp
  */
 
 TEST(IrcServer, Strcasecmp)
 {
-    /* TODO: write tests */
-}
+    struct t_irc_server *server;
 
-/*
- * Tests functions:
- *   irc_server_strncasecmp
- */
+    server = irc_server_alloc ("server1");
+    CHECK(server);
 
-TEST(IrcServer, Strncasecmp)
-{
-    /* TODO: write tests */
+    LONGS_EQUAL(0, irc_server_strcasecmp (NULL, NULL, NULL));
+    LONGS_EQUAL(0, irc_server_strcasecmp (NULL, "", ""));
+
+    LONGS_EQUAL(0, irc_server_strncasecmp (NULL, NULL, NULL, 0));
+    LONGS_EQUAL(0, irc_server_strncasecmp (NULL, "", "", 0));
+    LONGS_EQUAL(0, irc_server_strncasecmp (NULL, NULL, NULL, 1));
+    LONGS_EQUAL(0, irc_server_strncasecmp (NULL, "", "", 1));
+
+    LONGS_EQUAL(0, irc_server_strcasecmp (NULL, "abc", "abc"));
+    LONGS_EQUAL(0, irc_server_strcasecmp (NULL, "abc", "ABC"));
+
+    LONGS_EQUAL(0, irc_server_strncasecmp (NULL, "abc", "abc", 1));
+    LONGS_EQUAL(0, irc_server_strncasecmp (NULL, "abc", "ABC", 1));
+
+    LONGS_EQUAL(-19, irc_server_strcasecmp (NULL, "abc", "test"));
+    LONGS_EQUAL(19, irc_server_strcasecmp (NULL, "test", "abc"));
+
+    LONGS_EQUAL(-19, irc_server_strncasecmp (NULL, "abc", "test", 1));
+    LONGS_EQUAL(19, irc_server_strncasecmp (NULL, "test", "abc", 1));
+
+    LONGS_EQUAL(0, irc_server_strncasecmp (NULL, "atest", "abc", 1));
+
+    LONGS_EQUAL(0, irc_server_strcasecmp (NULL, "nick[a]", "nick{a}"));
+    LONGS_EQUAL(0, irc_server_strcasecmp (NULL, "nick^a", "nick~a"));
+
+    LONGS_EQUAL(0, irc_server_strncasecmp (NULL, "nick[a]", "nick{a}", 10));
+    LONGS_EQUAL(0, irc_server_strncasecmp (NULL, "nick^a", "nick~a", 10));
+
+    LONGS_EQUAL(0, irc_server_strcasecmp (server, "nick[a]", "nick{a}"));
+    LONGS_EQUAL(0, irc_server_strcasecmp (server, "nick^a", "nick~a"));
+
+    LONGS_EQUAL(0, irc_server_strncasecmp (server, "nick[a]", "nick{a}", 10));
+    LONGS_EQUAL(0, irc_server_strncasecmp (server, "nick^a", "nick~a", 10));
+
+    server->casemapping = IRC_SERVER_CASEMAPPING_STRICT_RFC1459;
+
+    LONGS_EQUAL(0, irc_server_strcasecmp (server, "nick[a]", "nick{a}"));
+    LONGS_EQUAL(-32, irc_server_strcasecmp (server, "nick^a", "nick~a"));
+    LONGS_EQUAL(32, irc_server_strcasecmp (server, "nick~a", "nick^a"));
+
+    LONGS_EQUAL(0, irc_server_strncasecmp (server, "nick[a]", "nick{a}", 10));
+    LONGS_EQUAL(-32, irc_server_strncasecmp (server, "nick^a", "nick~a", 10));
+    LONGS_EQUAL(32, irc_server_strncasecmp (server, "nick~a", "nick^a", 10));
+    LONGS_EQUAL(32, irc_server_strncasecmp (server, "nick_ô", "nick_Ô", 10));
+
+    server->casemapping = IRC_SERVER_CASEMAPPING_ASCII;
+
+    LONGS_EQUAL(-32, irc_server_strcasecmp (server, "nick[a]", "nick{a}"));
+    LONGS_EQUAL(32, irc_server_strcasecmp (server, "nick{a}", "nick[a]"));
+    LONGS_EQUAL(-32, irc_server_strcasecmp (server, "nick^a", "nick~a"));
+    LONGS_EQUAL(32, irc_server_strcasecmp (server, "nick~a", "nick^a"));
+    LONGS_EQUAL(32, irc_server_strncasecmp (server, "nick_ô", "nick_Ô", 10));
+
+    LONGS_EQUAL(-32, irc_server_strncasecmp (server, "nick[a]", "nick{a}", 10));
+    LONGS_EQUAL(32, irc_server_strncasecmp (server, "nick{a}", "nick[a]", 10));
+    LONGS_EQUAL(-32, irc_server_strncasecmp (server, "nick^a", "nick~a", 10));
+    LONGS_EQUAL(32, irc_server_strncasecmp (server, "nick~a", "nick^a", 10));
+    LONGS_EQUAL(32, irc_server_strncasecmp (server, "nick_ô", "nick_Ô", 10));
+
+    irc_server_free (server);
 }
 
 /*
@@ -166,15 +220,124 @@ TEST(IrcServer, Strncasecmp)
 
 TEST(IrcServer, EvalExpression)
 {
-    /* TODO: write tests */
+    struct t_irc_server *server;
+    char *str;
+
+    server = irc_server_alloc ("server1");
+    CHECK(server);
+
+    WEE_TEST_STR("", irc_server_eval_expression (NULL, "${server}"));
+    WEE_TEST_STR("", irc_server_eval_expression (NULL, "${irc_server}"));
+    WEE_TEST_STR("", irc_server_eval_expression (NULL, "${irc_server.name}"));
+
+    WEE_TEST_STR("server1", irc_server_eval_expression (server, "${server}"));
+    WEE_TEST_STR("server1", irc_server_eval_expression (server, "${irc_server.name}"));
+
+    str = irc_server_eval_expression (server, "${irc_server}");
+    STRNCMP_EQUAL("0x", str, 2);
+    free (str);
+
+    str = irc_server_eval_expression (server, "${username}");
+    CHECK(str && str[0]);
+    free (str);
+
+    irc_server_free (server);
 }
 
 /*
  * Tests functions:
- *   irc_server_EvalFingerprint
+ *   irc_server_fingerprint_search_algo_with_size
+ */
+
+TEST(IrcServer, FingerprintSearchAlgoWithSize)
+{
+    LONGS_EQUAL(-1, irc_server_fingerprint_search_algo_with_size (-1));
+    LONGS_EQUAL(-1, irc_server_fingerprint_search_algo_with_size (0));
+    LONGS_EQUAL(-1, irc_server_fingerprint_search_algo_with_size (-1));
+    LONGS_EQUAL(-1, irc_server_fingerprint_search_algo_with_size (1024));
+
+    LONGS_EQUAL(IRC_FINGERPRINT_ALGO_SHA1,
+                irc_server_fingerprint_search_algo_with_size (160));
+    LONGS_EQUAL(IRC_FINGERPRINT_ALGO_SHA256,
+                irc_server_fingerprint_search_algo_with_size (256));
+    LONGS_EQUAL(IRC_FINGERPRINT_ALGO_SHA512,
+                irc_server_fingerprint_search_algo_with_size (512));
+}
+
+/*
+ * Tests functions:
+ *   irc_server_eval_fingerprint
  */
 
 TEST(IrcServer, EvalFingerprint)
+{
+    struct t_irc_server *server;
+    char *str;
+
+    server = irc_server_alloc ("server1");
+    CHECK(server);
+
+    STRCMP_EQUAL(NULL, irc_server_eval_fingerprint (NULL));
+
+    WEE_TEST_STR("", irc_server_eval_fingerprint (server));
+
+    /* invalid: evaluated to empty string */
+    config_file_option_set (server->options[IRC_SERVER_OPTION_TLS_FINGERPRINT],
+                            "${empty_value}", 1);
+    STRCMP_EQUAL(NULL, irc_server_eval_fingerprint (server));
+
+    /* invalid fingerprint value */
+    config_file_option_set (server->options[IRC_SERVER_OPTION_TLS_FINGERPRINT],
+                            "invalid", 1);
+    STRCMP_EQUAL(NULL, irc_server_eval_fingerprint (server));
+
+    /* invalid fingerprint value (same length as SHA-1) */
+    config_file_option_set (server->options[IRC_SERVER_OPTION_TLS_FINGERPRINT],
+                            "zzzz0aeb5ebce80ad5c201ebc358d616904czzzz", 1);
+    STRCMP_EQUAL(NULL, irc_server_eval_fingerprint (server));
+
+    /* valid SHA-1 fingerprint */
+    config_file_option_set (server->options[IRC_SERVER_OPTION_TLS_FINGERPRINT],
+                            "340b0aeb5ebce80ad5c201ebc358d616904ca84e", 1);
+    WEE_TEST_STR("340b0aeb5ebce80ad5c201ebc358d616904ca84e",
+                 irc_server_eval_fingerprint (server));
+
+    /* valid SHA-256 fingerprint */
+    config_file_option_set (
+        server->options[IRC_SERVER_OPTION_TLS_FINGERPRINT],
+        "6a52951b8c2541c82bf11c83534631447dbae36b6576fe79fa6a5d3467eb3af9", 1);
+    WEE_TEST_STR("6a52951b8c2541c82bf11c83534631447dbae36b6576fe79fa6a5d3467eb3af9",
+                 irc_server_eval_fingerprint (server));
+
+    /* valid SHA-256 fingerprint */
+    config_file_option_set (
+        server->options[IRC_SERVER_OPTION_TLS_FINGERPRINT],
+        "738c7bb821afe25b6be60386883bd8edb3e972bee442f7d75c01aa65155b5887"
+        "c3512362e1008eb71cdd343449440b0ea0559b1e11743009ddf62ab1d3618ace", 1);
+    WEE_TEST_STR(
+        "738c7bb821afe25b6be60386883bd8edb3e972bee442f7d75c01aa65155b5887"
+        "c3512362e1008eb71cdd343449440b0ea0559b1e11743009ddf62ab1d3618ace",
+        irc_server_eval_fingerprint (server));
+
+    /* valid SHA-1 + SHA-256 fingerprints */
+    config_file_option_set (
+        server->options[IRC_SERVER_OPTION_TLS_FINGERPRINT],
+        "340b0aeb5ebce80ad5c201ebc358d616904ca84e,"
+        "6a52951b8c2541c82bf11c83534631447dbae36b6576fe79fa6a5d3467eb3af9", 1);
+    WEE_TEST_STR(
+        "340b0aeb5ebce80ad5c201ebc358d616904ca84e,"
+        "6a52951b8c2541c82bf11c83534631447dbae36b6576fe79fa6a5d3467eb3af9",
+        irc_server_eval_fingerprint (server));
+
+    irc_server_free (server);
+}
+
+/*
+ * Tests functions:
+ *   irc_server_sasl_get_creds
+ */
+
+TEST(IrcServer, SaslGetCreds)
 {
     /* TODO: write tests */
 }
@@ -196,17 +359,114 @@ TEST(IrcServer, SaslEnabled)
 
 TEST(IrcServer, GetNameWithoutPort)
 {
-    /* TODO: write tests */
+    char *str;
+
+    STRCMP_EQUAL(NULL, irc_server_get_name_without_port (NULL));
+
+    WEE_TEST_STR("", irc_server_get_name_without_port (""));
+    WEE_TEST_STR("example.com", irc_server_get_name_without_port ("example.com"));
+    WEE_TEST_STR("example.com", irc_server_get_name_without_port ("example.com/6697"));
 }
 
 /*
  * Tests functions:
+ *   irc_server_get_short_description
  *   irc_server_set_addresses
  */
 
 TEST(IrcServer, SetAddresses)
 {
-    /* TODO: write tests */
+    struct t_irc_server *server;
+    char *str;
+
+    STRCMP_EQUAL(NULL, irc_server_get_short_description (NULL));
+
+    server = irc_server_alloc ("server1");
+
+    config_file_option_set (server->options[IRC_SERVER_OPTION_TLS], "off", 1);
+
+    LONGS_EQUAL(0, irc_server_set_addresses (NULL, NULL, 0));
+    LONGS_EQUAL(0, irc_server_set_addresses (NULL, "irc.example.org", 0));
+
+    LONGS_EQUAL(1, irc_server_set_addresses (server, "fake:irc.fake.org", 0));
+    LONGS_EQUAL(1, server->fake_server);
+    STRCMP_EQUAL("irc.fake.org", server->addresses_eval);
+    LONGS_EQUAL(1, server->addresses_count);
+    STRCMP_EQUAL("irc.fake.org", server->addresses_array[0]);
+    LONGS_EQUAL(6667, server->ports_array[0]);
+    LONGS_EQUAL(0, server->retry_array[0]);
+
+    WEE_TEST_STR("irc.fake.org/6667 (fake, TLS: disabled)",
+                 irc_server_get_short_description (server));
+
+    LONGS_EQUAL(1, irc_server_set_addresses (server, "irc.example.org", 0));
+    LONGS_EQUAL(0, server->fake_server);
+    STRCMP_EQUAL("irc.example.org", server->addresses_eval);
+    LONGS_EQUAL(1, server->addresses_count);
+    STRCMP_EQUAL("irc.example.org", server->addresses_array[0]);
+    LONGS_EQUAL(6667, server->ports_array[0]);
+    LONGS_EQUAL(0, server->retry_array[0]);
+
+    WEE_TEST_STR("irc.example.org/6667 (TLS: disabled)",
+                 irc_server_get_short_description (server));
+
+    LONGS_EQUAL(1,
+                irc_server_set_addresses (
+                    server, "irc.example.org,irc2.example.org/6666", 0));
+    LONGS_EQUAL(0, server->fake_server);
+    STRCMP_EQUAL("irc.example.org,irc2.example.org/6666", server->addresses_eval);
+    LONGS_EQUAL(2, server->addresses_count);
+    STRCMP_EQUAL("irc.example.org", server->addresses_array[0]);
+    STRCMP_EQUAL("irc2.example.org", server->addresses_array[1]);
+    LONGS_EQUAL(6667, server->ports_array[0]);
+    LONGS_EQUAL(6666, server->ports_array[1]);
+    LONGS_EQUAL(0, server->retry_array[0]);
+    LONGS_EQUAL(0, server->retry_array[1]);
+
+    WEE_TEST_STR("irc.example.org/6667, irc2.example.org/6666 (TLS: disabled)",
+                 irc_server_get_short_description (server));
+
+    config_file_option_set (server->options[IRC_SERVER_OPTION_TLS], "on", 1);
+
+    LONGS_EQUAL(1,
+                irc_server_set_addresses (
+                    server, "irc.example.org,irc2.example.org/7000", 1));
+    LONGS_EQUAL(0, server->fake_server);
+    STRCMP_EQUAL("irc.example.org,irc2.example.org/7000", server->addresses_eval);
+    LONGS_EQUAL(2, server->addresses_count);
+    STRCMP_EQUAL("irc.example.org", server->addresses_array[0]);
+    STRCMP_EQUAL("irc2.example.org", server->addresses_array[1]);
+    LONGS_EQUAL(6697, server->ports_array[0]);
+    LONGS_EQUAL(7000, server->ports_array[1]);
+    LONGS_EQUAL(0, server->retry_array[0]);
+    LONGS_EQUAL(0, server->retry_array[1]);
+
+    WEE_TEST_STR("irc.example.org/6697, irc2.example.org/7000 (TLS: enabled)",
+                 irc_server_get_short_description (server));
+
+    LONGS_EQUAL(0,
+                irc_server_set_addresses (
+                    server, "irc.example.org,irc2.example.org/7000", 1));
+    LONGS_EQUAL(0, server->fake_server);
+    STRCMP_EQUAL("irc.example.org,irc2.example.org/7000", server->addresses_eval);
+    LONGS_EQUAL(2, server->addresses_count);
+    STRCMP_EQUAL("irc.example.org", server->addresses_array[0]);
+    STRCMP_EQUAL("irc2.example.org", server->addresses_array[1]);
+    LONGS_EQUAL(6697, server->ports_array[0]);
+    LONGS_EQUAL(7000, server->ports_array[1]);
+    LONGS_EQUAL(0, server->retry_array[0]);
+    LONGS_EQUAL(0, server->retry_array[1]);
+
+    WEE_TEST_STR("irc.example.org/6697, irc2.example.org/7000 (TLS: enabled)",
+                 irc_server_get_short_description (server));
+
+    server->temp_server = 1;
+
+    WEE_TEST_STR("irc.example.org/6697, irc2.example.org/7000 "
+                 "(temporary, TLS: enabled)",
+                 irc_server_get_short_description (server));
+
+    irc_server_free (server);
 }
 
 /*
@@ -285,20 +545,20 @@ TEST(IrcServer, GetIsupportValue)
         free (server->isupport);
     server->isupport = strdup ("");
 
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, NULL));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, ""));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "TEST"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, NULL));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, ""));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "TEST"));
 
     if (server->isupport)
         free (server->isupport);
     server->isupport = strdup ("AWAYLEN=307 BOT=B CASEMAPPING=ascii "
                                "CHANLIMIT=#:10 EMPTY= INVEX KICKLEN=307 WHOX");
 
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, NULL));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, ""));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "xxx"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "AWAYLE"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "WHO"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, NULL));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, ""));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "xxx"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "AWAYLE"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "WHO"));
 
     STRCMP_EQUAL("307", irc_server_get_isupport_value (server, "AWAYLEN"));
     STRCMP_EQUAL("B", irc_server_get_isupport_value (server, "BOT"));
@@ -313,13 +573,13 @@ TEST(IrcServer, GetIsupportValue)
         free (server->isupport);
     server->isupport = strdup ("TEST SECOND");
 
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "T"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "TES"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "EST"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "TESTT"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "SEC"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "COND"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "SECONDD"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "T"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "TES"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "EST"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "TESTT"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "SEC"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "COND"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "SECONDD"));
 
     STRCMP_EQUAL("", irc_server_get_isupport_value (server, "TEST"));
     STRCMP_EQUAL("", irc_server_get_isupport_value (server, "SECOND"));
@@ -328,10 +588,10 @@ TEST(IrcServer, GetIsupportValue)
         free (server->isupport);
     server->isupport = strdup ("TEST=abc");
 
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "T"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "TES"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "EST"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "TESTT"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "T"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "TES"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "EST"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "TESTT"));
 
     STRCMP_EQUAL("abc", irc_server_get_isupport_value (server, "TEST"));
 
@@ -339,10 +599,10 @@ TEST(IrcServer, GetIsupportValue)
         free (server->isupport);
     server->isupport = strdup ("  TEST=abc  ");
 
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "T"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "TES"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "EST"));
-    POINTERS_EQUAL(NULL, irc_server_get_isupport_value (server, "TESTT"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "T"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "TES"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "EST"));
+    STRCMP_EQUAL(NULL, irc_server_get_isupport_value (server, "TESTT"));
 
     STRCMP_EQUAL("abc", irc_server_get_isupport_value (server, "TEST"));
 
@@ -371,21 +631,21 @@ TEST(IrcServer, SetClienttagdeny)
     server = irc_server_alloc ("test_clienttagdeny");
     CHECK(server);
 
-    POINTERS_EQUAL(NULL, server->clienttagdeny);
+    STRCMP_EQUAL(NULL, server->clienttagdeny);
     LONGS_EQUAL(0, server->clienttagdeny_count);
     POINTERS_EQUAL(NULL, server->clienttagdeny_array);
     LONGS_EQUAL(1, server->typing_allowed);
 
     irc_server_set_clienttagdeny (server, "*");
     irc_server_set_clienttagdeny (server, NULL);
-    POINTERS_EQUAL(NULL, server->clienttagdeny);
+    STRCMP_EQUAL(NULL, server->clienttagdeny);
     LONGS_EQUAL(0, server->clienttagdeny_count);
     POINTERS_EQUAL(NULL, server->clienttagdeny_array);
     LONGS_EQUAL(1, server->typing_allowed);
 
     irc_server_set_clienttagdeny (server, "*");
     irc_server_set_clienttagdeny (server, "");
-    POINTERS_EQUAL(NULL, server->clienttagdeny);
+    STRCMP_EQUAL(NULL, server->clienttagdeny);
     LONGS_EQUAL(0, server->clienttagdeny_count);
     POINTERS_EQUAL(NULL, server->clienttagdeny_array);
     LONGS_EQUAL(1, server->typing_allowed);
@@ -394,7 +654,7 @@ TEST(IrcServer, SetClienttagdeny)
     STRCMP_EQUAL("*", server->clienttagdeny);
     LONGS_EQUAL(1, server->clienttagdeny_count);
     STRCMP_EQUAL("*", server->clienttagdeny_array[0]);
-    POINTERS_EQUAL(NULL, server->clienttagdeny_array[1]);
+    STRCMP_EQUAL(NULL, server->clienttagdeny_array[1]);
     LONGS_EQUAL(0, server->typing_allowed);
 
     irc_server_set_clienttagdeny (server, "*,-foo");
@@ -402,7 +662,7 @@ TEST(IrcServer, SetClienttagdeny)
     LONGS_EQUAL(2, server->clienttagdeny_count);
     STRCMP_EQUAL("*", server->clienttagdeny_array[0]);
     STRCMP_EQUAL("!foo", server->clienttagdeny_array[1]);
-    POINTERS_EQUAL(NULL, server->clienttagdeny_array[2]);
+    STRCMP_EQUAL(NULL, server->clienttagdeny_array[2]);
     LONGS_EQUAL(0, server->typing_allowed);
 
     irc_server_set_clienttagdeny (server, "*,-foo,-example/bar");
@@ -411,7 +671,7 @@ TEST(IrcServer, SetClienttagdeny)
     STRCMP_EQUAL("*", server->clienttagdeny_array[0]);
     STRCMP_EQUAL("!foo", server->clienttagdeny_array[1]);
     STRCMP_EQUAL("!example/bar", server->clienttagdeny_array[2]);
-    POINTERS_EQUAL(NULL, server->clienttagdeny_array[3]);
+    STRCMP_EQUAL(NULL, server->clienttagdeny_array[3]);
     LONGS_EQUAL(0, server->typing_allowed);
 
     irc_server_set_clienttagdeny (server, "*,-foo,-example/bar,-typing");
@@ -421,7 +681,7 @@ TEST(IrcServer, SetClienttagdeny)
     STRCMP_EQUAL("!foo", server->clienttagdeny_array[1]);
     STRCMP_EQUAL("!example/bar", server->clienttagdeny_array[2]);
     STRCMP_EQUAL("!typing", server->clienttagdeny_array[3]);
-    POINTERS_EQUAL(NULL, server->clienttagdeny_array[4]);
+    STRCMP_EQUAL(NULL, server->clienttagdeny_array[4]);
     LONGS_EQUAL(1, server->typing_allowed);
 
     irc_server_free (server);
@@ -539,6 +799,16 @@ TEST(IrcServer, GetDefaultMsg)
 
 /*
  * Tests functions:
+ *   irc_server_has_channels
+ */
+
+TEST(IrcServer, HasChannels)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
  *   irc_server_alloc
  */
 
@@ -554,7 +824,136 @@ TEST(IrcServer, Alloc)
 
 TEST(IrcServer, AllocWithUrl)
 {
-    /* TODO: write tests */
+    struct t_irc_server *server;
+
+    POINTERS_EQUAL(NULL, irc_server_alloc_with_url (NULL));
+    POINTERS_EQUAL(NULL, irc_server_alloc_with_url (""));
+    POINTERS_EQUAL(NULL, irc_server_alloc_with_url ("test"));
+    POINTERS_EQUAL(NULL, irc_server_alloc_with_url ("test://irc.example.org"));
+
+    /* address */
+    server = irc_server_alloc_with_url ("irc://irc.example.org");
+    CHECK(server);
+    STRCMP_EQUAL(server->name, "irc.example.org");
+    STRCMP_EQUAL("irc.example.org/6667",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_ADDRESSES]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_IPV6]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_TLS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_PASSWORD]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_NICKS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_AUTOJOIN]));
+    irc_server_free (server);
+
+    /* address/port */
+    server = irc_server_alloc_with_url ("irc://irc.example.org:7000");
+    CHECK(server);
+    STRCMP_EQUAL(server->name, "irc.example.org");
+    STRCMP_EQUAL("irc.example.org/7000",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_ADDRESSES]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_IPV6]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_TLS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_PASSWORD]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_NICKS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_AUTOJOIN]));
+    irc_server_free (server);
+
+    /* address/port, IPv6 */
+    server = irc_server_alloc_with_url ("irc6://irc.example.org:7000");
+    CHECK(server);
+    STRCMP_EQUAL(server->name, "irc.example.org");
+    STRCMP_EQUAL("irc.example.org/7000",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_ADDRESSES]));
+    LONGS_EQUAL(1, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_IPV6]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_TLS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_PASSWORD]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_NICKS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_AUTOJOIN]));
+    irc_server_free (server);
+
+    /* address, TLS */
+    server = irc_server_alloc_with_url ("ircs://irc.example.org");
+    CHECK(server);
+    STRCMP_EQUAL(server->name, "irc.example.org");
+    STRCMP_EQUAL("irc.example.org/6697",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_ADDRESSES]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_IPV6]));
+    LONGS_EQUAL(1, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_TLS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_PASSWORD]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_NICKS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_AUTOJOIN]));
+    irc_server_free (server);
+
+    /* address, IPv6, TLS */
+    server = irc_server_alloc_with_url ("irc6s://irc.example.org");
+    CHECK(server);
+    STRCMP_EQUAL(server->name, "irc.example.org");
+    STRCMP_EQUAL("irc.example.org/6697",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_ADDRESSES]));
+    LONGS_EQUAL(1, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_IPV6]));
+    LONGS_EQUAL(1, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_TLS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_PASSWORD]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_NICKS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_AUTOJOIN]));
+    irc_server_free (server);
+
+    /* address/port, TLS */
+    server = irc_server_alloc_with_url ("ircs://irc.example.org:7000");
+    CHECK(server);
+    STRCMP_EQUAL(server->name, "irc.example.org");
+    STRCMP_EQUAL("irc.example.org/7000",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_ADDRESSES]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_IPV6]));
+    LONGS_EQUAL(1, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_TLS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_PASSWORD]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_NICKS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_AUTOJOIN]));
+    irc_server_free (server);
+
+    /* address, nick */
+    server = irc_server_alloc_with_url ("irc://alice@irc.example.org");
+    CHECK(server);
+    STRCMP_EQUAL(server->name, "irc.example.org");
+    STRCMP_EQUAL("irc.example.org/6667",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_ADDRESSES]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_IPV6]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_TLS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_PASSWORD]));
+    STRCMP_EQUAL("alice,alice2,alice3,alice4,alice5",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_NICKS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_AUTOJOIN]));
+    irc_server_free (server);
+
+    /* address, nick, password */
+    server = irc_server_alloc_with_url ("irc://alice:secret@irc.example.org");
+    CHECK(server);
+    STRCMP_EQUAL(server->name, "irc.example.org");
+    STRCMP_EQUAL("irc.example.org/6667",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_ADDRESSES]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_IPV6]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_TLS]));
+    STRCMP_EQUAL("secret",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_PASSWORD]));
+    STRCMP_EQUAL("alice,alice2,alice3,alice4,alice5",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_NICKS]));
+    STRCMP_EQUAL(NULL, CONFIG_STRING(server->options[IRC_SERVER_OPTION_AUTOJOIN]));
+    irc_server_free (server);
+
+    /* address, nick, password, channels */
+    server = irc_server_alloc_with_url (
+        "irc://alice:secret@irc.example.org/#test1,#test2");
+    CHECK(server);
+    STRCMP_EQUAL(server->name, "irc.example.org");
+    STRCMP_EQUAL("irc.example.org/6667",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_ADDRESSES]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_IPV6]));
+    LONGS_EQUAL(0, CONFIG_BOOLEAN(server->options[IRC_SERVER_OPTION_TLS]));
+    STRCMP_EQUAL("secret",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_PASSWORD]));
+    STRCMP_EQUAL("alice,alice2,alice3,alice4,alice5",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_NICKS]));
+    STRCMP_EQUAL("#test1,#test2",
+                 CONFIG_STRING(server->options[IRC_SERVER_OPTION_AUTOJOIN]));
+    irc_server_free (server);
 }
 
 
@@ -694,6 +1093,56 @@ TEST(IrcServer, SetSendDefaultTags)
  */
 
 TEST(IrcServer, GetTagsToSend)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_server_outqueue_all_empty
+ */
+
+TEST(IrcServer, OutqueueAllEmpty)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_server_outqueue_timer_cb
+ */
+
+TEST(IrcServer, OutqueueTimerCb)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_server_outqueue_timer_remove
+ */
+
+TEST(IrcServer, OutqueueTimerRemove)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_server_outqueue_timer_add
+ */
+
+TEST(IrcServer, OutqueueTimerAdd)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_server_outqueue_send_one_msg
+ */
+
+TEST(IrcServer, OutqueueSendOneMsg)
 {
     /* TODO: write tests */
 }
@@ -910,16 +1359,6 @@ TEST(IrcServer, CreateBuffer)
 
 /*
  * Tests functions:
- *   irc_server_fingerprint_search_algo_with_size
- */
-
-TEST(IrcServer, FingerprintSearchAlgoWithSize)
-{
-    /* TODO: write tests */
-}
-
-/*
- * Tests functions:
  *   irc_server_fingerprint_str_sizes
  */
 
@@ -1014,6 +1453,16 @@ TEST(IrcServer, Disconnect)
  */
 
 TEST(IrcServer, DisconnectAll)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_server_execute_command
+ */
+
+TEST(IrcServer, ExecuteCommand)
 {
     /* TODO: write tests */
 }
@@ -1196,7 +1645,7 @@ TEST(IrcServerConnected, BuildAutojoin)
 
     server_recv (":server 001 alice");
 
-    POINTERS_EQUAL(NULL, irc_server_build_autojoin (ptr_server));
+    STRCMP_EQUAL(NULL, irc_server_build_autojoin (ptr_server));
 
     /* join one channel */
     server_recv (":alice!user@host JOIN #test1");
@@ -1204,7 +1653,7 @@ TEST(IrcServerConnected, BuildAutojoin)
 
     /* simulate a "parted" channel */
     ptr_server->channels->part = 1;
-    POINTERS_EQUAL(NULL, irc_server_build_autojoin (ptr_server));
+    STRCMP_EQUAL(NULL, irc_server_build_autojoin (ptr_server));
 
     /* restore "part" flag */
     ptr_server->channels->part = 0;

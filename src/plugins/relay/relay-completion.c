@@ -1,7 +1,7 @@
 /*
  * relay-completion.c - completion for relay command
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -25,6 +25,7 @@
 
 #include "../weechat-plugin.h"
 #include "relay.h"
+#include "relay-remote.h"
 #include "relay-server.h"
 
 
@@ -47,6 +48,7 @@ relay_completion_protocol_name_cb (const void *pointer, void *data,
     (void) buffer;
     (void) completion_item;
 
+    /* relay "irc" */
     infolist = weechat_infolist_get ("irc_server", NULL, NULL);
     if (infolist)
     {
@@ -57,7 +59,7 @@ relay_completion_protocol_name_cb (const void *pointer, void *data,
                       weechat_infolist_string (infolist, "name"));
             weechat_completion_list_add (completion, protocol_name,
                                          0, WEECHAT_LIST_POS_SORT);
-            snprintf (protocol_name, sizeof (protocol_name), "ssl.irc.%s",
+            snprintf (protocol_name, sizeof (protocol_name), "tls.irc.%s",
                       weechat_infolist_string (infolist, "name"));
             weechat_completion_list_add (completion, protocol_name,
                                          0, WEECHAT_LIST_POS_SORT);
@@ -66,7 +68,7 @@ relay_completion_protocol_name_cb (const void *pointer, void *data,
                       weechat_infolist_string (infolist, "name"));
             weechat_completion_list_add (completion, protocol_name,
                                          0, WEECHAT_LIST_POS_SORT);
-            snprintf (protocol_name, sizeof (protocol_name), "unix.ssl.irc.%s",
+            snprintf (protocol_name, sizeof (protocol_name), "unix.tls.irc.%s",
                       weechat_infolist_string (infolist, "name"));
             weechat_completion_list_add (completion, protocol_name,
                                          0, WEECHAT_LIST_POS_SORT);
@@ -74,16 +76,24 @@ relay_completion_protocol_name_cb (const void *pointer, void *data,
         weechat_infolist_free (infolist);
     }
 
-    /* TCP socket */
-    weechat_completion_list_add (completion, "weechat",
+    /* relay "api" */
+    weechat_completion_list_add (completion, "api",
                                  0, WEECHAT_LIST_POS_SORT);
-    weechat_completion_list_add (completion, "ssl.weechat",
+    weechat_completion_list_add (completion, "tls.api",
+                                 0, WEECHAT_LIST_POS_SORT);
+    weechat_completion_list_add (completion, "unix.api",
+                                 0, WEECHAT_LIST_POS_SORT);
+    weechat_completion_list_add (completion, "unix.tls.api",
                                  0, WEECHAT_LIST_POS_SORT);
 
-    /* UNIX domain socket */
+    /* relay "weechat" */
+    weechat_completion_list_add (completion, "weechat",
+                                 0, WEECHAT_LIST_POS_SORT);
+    weechat_completion_list_add (completion, "tls.weechat",
+                                 0, WEECHAT_LIST_POS_SORT);
     weechat_completion_list_add (completion, "unix.weechat",
                                  0, WEECHAT_LIST_POS_SORT);
-    weechat_completion_list_add (completion, "unix.ssl.weechat",
+    weechat_completion_list_add (completion, "unix.tls.weechat",
                                  0, WEECHAT_LIST_POS_SORT);
 
     return WEECHAT_RC_OK;
@@ -156,6 +166,35 @@ relay_completion_free_port_cb (const void *pointer, void *data,
 }
 
 /*
+ * Adds relay remotes to completion list.
+ */
+
+int
+relay_completion_remotes_cb (const void *pointer, void *data,
+                             const char *completion_item,
+                             struct t_gui_buffer *buffer,
+                             struct t_gui_completion *completion)
+{
+    struct t_relay_remote *ptr_remote;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) buffer;
+    (void) completion_item;
+
+    for (ptr_remote = relay_remotes; ptr_remote;
+         ptr_remote = ptr_remote->next_remote)
+    {
+        weechat_completion_list_add (completion,
+                                     ptr_remote->name,
+                                     0, WEECHAT_LIST_POS_SORT);
+    }
+
+    return WEECHAT_RC_OK;
+}
+
+/*
  * Hooks completions.
  */
 
@@ -172,4 +211,7 @@ relay_completion_init ()
     weechat_hook_completion ("relay_free_port",
                              N_("first free port for relay plugin"),
                              &relay_completion_free_port_cb, NULL, NULL);
+    weechat_hook_completion ("relay_remotes",
+                             N_("relay remotes"),
+                             &relay_completion_remotes_cb, NULL, NULL);
 }

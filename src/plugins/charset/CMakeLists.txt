@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -18,7 +18,7 @@
 #
 
 add_library(charset MODULE
-  charset.c
+  charset.c charset.h
 )
 set_target_properties(charset PROPERTIES PREFIX "")
 
@@ -31,4 +31,4 @@ if(ICONV_FOUND)
   endif()
 endif()
 
-install(TARGETS charset LIBRARY DESTINATION ${WEECHAT_LIBDIR}/plugins)
+install(TARGETS charset LIBRARY DESTINATION "${WEECHAT_LIBDIR}/plugins")

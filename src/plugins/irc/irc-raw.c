@@ -1,7 +1,7 @@
 /*
  * irc-raw.c - functions for IRC raw data messages
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "../weechat-plugin.h"
 #include "irc.h"
@@ -80,7 +81,7 @@ irc_raw_message_match_filter (struct t_irc_raw_message *raw_message,
     int match;
     char *command, *result, str_date[128];
     struct t_hashtable *hashtable;
-    struct tm *date_tmp;
+    struct timeval tv;
 
     if (!filter || !filter[0])
         return 1;
@@ -92,12 +93,10 @@ irc_raw_message_match_filter (struct t_irc_raw_message *raw_message,
                                                     raw_message->message);
         if (hashtable)
         {
-            date_tmp = localtime (&(raw_message->date));
-            if (strftime (str_date, sizeof (str_date),
-                      "%Y-%m-%d %H:%M:%S", date_tmp) == 0)
-            {
-                str_date[0] = '\0';
-            }
+            tv.tv_sec = raw_message->date;
+            tv.tv_usec = raw_message->date_usec;
+            weechat_util_strftimeval (str_date, sizeof (str_date),
+                                      "%FT%T.%f", &tv);
             weechat_hashtable_set (hashtable, "date", str_date);
             weechat_hashtable_set (hashtable,
                                    "server", raw_message->server->name);
@@ -124,34 +123,31 @@ irc_raw_message_match_filter (struct t_irc_raw_message *raw_message,
             hashtable,
             irc_raw_filter_hashtable_options);
         match = (result && (strcmp (result, "1") == 0)) ? 1 : 0;
-        if (hashtable)
-            weechat_hashtable_free (hashtable);
-        if (result)
-            free (result);
+        weechat_hashtable_free (hashtable);
+        free (result);
         return match;
     }
     else if (strncmp (filter, "s:", 2) == 0)
     {
         /* filter by server name */
-        return (weechat_strcasecmp (raw_message->server->name,
-                                    filter + 2) == 0) ? 1 : 0;
+        return (strcmp (raw_message->server->name, filter + 2) == 0) ? 1 : 0;
     }
     else if (strncmp (filter, "f:", 2) == 0)
     {
         /* filter by message flag */
-        if (weechat_strcasecmp (filter + 2, "recv") == 0)
+        if (strcmp (filter + 2, "recv") == 0)
         {
             return (raw_message->flags & IRC_RAW_FLAG_RECV) ? 1 : 0;
         }
-        else if (weechat_strcasecmp (filter + 2, "sent") == 0)
+        else if (strcmp (filter + 2, "sent") == 0)
         {
             return (raw_message->flags & IRC_RAW_FLAG_SEND) ? 1 : 0;
         }
-        else if (weechat_strcasecmp (filter + 2, "modified") == 0)
+        else if (strcmp (filter + 2, "modified") == 0)
         {
             return (raw_message->flags & IRC_RAW_FLAG_MODIFIED) ? 1 : 0;
         }
-        else if (weechat_strcasecmp (filter + 2, "redirected") == 0)
+        else if (strcmp (filter + 2, "redirected") == 0)
         {
             return (raw_message->flags & IRC_RAW_FLAG_REDIRECT) ? 1 : 0;
         }
@@ -179,8 +175,7 @@ irc_raw_message_match_filter (struct t_irc_raw_message *raw_message,
                            NULL);  /* pos_text */
         match = (command && (weechat_strcasecmp (command, filter + 2) == 0)) ?
             1 : 0;
-        if (command)
-            free (command);
+        free (command);
         return match;
     }
     else
@@ -302,17 +297,17 @@ irc_raw_message_print (struct t_irc_raw_message *raw_message)
                   (raw_message->server) ? (raw_message->server)->name : "");
     }
 
-    weechat_printf_date_tags (
+    weechat_printf_datetime_tags (
         irc_raw_buffer,
-        raw_message->date, NULL,
+        raw_message->date,
+        raw_message->date_usec,
+        NULL,
         "%s\t%s",
         prefix,
         (buf2) ? buf2 : ((buf) ? buf : raw_message->message));
 
-    if (buf)
-        free (buf);
-    if (buf2)
-        free (buf2);
+    free (buf);
+    free (buf2);
 }
 
 /*
@@ -380,33 +375,44 @@ irc_raw_refresh (int clear)
 void
 irc_raw_open (int switch_to_buffer)
 {
+    struct t_hashtable *buffer_props;
+
     if (!irc_raw_buffer)
     {
         irc_raw_buffer = weechat_buffer_search (IRC_PLUGIN_NAME,
                                                 IRC_RAW_BUFFER_NAME);
         if (!irc_raw_buffer)
         {
-            irc_raw_buffer = weechat_buffer_new (
+            buffer_props = weechat_hashtable_new (
+                32,
+                WEECHAT_HASHTABLE_STRING,
+                WEECHAT_HASHTABLE_STRING,
+                NULL, NULL);
+            if (buffer_props)
+            {
+                weechat_hashtable_set (buffer_props,
+                                       "short_name", IRC_RAW_BUFFER_NAME);
+                weechat_hashtable_set (buffer_props,
+                                       "localvar_set_type", "debug");
+                weechat_hashtable_set (buffer_props,
+                                       "localvar_set_server", IRC_RAW_BUFFER_NAME);
+                weechat_hashtable_set (buffer_props,
+                                       "localvar_set_channel", IRC_RAW_BUFFER_NAME);
+                weechat_hashtable_set (buffer_props,
+                                       "localvar_set_no_log", "1");
+                /* disable all highlights on this buffer */
+                weechat_hashtable_set (buffer_props, "highlight_words", "-");
+            }
+            irc_raw_buffer = weechat_buffer_new_props (
                 IRC_RAW_BUFFER_NAME,
+                buffer_props,
                 &irc_input_data_cb, NULL, NULL,
                 &irc_buffer_close_cb, NULL, NULL);
+            weechat_hashtable_free (buffer_props);
 
             /* failed to create buffer ? then return */
             if (!irc_raw_buffer)
                 return;
-
-            if (!weechat_buffer_get_integer (irc_raw_buffer, "short_name_is_set"))
-            {
-                weechat_buffer_set (irc_raw_buffer, "short_name",
-                                    IRC_RAW_BUFFER_NAME);
-            }
-            weechat_buffer_set (irc_raw_buffer, "localvar_set_type", "debug");
-            weechat_buffer_set (irc_raw_buffer, "localvar_set_server", IRC_RAW_BUFFER_NAME);
-            weechat_buffer_set (irc_raw_buffer, "localvar_set_channel", IRC_RAW_BUFFER_NAME);
-            weechat_buffer_set (irc_raw_buffer, "localvar_set_no_log", "1");
-
-            /* disable all highlights on this buffer */
-            weechat_buffer_set (irc_raw_buffer, "highlight_words", "-");
 
             irc_raw_set_localvar_filter ();
 
@@ -425,8 +431,7 @@ irc_raw_open (int switch_to_buffer)
 void
 irc_raw_set_filter (const char *filter)
 {
-    if (irc_raw_filter)
-        free (irc_raw_filter);
+    free (irc_raw_filter);
     irc_raw_filter = (filter && (strcmp (filter, "*") != 0)) ?
         strdup (filter) : NULL;
     irc_raw_set_localvar_filter ();
@@ -471,8 +476,7 @@ irc_raw_message_free (struct t_irc_raw_message *raw_message)
         (raw_message->next_message)->prev_message = raw_message->prev_message;
 
     /* free data */
-    if (raw_message->message)
-        free (raw_message->message);
+    free (raw_message->message);
 
     free (raw_message);
 
@@ -517,7 +521,8 @@ irc_raw_message_remove_old ()
  */
 
 struct t_irc_raw_message *
-irc_raw_message_add_to_list (time_t date, struct t_irc_server *server,
+irc_raw_message_add_to_list (time_t date, int date_usec,
+                             struct t_irc_server *server,
                              int flags, const char *message)
 {
     struct t_irc_raw_message *new_raw_message;
@@ -531,6 +536,7 @@ irc_raw_message_add_to_list (time_t date, struct t_irc_server *server,
     if (new_raw_message)
     {
         new_raw_message->date = date;
+        new_raw_message->date_usec = date_usec;
         new_raw_message->server = server;
         new_raw_message->flags = flags;
         new_raw_message->message = strdup (message);
@@ -559,7 +565,7 @@ irc_raw_print (struct t_irc_server *server, int flags,
                const char *message)
 {
     struct t_irc_raw_message *new_raw_message;
-    time_t now;
+    struct timeval tv_now;
 
     if (!message)
         return;
@@ -568,10 +574,9 @@ irc_raw_print (struct t_irc_server *server, int flags,
     if (!irc_raw_buffer && (weechat_irc_plugin->debug >= 1))
         irc_raw_open (0);
 
-    now = time (NULL);
-
-    new_raw_message = irc_raw_message_add_to_list (now, server, flags,
-                                                   message);
+    gettimeofday (&tv_now, NULL);
+    new_raw_message = irc_raw_message_add_to_list (
+        tv_now.tv_sec, tv_now.tv_usec, server, flags, message);
     if (new_raw_message)
     {
         if (irc_raw_buffer)
@@ -583,7 +588,8 @@ irc_raw_print (struct t_irc_server *server, int flags,
     if (weechat_irc_plugin->debug >= 2)
     {
         new_raw_message = irc_raw_message_add_to_list (
-            now,
+            tv_now.tv_sec,
+            tv_now.tv_usec,
             server,
             flags | IRC_RAW_FLAG_BINARY,
             message);
@@ -619,6 +625,8 @@ irc_raw_add_to_infolist (struct t_infolist *infolist,
         return 0;
 
     if (!weechat_infolist_new_var_time (ptr_item, "date", raw_message->date))
+        return 0;
+    if (!weechat_infolist_new_var_integer (ptr_item, "date_usec", raw_message->date_usec))
         return 0;
     if (!weechat_infolist_new_var_string (ptr_item, "server", raw_message->server->name))
         return 0;
@@ -658,6 +666,11 @@ irc_raw_end ()
 {
     irc_raw_message_free_all ();
 
+    if (irc_raw_buffer)
+    {
+        weechat_buffer_close (irc_raw_buffer);
+        irc_raw_buffer = NULL;
+    }
     if (irc_raw_filter)
     {
         free (irc_raw_filter);

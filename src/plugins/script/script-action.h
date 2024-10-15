@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -23,8 +23,11 @@
 extern char **script_actions;
 
 extern int script_action_run_all ();
-extern void script_action_schedule (const char *action, int need_repository,
-                                    int error_repository, int quiet);
+extern void script_action_schedule (struct t_gui_buffer *buffer,
+                                    const char *action,
+                                    int need_repository,
+                                    int error_repository,
+                                    int quiet);
 extern void script_action_end ();
 
 #endif /* WEECHAT_PLUGIN_SCRIPT_ACTION_H */

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -21,6 +21,7 @@ add_library(buflist MODULE
   buflist.c buflist.h
   buflist-bar-item.c buflist-bar-item.h
   buflist-command.c buflist-command.h
+  buflist-completion.c buflist-completion.h
   buflist-config.c buflist-config.h
   buflist-info.c buflist-info.h
   buflist-mouse.c buflist-mouse.h
@@ -29,4 +30,4 @@ set_target_properties(buflist PROPERTIES PREFIX "")
 
 target_link_libraries(buflist coverage_config)
 
-install(TARGETS buflist LIBRARY DESTINATION ${WEECHAT_LIBDIR}/plugins)
+install(TARGETS buflist LIBRARY DESTINATION "${WEECHAT_LIBDIR}/plugins")

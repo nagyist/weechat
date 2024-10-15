@@ -1,7 +1,7 @@
 /*
  * test-core-hook.cpp - test hook functions
  *
- * Copyright (C) 2018-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2018-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -23,16 +23,7 @@
 
 extern "C"
 {
-#include <string.h>
-#include "src/core/wee-hook.h"
-#include "src/core/wee-string.h"
-#include "src/gui/gui-buffer.h"
-#include "src/gui/gui-chat.h"
-#include "src/gui/gui-line.h"
-#include "src/plugins/plugin.h"
 }
-
-#define TEST_BUFFER_NAME "test"
 
 TEST_GROUP(CoreHook)
 {
@@ -40,373 +31,230 @@ TEST_GROUP(CoreHook)
 
 /*
  * Tests functions:
- *   hook_command_run
+ *   hook_init
  */
 
-TEST(CoreHook, CommandRun)
+TEST(CoreHook, Init)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_command
+ *   hook_search_type
  */
 
-TEST(CoreHook, Command)
+TEST(CoreHook, SearchType)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_completion
+ *   hook_find_pos
  */
 
-TEST(CoreHook, Completion)
+TEST(CoreHook, FindPos)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_config
+ *   hook_add_to_list
  */
 
-TEST(CoreHook, Config)
+TEST(CoreHook, AddToList)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_connect
+ *   hook_remove_from_list
  */
 
-TEST(CoreHook, Connect)
+TEST(CoreHook, RemoveFromList)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_fd
+ *   hook_remove_deleted
  */
 
-TEST(CoreHook, Fd)
+TEST(CoreHook, RemoveDeleted)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_focus
+ *   hook_init_data
  */
 
-TEST(CoreHook, Focus)
+TEST(CoreHook, InitData)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_hdata
+ *   hook_valid
  */
 
-TEST(CoreHook, Hdata)
+TEST(CoreHook, Valid)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_hsignal
+ *   hook_exec_start
  */
 
-TEST(CoreHook, Hsignal)
+TEST(CoreHook, ExecStart)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_info_hashtable
+ *   hook_exec_end
  */
 
-TEST(CoreHook, InfoHashtable)
+TEST(CoreHook, ExecEnd)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_info
+ *   hook_callback_start
  */
 
-TEST(CoreHook, Info)
+TEST(CoreHook, CallbackStart)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_infolist
+ *   hook_callback_end
  */
 
-TEST(CoreHook, Infolist)
+TEST(CoreHook, CallbackEnd)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_line
+ *   hook_get_description
  */
 
-TEST(CoreHook, Line)
-{
-    /* TODO: write tests */
-}
-
-char *
-test_modifier_cb (const void *pointer, void *data,
-                  const char *modifier, const char *modifier_data,
-                  const char *string)
-{
-    char **items, *new_string;
-    const char *ptr_plugin, *ptr_tags, *ptr_msg;
-    int num_items, length, rc;
-    unsigned long value;
-    struct t_gui_buffer *ptr_buffer;
-
-    /* make C++ compiler happy */
-    (void) pointer;
-    (void) data;
-    (void) modifier;
-
-    new_string = NULL;
-
-    /* split modifier_data, which is: "buffer_pointer;tags" */
-    items = string_split (modifier_data, ";", NULL,
-                          WEECHAT_STRING_SPLIT_STRIP_LEFT
-                          | WEECHAT_STRING_SPLIT_STRIP_RIGHT
-                          | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS,
-                          2, &num_items);
-    if (!items || (num_items < 1))
-        goto error;
-
-    ptr_tags = (num_items >= 2) ? items[1] : NULL;
-
-    rc = sscanf (items[0], "0x%lx", &value);
-    if ((rc == EOF) || (rc == 0))
-        goto error;
-    ptr_buffer = (struct t_gui_buffer *)value;
-
-    ptr_plugin = gui_buffer_get_plugin_name (ptr_buffer);
-    if (!ptr_plugin)
-        goto error;
-
-    /* do nothing on a buffer different from "core.test" */
-    if ((strcmp (ptr_plugin, "core") != 0)
-        || (strcmp (ptr_buffer->name, TEST_BUFFER_NAME) != 0))
-    {
-        goto error;
-    }
-
-    if (strncmp (string, "\t\t", 2) == 0)
-    {
-        ptr_msg = string + 2;
-    }
-    else
-    {
-        ptr_msg = strchr (string, '\t');
-        if (!ptr_msg)
-            goto error;
-        ptr_msg++;
-    }
-
-    length = strlen (string) + 128;
-    new_string = (char *)malloc (length);
-    if (!new_string)
-        goto error;
-    new_string[0] = '\0';
-
-    if (ptr_tags && strstr (ptr_tags, "add_prefix"))
-    {
-        /* add a prefix in message */
-        snprintf (new_string, length, "new prefix\t%s (modified)", ptr_msg);
-    }
-    else if (ptr_tags && strstr (ptr_tags, "add_date_prefix"))
-    {
-        /* add a date/prefix in message */
-        snprintf (new_string, length, "new prefix\t%s (modified)", ptr_msg);
-    }
-    else if (ptr_tags && strstr (ptr_tags, "update_prefix"))
-    {
-        /* update the prefix */
-        snprintf (new_string, length, "new prefix\t%s (modified)", ptr_msg);
-    }
-    else if (ptr_tags && strstr (ptr_tags, "remove_prefix"))
-    {
-        /* remove the prefix */
-        snprintf (new_string, length, " \t%s (modified)", ptr_msg);
-    }
-    else if (ptr_tags && strstr (ptr_tags, "remove_date_prefix"))
-    {
-        /* remove the date/prefix */
-        snprintf (new_string, length, "\t\t%s (modified)", ptr_msg);
-    }
-
-    if (!new_string[0])
-    {
-        /* default message returned: just add " (modified)" to the string */
-        snprintf (new_string, length, "%s (modified)", string);
-    }
-
-    return new_string;
-
-error:
-    if (items)
-        string_free_split (items);
-    if (new_string)
-        free (new_string);
-    return NULL;
-}
-
-/*
- * Tests functions:
- *   hook_modifier
- */
-
-TEST(CoreHook, Modifier)
-{
-    struct t_gui_buffer *test_buffer;
-    struct t_gui_line *ptr_line;
-    struct t_hook *hook;
-
-    /* create/open a test buffer */
-    test_buffer = gui_buffer_new (NULL, TEST_BUFFER_NAME,
-                                  NULL, NULL, NULL,
-                                  NULL, NULL, NULL);
-    CHECK(test_buffer);
-
-    hook = hook_modifier (NULL, "weechat_print", &test_modifier_cb, NULL, NULL);
-
-    /* check hook contents */
-    CHECK(hook);
-    POINTERS_EQUAL(NULL, hook->plugin);
-    POINTERS_EQUAL(NULL, hook->subplugin);
-    LONGS_EQUAL(HOOK_TYPE_MODIFIER, hook->type);
-    LONGS_EQUAL(0, hook->deleted);
-    LONGS_EQUAL(0, hook->running);
-    LONGS_EQUAL(HOOK_PRIORITY_DEFAULT, hook->priority);
-    POINTERS_EQUAL(NULL, hook->callback_pointer);
-    POINTERS_EQUAL(NULL, hook->callback_data);
-    CHECK(hook->hook_data);
-    POINTERS_EQUAL(&test_modifier_cb, HOOK_MODIFIER(hook, callback));
-    STRCMP_EQUAL("weechat_print", HOOK_MODIFIER(hook, modifier));
-
-    /* message without prefix: unchanged */
-    gui_chat_printf_date_tags (test_buffer, 0, NULL, " \tmessage");
-    ptr_line = test_buffer->own_lines->last_line;
-    CHECK(ptr_line->data->date > 0);
-    STRCMP_EQUAL("", ptr_line->data->prefix);
-    STRCMP_EQUAL("message (modified)", ptr_line->data->message);
-
-    /* message without prefix: add a prefix */
-    gui_chat_printf_date_tags (test_buffer, 0, "add_prefix", " \tmessage");
-    ptr_line = test_buffer->own_lines->last_line;
-    CHECK(ptr_line->data->date > 0);
-    STRCMP_EQUAL("new prefix", ptr_line->data->prefix);
-    STRCMP_EQUAL("message (modified)", ptr_line->data->message);
-
-    /* message without date: unchanged */
-    gui_chat_printf_date_tags (test_buffer, 0, NULL, "\t\tmessage");
-    ptr_line = test_buffer->own_lines->last_line;
-    LONGS_EQUAL(0, ptr_line->data->date);
-    POINTERS_EQUAL(NULL, ptr_line->data->prefix);
-    STRCMP_EQUAL("message (modified)", ptr_line->data->message);
-
-    /* message without date: add a date/prefix */
-    gui_chat_printf_date_tags (test_buffer, 0, "add_date_prefix",
-                               "\t\tmessage");
-    ptr_line = test_buffer->own_lines->last_line;
-    CHECK(ptr_line->data->date > 0);
-    STRCMP_EQUAL("new prefix", ptr_line->data->prefix);
-    STRCMP_EQUAL("message (modified)", ptr_line->data->message);
-
-    /* standard message: unchanged */
-    gui_chat_printf_date_tags (test_buffer, 0, NULL, "prefix\tmessage");
-    ptr_line = test_buffer->own_lines->last_line;
-    CHECK(ptr_line->data->date > 0);
-    STRCMP_EQUAL("prefix", ptr_line->data->prefix);
-    STRCMP_EQUAL("message (modified)", ptr_line->data->message);
-
-    /* standard message: update the prefix */
-    gui_chat_printf_date_tags (test_buffer, 0, "update_prefix",
-                               "prefix\tmessage");
-    ptr_line = test_buffer->own_lines->last_line;
-    CHECK(ptr_line->data->date > 0);
-    STRCMP_EQUAL("new prefix", ptr_line->data->prefix);
-    STRCMP_EQUAL("message (modified)", ptr_line->data->message);
-
-    /* standard message: remove the prefix */
-    gui_chat_printf_date_tags (test_buffer, 0, "remove_prefix",
-                               "prefix\tmessage");
-    ptr_line = test_buffer->own_lines->last_line;
-    CHECK(ptr_line->data->date > 0);
-    STRCMP_EQUAL("", ptr_line->data->prefix);
-    STRCMP_EQUAL("message (modified)", ptr_line->data->message);
-
-    /* standard message: remove the date/prefix */
-    gui_chat_printf_date_tags (test_buffer, 0, "remove_date_prefix",
-                               "prefix\tmessage");
-    ptr_line = test_buffer->own_lines->last_line;
-    LONGS_EQUAL(0, ptr_line->data->date);
-    POINTERS_EQUAL(NULL, ptr_line->data->prefix);
-    STRCMP_EQUAL("message (modified)", ptr_line->data->message);
-
-    /* close the test buffer */
-    gui_buffer_close (test_buffer);
-}
-
-/*
- * Tests functions:
- *   hook_print
- */
-
-TEST(CoreHook, Print)
+TEST(CoreHook, GetDescription)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_process
- *   hook_process_hashtable
+ *   hook_set
  */
 
-TEST(CoreHook, Process)
+TEST(CoreHook, Set)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_signal
+ *   hook_timer_clean_process_cb
  */
 
-TEST(CoreHook, Signal)
+TEST(CoreHook, TimerCleanProcessCb)
 {
     /* TODO: write tests */
 }
 
 /*
  * Tests functions:
- *   hook_timer
+ *   hook_schedule_clean_process
  */
 
-TEST(CoreHook, Timer)
+TEST(CoreHook, ScheduleCleanProcess)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   unhook
+ */
+
+TEST(CoreHook, Unhook)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   unhook_all_plugin
+ */
+
+TEST(CoreHook, UnhookAllPlugin)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   unhook_all
+ */
+
+TEST(CoreHook, UnhookAll)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   hook_add_to_infolist_pointer
+ */
+
+TEST(CoreHook, AddToInfolistPointer)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   hook_add_to_infolist_type
+ */
+
+TEST(CoreHook, AddToInfolistType)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   hook_add_to_infolist
+ */
+
+TEST(CoreHook, AddToInfolist)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   hook_print_log
+ */
+
+TEST(CoreHook, PrintLog)
 {
     /* TODO: write tests */
 }

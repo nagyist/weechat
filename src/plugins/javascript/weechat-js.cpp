@@ -2,7 +2,7 @@
  * weechat-js.cpp - javascript plugin for WeeChat
  *
  * Copyright (C) 2013 Koka El Kiwi <kokakiwi@kokakiwi.net>
- * Copyright (C) 2015-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2015-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -35,11 +35,11 @@ extern "C"
 #include "weechat-js-v8.h"
 
 WEECHAT_PLUGIN_NAME(JS_PLUGIN_NAME);
-WEECHAT_PLUGIN_DESCRIPTION("Support of javascript scripts");
+WEECHAT_PLUGIN_DESCRIPTION(N_("Support of javascript scripts"));
 WEECHAT_PLUGIN_AUTHOR("Koka El Kiwi <kokakiwi@kokakiwi.net>");
 WEECHAT_PLUGIN_VERSION(WEECHAT_VERSION);
 WEECHAT_PLUGIN_LICENSE(WEECHAT_LICENSE);
-WEECHAT_PLUGIN_PRIORITY(4006);
+WEECHAT_PLUGIN_PRIORITY(JS_PLUGIN_PRIORITY);
 
 struct t_weechat_plugin *weechat_js_plugin = NULL;
 
@@ -304,7 +304,7 @@ weechat_js_load (const char *filename, const char *code)
     char *source;
 
     /* make C compiler happy */
-    /* TODO: implement load of code in Javascript */
+    /* TODO: implement load of code in JavaScript */
     (void) code;
 
     source = weechat_file_get_content (filename);
@@ -452,8 +452,7 @@ weechat_js_unload (struct t_plugin_script *script)
     {
         rc = (int *)weechat_js_exec (script, WEECHAT_SCRIPT_EXEC_INT,
                                      script->shutdown_func, NULL, NULL);
-        if (rc)
-            free (rc);
+        free (rc);
     }
 
     filename = strdup (script->filename);
@@ -473,8 +472,7 @@ weechat_js_unload (struct t_plugin_script *script)
 
     (void) weechat_hook_signal_send ("javascript_script_unloaded",
                                      WEECHAT_HOOK_SIGNAL_STRING, filename);
-    if (filename)
-        free (filename);
+    free (filename);
 }
 
 /*
@@ -486,7 +484,7 @@ weechat_js_unload_name (const char *name)
 {
     struct t_plugin_script *ptr_script;
 
-    ptr_script = plugin_script_search (weechat_js_plugin, js_scripts, name);
+    ptr_script = plugin_script_search (js_scripts, name);
     if (ptr_script)
     {
         weechat_js_unload (ptr_script);
@@ -528,7 +526,7 @@ weechat_js_reload_name (const char *name)
     struct t_plugin_script *ptr_script;
     char *filename;
 
-    ptr_script = plugin_script_search (weechat_js_plugin, js_scripts, name);
+    ptr_script = plugin_script_search (js_scripts, name);
     if (ptr_script)
     {
         filename = strdup (ptr_script->filename);
@@ -584,7 +582,7 @@ weechat_js_command_cb (const void *pointer, void *data,
                        int argc, char **argv, char **argv_eol)
 {
     char *ptr_name, *ptr_code, *path_script;
-    int i, send_to_buffer_as_input, exec_commands;
+    int i, send_to_buffer_as_input, exec_commands, old_js_quiet;
 
     /* make C++ compiler happy */
     (void) pointer;
@@ -597,30 +595,30 @@ weechat_js_command_cb (const void *pointer, void *data,
     }
     else if (argc == 2)
     {
-        if (weechat_strcasecmp (argv[1], "list") == 0)
+        if (weechat_strcmp (argv[1], "list") == 0)
         {
             plugin_script_display_list (weechat_js_plugin, js_scripts,
                                         NULL, 0);
         }
-        else if (weechat_strcasecmp (argv[1], "listfull") == 0)
+        else if (weechat_strcmp (argv[1], "listfull") == 0)
         {
             plugin_script_display_list (weechat_js_plugin, js_scripts,
                                         NULL, 1);
         }
-        else if (weechat_strcasecmp (argv[1], "autoload") == 0)
+        else if (weechat_strcmp (argv[1], "autoload") == 0)
         {
             plugin_script_auto_load (weechat_js_plugin, &weechat_js_load_cb);
         }
-        else if (weechat_strcasecmp (argv[1], "reload") == 0)
+        else if (weechat_strcmp (argv[1], "reload") == 0)
         {
             weechat_js_unload_all ();
             plugin_script_auto_load (weechat_js_plugin, &weechat_js_load_cb);
         }
-        else if (weechat_strcasecmp(argv[1], "unload") == 0)
+        else if (weechat_strcmp(argv[1], "unload") == 0)
         {
             weechat_js_unload_all ();
         }
-        else if (weechat_strcasecmp (argv[1], "version") == 0)
+        else if (weechat_strcmp (argv[1], "version") == 0)
         {
             plugin_script_display_interpreter (weechat_js_plugin, 0);
         }
@@ -629,20 +627,21 @@ weechat_js_command_cb (const void *pointer, void *data,
     }
     else
     {
-        if (weechat_strcasecmp (argv[1], "list") == 0)
+        if (weechat_strcmp (argv[1], "list") == 0)
         {
             plugin_script_display_list (weechat_js_plugin, js_scripts,
                                         argv_eol[2], 0);
         }
-        else if (weechat_strcasecmp (argv[1], "listfull") == 0)
+        else if (weechat_strcmp (argv[1], "listfull") == 0)
         {
             plugin_script_display_list (weechat_js_plugin, js_scripts,
                                         argv_eol[2], 1);
         }
-        else if ((weechat_strcasecmp (argv[1], "load") == 0)
-                 || (weechat_strcasecmp (argv[1], "reload") == 0)
-                 || (weechat_strcasecmp (argv[1], "unload") == 0))
+        else if ((weechat_strcmp (argv[1], "load") == 0)
+                 || (weechat_strcmp (argv[1], "reload") == 0)
+                 || (weechat_strcmp (argv[1], "unload") == 0))
         {
+            old_js_quiet = js_quiet;
             ptr_name = argv_eol[2];
             if (strncmp (ptr_name, "-q ", 3) == 0)
             {
@@ -653,29 +652,28 @@ weechat_js_command_cb (const void *pointer, void *data,
                     ptr_name++;
                 }
             }
-            if (weechat_strcasecmp (argv[1], "load") == 0)
+            if (weechat_strcmp (argv[1], "load") == 0)
             {
                 /* load javascript script */
                 path_script = plugin_script_search_path (weechat_js_plugin,
-                                                         ptr_name);
+                                                         ptr_name, 1);
                 weechat_js_load ((path_script) ? path_script : ptr_name,
                                  NULL);
-                if (path_script)
-                    free (path_script);
+                free (path_script);
             }
-            else if (weechat_strcasecmp (argv[1], "reload") == 0)
+            else if (weechat_strcmp (argv[1], "reload") == 0)
             {
                 /* reload one javascript script */
                 weechat_js_reload_name (ptr_name);
             }
-            else if (weechat_strcasecmp (argv[1], "unload") == 0)
+            else if (weechat_strcmp (argv[1], "unload") == 0)
             {
                 /* unload javascript script */
                 weechat_js_unload_name (ptr_name);
             }
-            js_quiet = 0;
+            js_quiet = old_js_quiet;
         }
-        else if (weechat_strcasecmp (argv[1], "eval") == 0)
+        else if (weechat_strcmp (argv[1], "eval") == 0)
         {
             send_to_buffer_as_input = 0;
             exec_commands = 0;
@@ -794,7 +792,7 @@ weechat_js_infolist_cb (const void *pointer, void *data,
     if (!infolist_name || !infolist_name[0])
         return NULL;
 
-    if (weechat_strcasecmp (infolist_name, "javascript_script") == 0)
+    if (strcmp (infolist_name, "javascript_script") == 0)
     {
         return plugin_script_infolist_list_scripts (weechat_js_plugin,
                                                     js_scripts, obj_pointer,
@@ -819,8 +817,7 @@ weechat_js_signal_debug_dump_cb (const void *pointer, void *data,
     (void) signal;
     (void) type_data;
 
-    if (!signal_data
-        || (weechat_strcasecmp ((char *)signal_data, JS_PLUGIN_NAME) == 0))
+    if (!signal_data || (strcmp ((char *)signal_data, JS_PLUGIN_NAME) == 0))
     {
         plugin_script_print_log (weechat_js_plugin, js_scripts);
     }
@@ -924,8 +921,18 @@ EXPORT int
 weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
 {
     char str_interpreter[64];
+    int old_js_quiet;
+
+    /* make C compiler happy */
+    (void) argc;
+    (void) argv;
 
     weechat_js_plugin = plugin;
+
+    js_quiet = 0;
+    js_eval_mode = 0;
+    js_eval_send_input = 0;
+    js_eval_exec_commands = 0;
 
     /* set interpreter name and version */
     snprintf (str_interpreter, sizeof (str_interpreter),
@@ -948,11 +955,13 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
     js_data.callback_signal_debug_dump = &weechat_js_signal_debug_dump_cb;
     js_data.callback_signal_script_action = &weechat_js_signal_script_action_cb;
     js_data.callback_load_file = &weechat_js_load_cb;
+    js_data.init_before_autoload = NULL;
     js_data.unload_all = &weechat_js_unload_all;
 
+    old_js_quiet = js_quiet;
     js_quiet = 1;
-    plugin_script_init (plugin, argc, argv, &js_data);
-    js_quiet = 0;
+    plugin_script_init (plugin, &js_data);
+    js_quiet = old_js_quiet;
 
     plugin_script_display_short_list (weechat_js_plugin, js_scripts);
 
@@ -966,6 +975,9 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
 EXPORT int
 weechat_plugin_end (struct t_weechat_plugin *plugin)
 {
+    int old_js_quiet;
+
+    old_js_quiet = js_quiet;
     js_quiet = 1;
     if (js_script_eval)
     {
@@ -973,15 +985,24 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
         js_script_eval = NULL;
     }
     plugin_script_end (plugin, &js_data);
-    js_quiet = 0;
+    js_quiet = old_js_quiet;
 
     /* free some data */
     if (js_action_install_list)
+    {
         free (js_action_install_list);
+        js_action_install_list = NULL;
+    }
     if (js_action_remove_list)
+    {
         free (js_action_remove_list);
+        js_action_remove_list = NULL;
+    }
     if (js_action_autoload_list)
+    {
         free (js_action_autoload_list);
+        js_action_autoload_list = NULL;
+    }
     /* weechat_string_dyn_free (js_buffer_output, 1); */
 
     return WEECHAT_RC_OK;

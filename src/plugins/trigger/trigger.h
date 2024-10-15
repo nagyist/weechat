@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2014-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -24,6 +24,7 @@
 
 #define weechat_plugin weechat_trigger_plugin
 #define TRIGGER_PLUGIN_NAME "trigger"
+#define TRIGGER_PLUGIN_PRIORITY 13000
 
 #define TRIGGER_HOOK_DEFAULT_CONDITIONS "${...}"
 #define TRIGGER_HOOK_DEFAULT_REGEX      "/abc/def"

@@ -2,7 +2,7 @@
  * irc-modelist.c - channel mode list management for IRC plugin
  *
  * Copyright (C) 2015 Simmo Saan <simmo.saan@gmail.com>
- * Copyright (C) 2018-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2018-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -323,10 +323,8 @@ irc_modelist_item_free (struct t_irc_modelist *modelist,
         (item->next_item)->prev_item = item->prev_item;
 
     /* free item data */
-    if (item->mask)
-        free (item->mask);
-    if (item->setter)
-        free (item->setter);
+    free (item->mask);
+    free (item->setter);
     free (item);
 
     modelist->items = new_items;
@@ -478,13 +476,13 @@ void
 irc_modelist_item_print_log (struct t_irc_modelist_item *item)
 {
     weechat_log_printf ("");
-    weechat_log_printf ("      => modelist item %d (addr:0x%lx):", item->number, item);
+    weechat_log_printf ("      => modelist item %d (addr:%p):", item->number, item);
     weechat_log_printf ("           mask . . . . . . . . . . : '%s'", item->mask);
     weechat_log_printf ("           setter . . . . . . . . . : '%s'", item->setter);
     weechat_log_printf ("           datetime . . . . . . . . : %lld",
                         (long long)(item->datetime));
-    weechat_log_printf ("           prev_item  . . . . . . . : 0x%lx", item->prev_item);
-    weechat_log_printf ("           next_item  . . . . . . . : 0x%lx", item->next_item);
+    weechat_log_printf ("           prev_item  . . . . . . . : %p", item->prev_item);
+    weechat_log_printf ("           next_item  . . . . . . . : %p", item->next_item);
 }
 
 /*
@@ -497,10 +495,10 @@ irc_modelist_print_log (struct t_irc_modelist *modelist)
     struct t_irc_modelist_item *ptr_item;
 
     weechat_log_printf ("");
-    weechat_log_printf ("    => modelist \"%c\" (addr:0x%lx):", modelist->type, modelist);
-    weechat_log_printf ("         state. . . . . . . . . . : %d",    modelist->state);
-    weechat_log_printf ("         prev_modelist  . . . . . : 0x%lx", modelist->prev_modelist);
-    weechat_log_printf ("         next_modelist  . . . . . : 0x%lx", modelist->next_modelist);
+    weechat_log_printf ("    => modelist \"%c\" (addr:%p):", modelist->type, modelist);
+    weechat_log_printf ("         state. . . . . . . . . . : %d", modelist->state);
+    weechat_log_printf ("         prev_modelist  . . . . . : %p", modelist->prev_modelist);
+    weechat_log_printf ("         next_modelist  . . . . . : %p", modelist->next_modelist);
     for (ptr_item = modelist->items; ptr_item; ptr_item = ptr_item->next_item)
     {
         irc_modelist_item_print_log (ptr_item);

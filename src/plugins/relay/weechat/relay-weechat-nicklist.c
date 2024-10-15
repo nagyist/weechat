@@ -1,7 +1,7 @@
 /*
  * relay-weechat-nicklist.c - nicklist functions for WeeChat protocol
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -91,12 +91,12 @@ relay_weechat_nicklist_add_item (struct t_relay_weechat_nicklist *nicklist,
     ptr_item = &(nicklist->items[nicklist->items_count]);
     if (group)
     {
-        hdata = weechat_hdata_get ("nick_group");
+        hdata = relay_hdata_nick_group;
         ptr_item->pointer = group;
     }
     else
     {
-        hdata = weechat_hdata_get ("nick");
+        hdata = relay_hdata_nick;
         ptr_item->pointer = nick;
     }
     ptr_item->diff = diff;
@@ -125,14 +125,10 @@ relay_weechat_nicklist_item_free (struct t_relay_weechat_nicklist_item *item)
     if (!item)
         return;
 
-    if (item->name)
-        free (item->name);
-    if (item->color)
-        free (item->color);
-    if (item->prefix)
-        free (item->prefix);
-    if (item->prefix_color)
-        free (item->prefix_color);
+    free (item->name);
+    free (item->color);
+    free (item->prefix);
+    free (item->prefix_color);
 }
 
 /*

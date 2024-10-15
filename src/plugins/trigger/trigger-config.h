@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2014-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -21,9 +21,13 @@
 #define WEECHAT_PLUGIN_TRIGGER_CONFIG_H
 
 #define TRIGGER_CONFIG_NAME "trigger"
+#define TRIGGER_CONFIG_PRIO_NAME (TO_STR(TRIGGER_PLUGIN_PRIORITY) "|" TRIGGER_CONFIG_NAME)
 #define TRIGGER_CONFIG_SECTION_TRIGGER "trigger"
 
 extern struct t_config_file *trigger_config_file;
+
+extern struct t_config_section *trigger_config_section_look;
+extern struct t_config_section *trigger_config_section_color;
 extern struct t_config_section *trigger_config_section_trigger;
 
 extern struct t_config_option *trigger_config_look_enabled;
@@ -37,8 +41,6 @@ extern struct t_config_option *trigger_config_color_flag_post_action;
 extern struct t_config_option *trigger_config_color_identifier;
 extern struct t_config_option *trigger_config_color_regex;
 extern struct t_config_option *trigger_config_color_replace;
-extern struct t_config_option *trigger_config_color_trigger;
-extern struct t_config_option *trigger_config_color_trigger_disabled;
 
 extern char *trigger_config_default_list[][1 + TRIGGER_NUM_OPTIONS];
 

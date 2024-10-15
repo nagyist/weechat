@@ -1,7 +1,7 @@
 /*
  * spell-command.c - spell checker commands
  *
- * Copyright (C) 2013-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2013-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -125,10 +125,8 @@ spell_enchant_dict_describe_cb (const char *lang_tag,
         weechat_printf (NULL, "  %s", str_dict);
     }
 
-    if (lang)
-        free (lang);
-    if (country)
-        free (country);
+    free (lang);
+    free (country);
 }
 #endif /* USE_ENCHANT */
 
@@ -197,10 +195,8 @@ spell_command_speller_list_dicts ()
 
         weechat_printf (NULL, "  %s", str_dict);
 
-        if (lang)
-            free (lang);
-        if (country)
-            free (country);
+        free (lang);
+        free (country);
     }
 
     delete_aspell_dict_info_enumeration (elements);
@@ -271,11 +267,16 @@ spell_command_add_word (struct t_gui_buffer *buffer, const char *dict,
                                 _("%s: error: dictionary \"%s\" is not "
                                   "available on your system"),
                                 SPELL_PLUGIN_NAME, dict);
-                return;
+                goto end;
             }
             new_speller = spell_speller_new (dict);
             if (!new_speller)
-                return;
+            {
+                weechat_printf (NULL,
+                                _("%s%s: unable to create new speller"),
+                                weechat_prefix ("error"), SPELL_PLUGIN_NAME);
+                goto end;
+            }
             ptr_speller = new_speller;
         }
     }
@@ -286,7 +287,12 @@ spell_command_add_word (struct t_gui_buffer *buffer, const char *dict,
         if (!ptr_speller_buffer)
             ptr_speller_buffer = spell_speller_buffer_new (buffer);
         if (!ptr_speller_buffer)
-            goto error;
+        {
+            weechat_printf (NULL,
+                            _("%s%s: no speller found"),
+                            weechat_prefix ("error"), SPELL_PLUGIN_NAME);
+            goto end;
+        }
         if (!ptr_speller_buffer->spellers || !ptr_speller_buffer->spellers[0])
         {
             weechat_printf (NULL,
@@ -294,7 +300,7 @@ spell_command_add_word (struct t_gui_buffer *buffer, const char *dict,
                               "adding word"),
                             weechat_prefix ("error"),
                             SPELL_PLUGIN_NAME);
-            return;
+            goto end;
         }
         else if (ptr_speller_buffer->spellers[1])
         {
@@ -303,7 +309,7 @@ spell_command_add_word (struct t_gui_buffer *buffer, const char *dict,
                               "this buffer, please specify dictionary"),
                             weechat_prefix ("error"),
                             SPELL_PLUGIN_NAME);
-            return;
+            goto end;
         }
         ptr_speller = ptr_speller_buffer->spellers[0];
     }
@@ -320,16 +326,15 @@ spell_command_add_word (struct t_gui_buffer *buffer, const char *dict,
                         SPELL_PLUGIN_NAME, word);
     }
     else
-        goto error;
+    {
+        weechat_printf (NULL,
+                        _("%s%s: failed to add word to personal "
+                          "dictionary: %s"),
+                        weechat_prefix ("error"),
+                        SPELL_PLUGIN_NAME,
+                        aspell_speller_error_message (ptr_speller));
+    }
 #endif /* USE_ENCHANT */
-
-    goto end;
-
-error:
-    weechat_printf (NULL,
-                    _("%s%s: failed to add word to personal "
-                      "dictionary"),
-                    weechat_prefix ("error"), SPELL_PLUGIN_NAME);
 
 end:
     if (new_speller)
@@ -392,7 +397,7 @@ spell_command_cb (const void *pointer, void *data,
     }
 
     /* enable spell */
-    if (weechat_strcasecmp (argv[1], "enable") == 0)
+    if (weechat_strcmp (argv[1], "enable") == 0)
     {
         weechat_config_option_set (spell_config_check_enabled, "1", 1);
         weechat_printf (NULL, _("Spell checker enabled"));
@@ -400,7 +405,7 @@ spell_command_cb (const void *pointer, void *data,
     }
 
     /* disable spell */
-    if (weechat_strcasecmp (argv[1], "disable") == 0)
+    if (weechat_strcmp (argv[1], "disable") == 0)
     {
         weechat_config_option_set (spell_config_check_enabled, "0", 1);
         weechat_printf (NULL, _("Spell checker disabled"));
@@ -408,7 +413,7 @@ spell_command_cb (const void *pointer, void *data,
     }
 
     /* toggle spell */
-    if (weechat_strcasecmp (argv[1], "toggle") == 0)
+    if (weechat_strcmp (argv[1], "toggle") == 0)
     {
         if (spell_enabled)
         {
@@ -424,35 +429,34 @@ spell_command_cb (const void *pointer, void *data,
     }
 
     /* list of dictionaries */
-    if (weechat_strcasecmp (argv[1], "listdict") == 0)
+    if (weechat_strcmp (argv[1], "listdict") == 0)
     {
         spell_command_speller_list_dicts ();
         return WEECHAT_RC_OK;
     }
 
     /* set dictionary for current buffer */
-    if (weechat_strcasecmp (argv[1], "setdict") == 0)
+    if (weechat_strcmp (argv[1], "setdict") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "setdict");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
         dicts = weechat_string_replace (argv_eol[2], " ", "");
         spell_command_set_dict (buffer,
                                 (dicts) ? dicts : argv[2]);
-        if (dicts)
-            free (dicts);
+        free (dicts);
         return WEECHAT_RC_OK;
     }
 
     /* delete dictionary used on current buffer */
-    if (weechat_strcasecmp (argv[1], "deldict") == 0)
+    if (weechat_strcmp (argv[1], "deldict") == 0)
     {
         spell_command_set_dict (buffer, NULL);
         return WEECHAT_RC_OK;
     }
 
     /* add word to personal dictionary */
-    if (weechat_strcasecmp (argv[1], "addword") == 0)
+    if (weechat_strcmp (argv[1], "addword") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "addword");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
         if (argc > 3)
         {
             /* use a given dict */
@@ -479,33 +483,35 @@ spell_command_init ()
     weechat_hook_command (
         "spell",
         N_("spell plugin configuration"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("enable|disable|toggle"
            " || listdict"
            " || setdict -|<dict>[,<dict>...]"
            " || deldict"
            " || addword [<dict>] <word>"),
-        N_("  enable: enable spell checker\n"
-           " disable: disable spell checker\n"
-           "  toggle: toggle spell checker\n"
-           "listdict: show installed dictionaries\n"
-           " setdict: set dictionary for current buffer (multiple dictionaries "
-           "can be separated by a comma, the special value \"-\" disables "
-           "spell checking on current buffer)\n"
-           " deldict: delete dictionary used on current buffer\n"
-           " addword: add a word in personal dictionary\n"
-           "\n"
-           "Input line beginning with a '/' is not checked, except for some "
-           "commands (see /set spell.check.commands).\n"
-           "\n"
-           "To enable spell checker on all buffers, use option \"default_dict\", "
-           "then enable spell checker, for example:\n"
-           "  /set spell.check.default_dict \"en\"\n"
-           "  /spell enable\n"
-           "\n"
-           "To display a list of suggestions in a bar, use item "
-           "\"spell_suggest\".\n"
-           "\n"
-           "Default key to toggle spell checker is alt-s."),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[enable]: enable spell checker"),
+            N_("raw[disable]: disable spell checker"),
+            N_("raw[toggle]: toggle spell checker"),
+            N_("raw[listdict]: show installed dictionaries"),
+            N_("raw[setdict]: set dictionary for current buffer (multiple dictionaries "
+               "can be separated by a comma, the special value \"-\" disables "
+               "spell checking on current buffer)"),
+            N_("raw[deldict]: delete dictionary used on current buffer"),
+            N_("raw[addword]: add a word in personal dictionary"),
+            "",
+            N_("Input line beginning with a \"/\" is not checked, except for some "
+               "commands (see /set spell.check.commands)."),
+            "",
+            N_("To enable spell checker on all buffers, use option \"default_dict\", "
+               "then enable spell checker, for example:"),
+            AI("  /set spell.check.default_dict \"en\""),
+            AI("  /spell enable"),
+            "",
+            N_("To display a list of suggestions in a bar, use item "
+               "\"spell_suggest\"."),
+            "",
+            N_("Default key to toggle spell checker is alt-s.")),
         "enable"
         " || disable"
         " || toggle"

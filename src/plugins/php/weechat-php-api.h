@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2006-2017 Adam Saponara <as@php.net>
- * Copyright (C) 2017-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2017-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -85,6 +85,7 @@ PHP_FUNCTION(weechat_list_remove);
 PHP_FUNCTION(weechat_list_remove_all);
 PHP_FUNCTION(weechat_list_free);
 PHP_FUNCTION(weechat_config_new);
+PHP_FUNCTION(weechat_config_set_version);
 PHP_FUNCTION(weechat_config_new_section);
 PHP_FUNCTION(weechat_config_search_section);
 PHP_FUNCTION(weechat_config_new_option);
@@ -95,16 +96,25 @@ PHP_FUNCTION(weechat_config_option_set);
 PHP_FUNCTION(weechat_config_option_set_null);
 PHP_FUNCTION(weechat_config_option_unset);
 PHP_FUNCTION(weechat_config_option_rename);
+PHP_FUNCTION(weechat_config_option_get_string);
+PHP_FUNCTION(weechat_config_option_get_pointer);
 PHP_FUNCTION(weechat_config_option_is_null);
 PHP_FUNCTION(weechat_config_option_default_is_null);
 PHP_FUNCTION(weechat_config_boolean);
 PHP_FUNCTION(weechat_config_boolean_default);
+PHP_FUNCTION(weechat_config_boolean_inherited);
 PHP_FUNCTION(weechat_config_integer);
 PHP_FUNCTION(weechat_config_integer_default);
+PHP_FUNCTION(weechat_config_integer_inherited);
 PHP_FUNCTION(weechat_config_string);
 PHP_FUNCTION(weechat_config_string_default);
+PHP_FUNCTION(weechat_config_string_inherited);
 PHP_FUNCTION(weechat_config_color);
 PHP_FUNCTION(weechat_config_color_default);
+PHP_FUNCTION(weechat_config_color_inherited);
+PHP_FUNCTION(weechat_config_enum);
+PHP_FUNCTION(weechat_config_enum_default);
+PHP_FUNCTION(weechat_config_enum_inherited);
 PHP_FUNCTION(weechat_config_write_option);
 PHP_FUNCTION(weechat_config_write_line);
 PHP_FUNCTION(weechat_config_write);
@@ -126,8 +136,10 @@ PHP_FUNCTION(weechat_prefix);
 PHP_FUNCTION(weechat_color);
 PHP_FUNCTION(weechat_print);
 PHP_FUNCTION(weechat_print_date_tags);
+PHP_FUNCTION(weechat_print_datetime_tags);
 PHP_FUNCTION(weechat_print_y);
 PHP_FUNCTION(weechat_print_y_date_tags);
+PHP_FUNCTION(weechat_print_y_datetime_tags);
 PHP_FUNCTION(weechat_log_print);
 PHP_FUNCTION(weechat_hook_command);
 PHP_FUNCTION(weechat_hook_completion);
@@ -138,6 +150,7 @@ PHP_FUNCTION(weechat_hook_timer);
 PHP_FUNCTION(weechat_hook_fd);
 PHP_FUNCTION(weechat_hook_process);
 PHP_FUNCTION(weechat_hook_process_hashtable);
+PHP_FUNCTION(weechat_hook_url);
 PHP_FUNCTION(weechat_hook_connect);
 PHP_FUNCTION(weechat_hook_line);
 PHP_FUNCTION(weechat_hook_print);
@@ -170,6 +183,7 @@ PHP_FUNCTION(weechat_buffer_get_pointer);
 PHP_FUNCTION(weechat_buffer_set);
 PHP_FUNCTION(weechat_buffer_string_replace_local_var);
 PHP_FUNCTION(weechat_buffer_match_list);
+PHP_FUNCTION(weechat_line_search_by_id);
 PHP_FUNCTION(weechat_current_window);
 PHP_FUNCTION(weechat_window_search_with_buffer);
 PHP_FUNCTION(weechat_window_get_integer);
@@ -239,6 +253,7 @@ PHP_FUNCTION(weechat_hdata_search);
 PHP_FUNCTION(weechat_hdata_char);
 PHP_FUNCTION(weechat_hdata_integer);
 PHP_FUNCTION(weechat_hdata_long);
+PHP_FUNCTION(weechat_hdata_longlong);
 PHP_FUNCTION(weechat_hdata_string);
 PHP_FUNCTION(weechat_hdata_pointer);
 PHP_FUNCTION(weechat_hdata_time);

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2015-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2015-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -22,32 +22,58 @@
 # Returns current stable or devel version of WeeChat.
 #
 # Syntax:
-#   version.sh stable|devel|devel-full|devel-major|devel-minor|devel-patch
+#   version.sh <name>
 #
-#     stable       the current stable (e.g. 1.3)
-#     devel        the current devel (e.g. 1.4)
-#     devel-full   the full name of devel (e.g. 1.4-dev or 1.4-rc1)
-#     devel-major  the major version of devel (e.g. 1)
-#     devel-minor  the minor version of devel (e.g. 4-dev)
-#     devel-patch  the patch version of devel (e.g. 2 for version 1.4.2)
+#   name is one of:
+#
+#     stable         the current stable (e.g. "4.0.2")
+#     stable-major   the major version of stable ("4" for "4.0.2")
+#     stable-minor   the minor version of stable ("0" for "4.0.2")
+#     stable-patch   the patch version of stable ("2" for "4.0.2")
+#     stable-number  the stable version as hex number ("0x04000200" for "4.0.2")
+#     devel          the devel with only digits/dots (e.g. "4.1.0")
+#     devel-full     the full devel (e.g. "4.1.0-dev")
+#     devel-major    the major version of devel ("4" for "4.1.0-dev")
+#     devel-minor    the minor version of devel ("1" for "4.1.0-dev")
+#     devel-patch    the patch version of devel ("0-dev" for "4.1.0-dev")
+#     devel-number   the devel version as hex number ("0x04010000" for "4.1.0-dev")
 #
 
-WEECHAT_STABLE=3.7.1
-WEECHAT_DEVEL=3.8
-WEECHAT_DEVEL_FULL=3.8-dev
+weechat_stable="4.4.2"
+weechat_devel="4.5.0-dev"
+
+stable_major=$(echo "${weechat_stable}" | cut -d"." -f1)
+stable_minor=$(echo "${weechat_stable}" | cut -d"." -f2)
+stable_patch=$(echo "${weechat_stable}" | cut -d"." -f3-)
+stable_patch_digits=$(echo "${weechat_stable}" | cut -d"." -f3- | cut -d"-" -f1)
+
+devel_major=$(echo "${weechat_devel}" | cut -d"." -f1)
+devel_minor=$(echo "${weechat_devel}" | cut -d"." -f2)
+devel_patch=$(echo "${weechat_devel}" | cut -d"." -f3-)
+devel_patch_digits=$(echo "${weechat_devel}" | cut -d"." -f3- | cut -d"-" -f1)
 
 if [ $# -lt 1 ]; then
-    echo >&2 "Syntax: $0 stable|devel|devel-full|devel-major|devel-minor|devel-patch"
+    echo >&2 "Syntax: $0 <name>"
+    echo >&2 "name: stable, stable-major, stable-minor, stable-patch, stable-number,"
+    echo >&2 "      devel, devel-full, devel-major, devel-minor, devel-patch, devel-number"
     exit 1
 fi
 
 case $1 in
-    stable ) echo "$WEECHAT_STABLE" ;;
-    devel ) echo "$WEECHAT_DEVEL" ;;
-    devel-full ) echo "$WEECHAT_DEVEL_FULL" ;;
-    devel-major ) echo "$WEECHAT_DEVEL_FULL" | cut -d'.' -f1 ;;
-    devel-minor ) echo "$WEECHAT_DEVEL_FULL" | cut -d'.' -f2 ;;
-    devel-patch ) echo "$WEECHAT_DEVEL_FULL" | cut -d'.' -f3- ;;
+    # stable
+    stable ) echo "${weechat_stable}" ;;
+    stable-major ) echo "${stable_major}" ;;
+    stable-minor ) echo "${stable_minor}" ;;
+    stable-patch ) echo "${stable_patch}" ;;
+    stable-number ) printf "0x%02d%02d%02d00\n" "${stable_major}" "${stable_minor}" "${stable_patch_digits}" ;;
+    # devel
+    devel ) echo "${weechat_devel}" | cut -d"-" -f1 ;;
+    devel-full ) echo "${weechat_devel}" ;;
+    devel-major ) echo "${devel_major}" ;;
+    devel-minor ) echo "${devel_minor}" ;;
+    devel-patch ) echo "${devel_patch}" ;;
+    devel-number ) printf "0x%02d%02d%02d00\n" "${devel_major}" "${devel_minor}" "${devel_patch_digits}" ;;
+    # error
     * ) echo >&2 "ERROR: unknown version."
         exit 1 ;;
 esac

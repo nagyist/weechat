@@ -1,7 +1,7 @@
 /*
- * relay-command.c - relay command
+ * relay-command.c - relay commands
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -21,6 +21,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <time.h>
 
 #include "../weechat-plugin.h"
@@ -30,6 +31,7 @@
 #include "relay-config.h"
 #include "relay-network.h"
 #include "relay-raw.h"
+#include "relay-remote.h"
 #include "relay-server.h"
 
 
@@ -49,7 +51,7 @@ relay_command_client_list (int full)
     for (ptr_client = relay_clients; ptr_client;
          ptr_client = ptr_client->next_client)
     {
-        if (!full && RELAY_CLIENT_HAS_ENDED(ptr_client))
+        if (!full && RELAY_STATUS_HAS_ENDED(ptr_client->status))
             continue;
 
         if (num_found == 0)
@@ -89,7 +91,7 @@ relay_command_client_list (int full)
                             ptr_client->desc,
                             RELAY_COLOR_CHAT,
                             weechat_color (weechat_config_string (relay_config_color_status[ptr_client->status])),
-                            relay_client_status_string[ptr_client->status],
+                            _(relay_status_string[ptr_client->status]),
                             RELAY_COLOR_CHAT,
                             date_start,
                             date_activity,
@@ -104,7 +106,7 @@ relay_command_client_list (int full)
                             ptr_client->desc,
                             RELAY_COLOR_CHAT,
                             weechat_color (weechat_config_string (relay_config_color_status[ptr_client->status])),
-                            relay_client_status_string[ptr_client->status],
+                            _(relay_status_string[ptr_client->status]),
                             RELAY_COLOR_CHAT,
                             date_start);
         }
@@ -127,7 +129,6 @@ void
 relay_command_server_list ()
 {
     struct t_relay_server *ptr_server;
-    int i;
     char date_start[128];
     struct tm *date_tmp;
 
@@ -135,7 +136,6 @@ relay_command_server_list ()
     {
         weechat_printf (NULL, "");
         weechat_printf (NULL, _("Listening on:"));
-        i = 1;
         for (ptr_server = relay_servers; ptr_server;
              ptr_server = ptr_server->next_server)
         {
@@ -176,7 +176,6 @@ relay_command_server_list ()
                     ((ptr_server->ipv4 && ptr_server->ipv6) ? "IPv4+6" : ((ptr_server->ipv6) ? "IPv6" : ((ptr_server->ipv4) ? "IPv4" : "UNIX"))),
                     date_start);
             }
-            i++;
         }
     }
     else
@@ -195,7 +194,7 @@ relay_command_relay (const void *pointer, void *data,
     struct t_relay_server *ptr_server;
     struct t_config_option *ptr_option;
     char *path;
-    int unix_socket, rc;
+    int unix_socket, rc, update;
 
     /* make C compiler happy */
     (void) pointer;
@@ -204,27 +203,54 @@ relay_command_relay (const void *pointer, void *data,
 
     if (argc > 1)
     {
-        if (weechat_strcasecmp (argv[1], "list") == 0)
+        if (weechat_strcmp (argv[1], "list") == 0)
         {
             relay_command_client_list (0);
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "listfull") == 0)
+        if (weechat_strcmp (argv[1], "listfull") == 0)
         {
             relay_command_client_list (1);
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "listrelay") == 0)
+        if (weechat_strcmp (argv[1], "listrelay") == 0)
         {
             relay_command_server_list ();
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "add") == 0)
+        if ((weechat_strcmp (argv[1], "add") == 0)
+            || (weechat_strcmp (argv[1], "addreplace") == 0))
         {
-            WEECHAT_COMMAND_MIN_ARGS(4, "add");
+            WEECHAT_COMMAND_MIN_ARGS(4, argv[1]);
+            update = 0;
+            ptr_server = relay_server_search (argv[2]);
+            if (ptr_server)
+            {
+                if (weechat_strcmp (argv[1], "addreplace") == 0)
+                {
+                    update = 1;
+                    unix_socket = ptr_server->unix_socket;
+                    relay_server_free (ptr_server);
+                    ptr_option = weechat_config_search_option (
+                        relay_config_file,
+                        (unix_socket) ? relay_config_section_path : relay_config_section_port,
+                        argv[2]);
+                    weechat_config_option_free (ptr_option);
+                }
+                else
+                {
+                    weechat_printf (
+                        NULL,
+                        _("%s%s: error: relay for \"%s\" already exists"),
+                        weechat_prefix ("error"),
+                        RELAY_PLUGIN_NAME,
+                        argv[2]);
+                    return WEECHAT_RC_ERROR;
+                }
+            }
             relay_server_get_protocol_args (argv[2], NULL, NULL, NULL,
                                             &unix_socket, NULL, NULL);
             rc = relay_config_create_option_port_path (
@@ -235,19 +261,22 @@ relay_command_relay (const void *pointer, void *data,
                 argv_eol[3]);
             if (rc != WEECHAT_CONFIG_OPTION_SET_ERROR)
             {
-                weechat_printf (NULL,
-                                _("%s: relay \"%s\" (%s: %s) added"),
-                                RELAY_PLUGIN_NAME,
-                                argv[2],
-                                (unix_socket) ? _("path") : _("port"),
-                                argv_eol[3]);
+                weechat_printf (
+                    NULL,
+                    (update) ?
+                    _("%s: relay \"%s\" (%s: %s) updated") :
+                    _("%s: relay \"%s\" (%s: %s) added"),
+                    RELAY_PLUGIN_NAME,
+                    argv[2],
+                    (unix_socket) ? _("path") : _("port"),
+                    argv_eol[3]);
             }
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "del") == 0)
+        if (weechat_strcmp (argv[1], "del") == 0)
         {
-            WEECHAT_COMMAND_MIN_ARGS(3, "del");
+            WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
             ptr_server = relay_server_search (argv_eol[2]);
             if (ptr_server)
             {
@@ -258,8 +287,7 @@ relay_command_relay (const void *pointer, void *data,
                     relay_config_file,
                     (unix_socket) ? relay_config_section_path : relay_config_section_port,
                     argv_eol[2]);
-                if (ptr_option)
-                    weechat_config_option_free (ptr_option);
+                weechat_config_option_free (ptr_option);
                 weechat_printf (NULL,
                                 _("%s: relay \"%s\" (%s: %s) removed"),
                                 RELAY_PLUGIN_NAME,
@@ -275,13 +303,14 @@ relay_command_relay (const void *pointer, void *data,
                                 weechat_prefix ("error"),
                                 RELAY_PLUGIN_NAME,
                                 argv_eol[2]);
+                return WEECHAT_RC_ERROR;
             }
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "stop") == 0)
+        if (weechat_strcmp (argv[1], "stop") == 0)
         {
-            WEECHAT_COMMAND_MIN_ARGS(3, "stop");
+            WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
             ptr_server = relay_server_search (argv_eol[2]);
             if (ptr_server)
             {
@@ -294,13 +323,14 @@ relay_command_relay (const void *pointer, void *data,
                                 weechat_prefix ("error"),
                                 RELAY_PLUGIN_NAME,
                                 argv_eol[2]);
+                return WEECHAT_RC_ERROR;
             }
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "start") == 0)
+        if (weechat_strcmp (argv[1], "start") == 0)
         {
-            WEECHAT_COMMAND_MIN_ARGS(3, "start");
+            WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
             ptr_server = relay_server_search (argv_eol[2]);
             if (ptr_server)
             {
@@ -314,13 +344,14 @@ relay_command_relay (const void *pointer, void *data,
                                 weechat_prefix ("error"),
                                 RELAY_PLUGIN_NAME,
                                 argv_eol[2]);
+                return WEECHAT_RC_ERROR;
             }
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "restart") == 0)
+        if (weechat_strcmp (argv[1], "restart") == 0)
         {
-            WEECHAT_COMMAND_MIN_ARGS(3, "restart");
+            WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
             ptr_server = relay_server_search (argv_eol[2]);
             if (ptr_server)
             {
@@ -334,23 +365,24 @@ relay_command_relay (const void *pointer, void *data,
                                 weechat_prefix ("error"),
                                 RELAY_PLUGIN_NAME,
                                 argv_eol[2]);
+                return WEECHAT_RC_ERROR;
             }
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "raw") == 0)
+        if (weechat_strcmp (argv[1], "raw") == 0)
         {
             relay_raw_open (1);
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "sslcertkey") == 0)
+        if (weechat_strcmp (argv[1], "tlscertkey") == 0)
         {
-            relay_network_set_ssl_cert_key (1);
+            relay_network_set_tls_cert_key (1);
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "up") == 0)
+        if (weechat_strcmp (argv[1], "up") == 0)
         {
             if (relay_buffer && (relay_buffer_selected_line > 0))
             {
@@ -360,7 +392,7 @@ relay_command_relay (const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "down") == 0)
+        if (weechat_strcmp (argv[1], "down") == 0)
         {
             if (relay_buffer
                 && relay_buffer_selected_line < relay_client_count - 1)
@@ -387,6 +419,437 @@ relay_command_relay (const void *pointer, void *data,
 }
 
 /*
+ * Displays a relay remote.
+ */
+
+void
+relay_command_display_remote (struct t_relay_remote *remote, int with_detail)
+{
+    if (with_detail)
+    {
+        weechat_printf (NULL, "");
+        weechat_printf (NULL, _("Remote: %s %s[%s%s%s]"),
+                        remote->name,
+                        weechat_color ("chat_delimiters"),
+                        weechat_color ("reset"),
+                        _(relay_status_string[remote->status]),
+                        weechat_color ("chat_delimiters"));
+        weechat_printf (NULL, "  url. . . . . . . . . : '%s'",
+                        weechat_config_string (remote->options[RELAY_REMOTE_OPTION_URL]));
+        weechat_printf (NULL, "  autoconnect. . . . . : %s",
+                        (weechat_config_string (remote->options[RELAY_REMOTE_OPTION_AUTOCONNECT])) ?
+                        "on" : "off");
+        weechat_printf (NULL, "  autoreconnect_delay. : %d",
+                        weechat_config_integer (remote->options[RELAY_REMOTE_OPTION_AUTORECONNECT_DELAY]));
+        weechat_printf (NULL, "  proxy. . . . . . . . : '%s'",
+                        weechat_config_string (remote->options[RELAY_REMOTE_OPTION_PROXY]));
+        weechat_printf (NULL, "  tls_verify . . . . . : %s",
+                        (weechat_config_string (remote->options[RELAY_REMOTE_OPTION_TLS_VERIFY])) ?
+                        "on" : "off");
+        weechat_printf (NULL, "  password . . . . . . : '%s'",
+                        weechat_config_string (remote->options[RELAY_REMOTE_OPTION_PASSWORD]));
+        weechat_printf (NULL, "  totp_secret. . . . . : '%s'",
+                        weechat_config_string (remote->options[RELAY_REMOTE_OPTION_TOTP_SECRET]));
+    }
+    else
+    {
+        weechat_printf (
+            NULL,
+            "  %s: %s %s[%s%s%s]",
+            remote->name,
+            weechat_config_string (remote->options[RELAY_REMOTE_OPTION_URL]),
+            weechat_color ("chat_delimiters"),
+            weechat_color ("reset"),
+            _(relay_status_string[remote->status]),
+            weechat_color ("chat_delimiters"));
+    }
+}
+
+/*
+ * Callback for command "/remote".
+ */
+
+int
+relay_command_remote (const void *pointer, void *data,
+                      struct t_gui_buffer *buffer, int argc,
+                      char **argv, char **argv_eol)
+{
+    struct t_relay_remote *ptr_remote, *ptr_remote2;
+    int i, detailed_list, one_remote_found, update;
+    const char *ptr_autoconnect, *ptr_autoreconnect_delay, *ptr_proxy;
+    const char *ptr_tls_verify, *ptr_password;
+    const char *ptr_totp_secret;
+    char *remote_name;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) buffer;
+
+    if ((argc == 1)
+        || (weechat_strcmp (argv[1], "list") == 0)
+        || (weechat_strcmp (argv[1], "listfull") == 0))
+    {
+        /* list remotes */
+        remote_name = NULL;
+        detailed_list = 0;
+        for (i = 1; i < argc; i++)
+        {
+            if (weechat_strcmp (argv[i], "list") == 0)
+                continue;
+            if (weechat_strcmp (argv[i], "listfull") == 0)
+            {
+                detailed_list = 1;
+                continue;
+            }
+            if (!remote_name)
+                remote_name = argv[i];
+        }
+        if (remote_name)
+        {
+            one_remote_found = 0;
+            for (ptr_remote = relay_remotes; ptr_remote;
+                 ptr_remote = ptr_remote->next_remote)
+            {
+                if (strstr (ptr_remote->name, remote_name))
+                {
+                    if (!one_remote_found)
+                    {
+                        weechat_printf (NULL, "");
+                        weechat_printf (NULL,
+                                        _("Relay remotes with \"%s\":"),
+                                        remote_name);
+                    }
+                    one_remote_found = 1;
+                    relay_command_display_remote (ptr_remote, detailed_list);
+                }
+            }
+            if (!one_remote_found)
+            {
+                weechat_printf (NULL,
+                                _("No relay remote found with \"%s\""),
+                                remote_name);
+            }
+        }
+        else
+        {
+            if (relay_remotes)
+            {
+                weechat_printf (NULL, "");
+                weechat_printf (NULL, _("All relay remotes:"));
+                for (ptr_remote = relay_remotes; ptr_remote;
+                     ptr_remote = ptr_remote->next_remote)
+                {
+                    relay_command_display_remote (ptr_remote, detailed_list);
+                }
+            }
+            else
+                weechat_printf (NULL, _("No relay remote"));
+        }
+        return WEECHAT_RC_OK;
+    }
+
+    if ((weechat_strcmp (argv[1], "add") == 0)
+        || (weechat_strcmp (argv[1], "addreplace") == 0))
+    {
+        WEECHAT_COMMAND_MIN_ARGS(4, argv[1]);
+        update = 0;
+        ptr_remote = relay_remote_search (argv[2]);
+        if (ptr_remote)
+        {
+            if (weechat_strcmp (argv[1], "addreplace") == 0)
+            {
+                if (!RELAY_STATUS_HAS_ENDED(ptr_remote->status))
+                {
+                    weechat_printf (
+                        NULL,
+                        _("%s%s: you cannot delete remote relay \"%s\" because "
+                          "you are connected to. Try \"/remote disconnect %s\" "
+                          "before."),
+                        weechat_prefix ("error"),
+                        RELAY_PLUGIN_NAME,
+                        argv[2],
+                        argv[2]);
+                    return WEECHAT_RC_ERROR;
+                }
+                update = 1;
+                relay_remote_free (ptr_remote);
+            }
+            else
+            {
+                weechat_printf (
+                    NULL,
+                    _("%s%s: remote relay \"%s\" already exists"),
+                    weechat_prefix ("error"), RELAY_PLUGIN_NAME,
+                    ptr_remote->name);
+                return WEECHAT_RC_ERROR;
+            }
+        }
+        if (!relay_remote_name_valid (argv[2]))
+        {
+            weechat_printf (NULL,
+                            _("%s%s: invalid remote relay name: \"%s\""),
+                            weechat_prefix ("error"),
+                            RELAY_PLUGIN_NAME,
+                            argv[2]);
+            return WEECHAT_RC_ERROR;
+        }
+        if (!relay_remote_url_valid (argv[3]))
+        {
+            weechat_printf (NULL,
+                            _("%s%s: invalid remote relay URL: \"%s\""),
+                            weechat_prefix ("error"),
+                            RELAY_PLUGIN_NAME,
+                            argv[3]);
+            return WEECHAT_RC_ERROR;
+        }
+        ptr_autoconnect = NULL;
+        ptr_autoreconnect_delay = NULL;
+        ptr_proxy = NULL;
+        ptr_tls_verify = NULL;
+        ptr_password = NULL;
+        ptr_totp_secret = NULL;
+        for (i = 4; i < argc; i++)
+        {
+            if (strncmp (argv[i], "-autoconnect=", 13) == 0)
+            {
+                ptr_autoconnect = argv[i] + 13;
+            }
+            else if (strncmp (argv[i], "-autoreconnect_delay=", 21) == 0)
+            {
+                ptr_autoreconnect_delay = argv[i] + 21;
+            }
+            else if (strncmp (argv[i], "-proxy=", 7) == 0)
+            {
+                ptr_proxy = argv[i] + 7;
+            }
+            else if (strncmp (argv[i], "-tls_verify=", 12) == 0)
+            {
+                ptr_tls_verify = argv[i] + 12;
+            }
+            else if (strncmp (argv[i], "-password=", 10) == 0)
+            {
+                ptr_password = argv[i] + 10;
+            }
+            else if (strncmp (argv[i], "-totp_secret=", 13) == 0)
+            {
+                ptr_totp_secret = argv[i] + 13;
+            }
+            else
+            {
+                weechat_printf (NULL,
+                                _("%s%s: invalid remote relay option: \"%s\""),
+                                weechat_prefix ("error"),
+                                RELAY_PLUGIN_NAME,
+                                argv[i]);
+                return WEECHAT_RC_ERROR;
+            }
+        }
+        ptr_remote = relay_remote_new (argv[2], argv[3], ptr_autoconnect,
+                                       ptr_autoreconnect_delay, ptr_proxy,
+                                       ptr_tls_verify, ptr_password,
+                                       ptr_totp_secret);
+        if (ptr_remote)
+        {
+            weechat_printf (
+                NULL,
+                (update) ?
+                _("Remote relay \"%s\" updated") :
+                _("Remote relay \"%s\" created"),
+                argv[2]);
+        }
+        else
+        {
+            weechat_printf (
+                NULL,
+                _("%s%s: failed to create remote relay \"%s\""),
+                weechat_prefix ("error"), RELAY_PLUGIN_NAME,
+                argv[2]);
+            return WEECHAT_RC_ERROR;
+        }
+        return WEECHAT_RC_OK;
+    }
+
+    if (weechat_strcmp (argv[1], "connect") == 0)
+    {
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
+        ptr_remote = relay_remote_search (argv[2]);
+        if (!ptr_remote)
+        {
+            weechat_printf (
+                NULL,
+                _("%s%s: remote relay \"%s\" not found for \"%s\" command"),
+                weechat_prefix ("error"),
+                RELAY_PLUGIN_NAME,
+                argv[2],
+                "remote connect");
+            return WEECHAT_RC_ERROR;
+        }
+        relay_remote_connect (ptr_remote);
+        return WEECHAT_RC_OK;
+    }
+
+    if (weechat_strcmp (argv[1], "reconnect") == 0)
+    {
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
+        ptr_remote = relay_remote_search (argv[2]);
+        if (!ptr_remote)
+        {
+            weechat_printf (
+                NULL,
+                _("%s%s: remote relay \"%s\" not found for \"%s\" command"),
+                weechat_prefix ("error"),
+                RELAY_PLUGIN_NAME,
+                argv[2],
+                "remote connect");
+            return WEECHAT_RC_ERROR;
+        }
+        relay_remote_reconnect (ptr_remote);
+        return WEECHAT_RC_OK;
+    }
+
+    if (weechat_strcmp (argv[1], "send") == 0)
+    {
+        WEECHAT_COMMAND_MIN_ARGS(4, argv[1]);
+        ptr_remote = relay_remote_search (argv[2]);
+        if (!ptr_remote)
+        {
+            weechat_printf (
+                NULL,
+                _("%s%s: remote relay \"%s\" not found for \"%s\" command"),
+                weechat_prefix ("error"),
+                RELAY_PLUGIN_NAME,
+                argv[2],
+                "remote send");
+            return WEECHAT_RC_ERROR;
+        }
+        if (ptr_remote->status != RELAY_STATUS_CONNECTED)
+        {
+            weechat_printf (
+                NULL,
+                _("%s%s: no connection to remote relay \"%s\""),
+                weechat_prefix ("error"),
+                RELAY_PLUGIN_NAME,
+                argv[2]);
+            return WEECHAT_RC_ERROR;
+        }
+        relay_remote_send (ptr_remote, argv_eol[3]);
+        return WEECHAT_RC_OK;
+    }
+
+    if (weechat_strcmp (argv[1], "disconnect") == 0)
+    {
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
+        ptr_remote = relay_remote_search (argv[2]);
+        if (!ptr_remote)
+        {
+            weechat_printf (
+                NULL,
+                _("%s%s: remote relay \"%s\" not found for \"%s\" command"),
+                weechat_prefix ("error"),
+                RELAY_PLUGIN_NAME,
+                argv[2],
+                "remote disconnect");
+            return WEECHAT_RC_ERROR;
+        }
+        relay_remote_disconnect (ptr_remote);
+        if (ptr_remote->reconnect_start > 0)
+        {
+            ptr_remote->reconnect_delay = 0;
+            ptr_remote->reconnect_start = 0;
+            weechat_printf (NULL,
+                            _("remote[%s]: auto-reconnection is cancelled"),
+                            ptr_remote->name);
+        }
+        return WEECHAT_RC_OK;
+    }
+
+    if (weechat_strcmp (argv[1], "rename") == 0)
+    {
+        WEECHAT_COMMAND_MIN_ARGS(4, argv[1]);
+        /* look for remote by name */
+        ptr_remote = relay_remote_search (argv[2]);
+        if (!ptr_remote)
+        {
+            weechat_printf (
+                NULL,
+                _("%s%s: remote relay \"%s\" not found for \"%s\" command"),
+                weechat_prefix ("error"),
+                RELAY_PLUGIN_NAME,
+                argv[2],
+                "remote rename");
+            return WEECHAT_RC_ERROR;
+        }
+        /* check if target name already exists */
+        ptr_remote2 = relay_remote_search (argv[3]);
+        if (ptr_remote2)
+        {
+            weechat_printf (
+                NULL,
+                _("%s%s: remote relay \"%s\" already exists for \"%s\" command"),
+                weechat_prefix ("error"),
+                RELAY_PLUGIN_NAME,
+                ptr_remote2->name,
+                "server rename");
+            return WEECHAT_RC_ERROR;
+        }
+        /* rename remote */
+        if (relay_remote_rename (ptr_remote, argv[3]))
+        {
+            weechat_printf (
+                NULL,
+                _("%s: remote relay \"%s\" has been renamed to \"%s\""),
+                RELAY_PLUGIN_NAME,
+                argv[2],
+                argv[3]);
+            return WEECHAT_RC_OK;
+        }
+        WEECHAT_COMMAND_ERROR;
+    }
+
+    if (weechat_strcmp (argv[1], "del") == 0)
+    {
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
+        /* look for remote by name */
+        ptr_remote = relay_remote_search (argv[2]);
+        if (!ptr_remote)
+        {
+            weechat_printf (
+                NULL,
+                _("%s%s: remote relay \"%s\" not found for \"%s\" command"),
+                weechat_prefix ("error"),
+                RELAY_PLUGIN_NAME,
+                argv[2],
+                "remote del");
+            return WEECHAT_RC_ERROR;
+        }
+        if (!RELAY_STATUS_HAS_ENDED(ptr_remote->status))
+        {
+            weechat_printf (
+                NULL,
+                _("%s%s: you cannot delete remote relay \"%s\" because you are "
+                  "connected to. Try \"/remote disconnect %s\" before."),
+                weechat_prefix ("error"),
+                RELAY_PLUGIN_NAME,
+                argv[2],
+                argv[2]);
+            return WEECHAT_RC_ERROR;
+        }
+        remote_name = strdup (ptr_remote->name);
+        relay_remote_free (ptr_remote);
+        weechat_printf (
+            NULL,
+            _("%s: remote relay \"%s\" has been deleted"),
+            RELAY_PLUGIN_NAME,
+            (remote_name) ? remote_name : "???");
+        free (remote_name);
+        return WEECHAT_RC_OK;
+    }
+
+    WEECHAT_COMMAND_ERROR;
+}
+
+/*
  * Hooks command.
  */
 
@@ -396,77 +859,121 @@ relay_command_init ()
     weechat_hook_command (
         "relay",
         N_("relay control"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("list|listfull|listrelay"
-           " || add <name> <port>|<path>"
+           " || add|addreplace <name> <port>|<path>"
            " || del|start|restart|stop <name>"
            " || raw"
-           " || sslcertkey"),
-        N_("         list: list relay clients (only active relays)\n"
-           "     listfull: list relay clients (verbose, all relays)\n"
-           "    listrelay: list relays (name and port)\n"
-           "          add: add a relay (listen on a port/path)\n"
-           "          del: remove a relay (clients remain connected)\n"
-           "        start: listen on port\n"
-           "      restart: close the server socket and listen again on port "
-           "(clients remain connected)\n"
-           "         stop: close the server socket (clients remain connected)\n"
-           "         name: relay name (see format below)\n"
-           "         port: port used for relay\n"
-           "         path: path used for relay (for UNIX domain socket only); "
-           "path is evaluated (see function string_eval_path_home in "
-           "plugin API reference)\n"
-           "          raw: open buffer with raw Relay data\n"
-           "   sslcertkey: set SSL certificate/key using path in option "
-           "relay.network.ssl_cert_key\n"
-           "\n"
-           "Relay name is: [ipv4.][ipv6.][ssl.]<protocol.name> or "
-           "unix.[ssl.]<protocol.name>\n"
-           "         ipv4: force use of IPv4\n"
-           "         ipv6: force use of IPv6\n"
-           "          ssl: enable SSL\n"
-           "         unix: use UNIX domain socket\n"
-           "protocol.name: protocol and name to relay:\n"
-           "                 - protocol \"irc\": name is the server to share "
-           "(optional, if not given, the server name must be sent by client in "
-           "command \"PASS\", with format: \"PASS server:password\")\n"
-           "                 - protocol \"weechat\" (name is not used)\n"
-           "\n"
-           "The \"irc\" protocol allows any IRC client (including WeeChat "
-           "itself) to connect on the port.\n"
-           "The \"weechat\" protocol allows a remote interface to connect on "
-           "the port, see the list here: https://weechat.org/about/interfaces/\n"
-           "\n"
-           "Without argument, this command opens buffer with list of relay "
-           "clients.\n"
-           "\n"
-           "Examples:\n"
-           "  irc proxy, for server \"libera\":\n"
-           "    /relay add irc.libera 8000\n"
-           "  irc proxy, for server \"libera\", with SSL:\n"
-           "    /relay add ssl.irc.libera 8001\n"
-           "  irc proxy, for all servers (client will choose), with SSL:\n"
-           "    /relay add ssl.irc 8002\n"
-           "  weechat protocol:\n"
-           "    /relay add weechat 9000\n"
-           "  weechat protocol with SSL:\n"
-           "    /relay add ssl.weechat 9001\n"
-           "  weechat protocol with SSL, using only IPv4:\n"
-           "    /relay add ipv4.ssl.weechat 9001\n"
-           "  weechat protocol with SSL, using only IPv6:\n"
-           "    /relay add ipv6.ssl.weechat 9001\n"
-           "  weechat protocol with SSL, using IPv4 + IPv6:\n"
-           "    /relay add ipv4.ipv6.ssl.weechat 9001\n"
-           "  weechat protocol over UNIX domain socket:\n"
-           "    /relay add unix.weechat ${weechat_runtime_dir}/relay_socket"),
+           " || tlscertkey"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[list]: list relay clients (only active relays)"),
+            N_("raw[listfull]: list relay clients (verbose, all relays)"),
+            N_("raw[listrelay]: list relays (name and port)"),
+            N_("raw[add]: add a relay (listen on a port/path)"),
+            N_("raw[addreplace]: add or replace an existing relay"),
+            N_("raw[del]: remove a relay (clients remain connected)"),
+            N_("raw[start]: listen on port"),
+            N_("raw[restart]: close the server socket and listen again on port "
+               "(clients remain connected)"),
+            N_("raw[stop]: close the server socket (clients remain connected)"),
+            N_("name: relay name (see format below)"),
+            N_("port: port used for relay"),
+            N_("path: path used for relay (for UNIX domain socket only); "
+               "path is evaluated (see function string_eval_path_home in "
+               "plugin API reference)"),
+            N_("raw[raw]: open buffer with raw Relay data"),
+            N_("raw[tlscertkey]: set TLS certificate/key using path in option "
+               "relay.network.tls_cert_key"),
+            "",
+            N_("Relay name is: [ipv4.][ipv6.][tls.]<protocol.name> or "
+               "unix.[tls.]<protocol.name>:"),
+            N_("  - ipv4: force use of IPv4"),
+            N_("  - ipv6: force use of IPv6"),
+            N_("  - tls: enable TLS"),
+            N_("  - unix: use UNIX domain socket"),
+            N_("  - protocol.name: protocol and name to relay:"),
+            N_("    - protocol \"irc\": name is the server to share "
+               "(optional, if not given, the server name must be sent by client in "
+               "command \"PASS\", with format: \"PASS server:password\")"),
+            N_("    - protocol \"api\" (name is not used)"),
+            N_("    - protocol \"weechat\" (name is not used)"),
+            "",
+            N_("The \"irc\" protocol allows any IRC client (including WeeChat "
+               "itself) to connect on the port."),
+            N_("The \"api\" protocol allows a remote interface (including "
+               "WeeChat itself) to connect on the port."),
+            N_("The \"weechat\" protocol allows a remote interface "
+               "(but not WeeChat itself) to connect on the port."),
+            "",
+            N_("The list of remote interfaces is here: "
+               "https://weechat.org/about/interfaces/"),
+            "",
+            N_("Without argument, this command opens buffer with list of relay "
+               "clients."),
+            "",
+            N_("Examples:"),
+            AI("  /relay add irc.libera 8000"),
+            AI("  /relay add tls.irc.libera 8001"),
+            AI("  /relay add tls.irc 8002"),
+            AI("  /relay add tls.api 9000"),
+            AI("  /relay add weechat 10000"),
+            AI("  /relay add tls.weechat 10001"),
+            AI("  /relay add ipv4.tls.weechat 10001"),
+            AI("  /relay add ipv6.tls.weechat 10001"),
+            AI("  /relay add ipv4.ipv6.tls.weechat 10001"),
+            AI("  /relay add unix.weechat ${weechat_runtime_dir}/relay_socket")),
         "list %(relay_relays)"
         " || listfull %(relay_relays)"
         " || listrelay"
-        " || add %(relay_protocol_name) %(relay_free_port)"
+        " || add|addreplace %(relay_protocol_name) %(relay_free_port)"
         " || del %(relay_relays)"
         " || start %(relay_relays)"
         " || restart %(relay_relays)"
         " || stop %(relay_relays)"
         " || raw"
-        " || sslcertkey",
+        " || tlscertkey",
         &relay_command_relay, NULL, NULL);
+    weechat_hook_command (
+        "remote",
+        N_("control of remote relay servers"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("list|listfull [<name>]"
+           " || add|addreplace <name> <url> [-<option>[=<value>]]"
+           " || connect|reconnect|disconnect|del <name>"
+           " || send <name> <json>"
+           " || rename <name> <new_name>"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[list]: list remote relay servers "
+               "(without argument, this list is displayed)"),
+            N_("raw[listfull]: list remote relay servers (verbose)"),
+            N_("raw[add]: add a remote relay server"),
+            N_("raw[addreplace]: add or replace an existing remote relay server"),
+            N_("name: name of remote relay server, for internal and display use; "
+               "this name is used to connect to the remote relay and to set "
+               "remote relay options: relay.remote.name.xxx"),
+            N_("url: URL of the remote relay, format is https://example.com:9000 "
+               "or http://example.com:9000 (plain-text connection, not recommended)"),
+            N_("option: set option for remote relay"),
+            N_("raw[connect]: connect to a remote relay server"),
+            N_("raw[reconnect]: reconnect to a remote relay server"),
+            N_("raw[disconnect]: disconnect from a remote relay server"),
+            N_("raw[del]: delete a remote relay server"),
+            N_("raw[send]: send JSON data to a remote relay server"),
+            N_("raw[rename]: rename a remote relay server"),
+            "",
+            N_("Examples:"),
+            AI("  /remote add example https://localhost:9000 "
+               "-password=my_secret_password -totp_secret=secrettotp"),
+            AI("  /remote connect example"),
+            AI("  /remote disconnect example"),
+            AI("  /remote del example")),
+        "list %(relay_remotes)"
+        " || listfull %(relay_remotes)"
+        " || add|addreplace %(relay_remotes) https://localhost:9000 "
+        "-autoconnect=on|-password=${xxx}|-proxy=xxx|-tls_verify=off|"
+        "-totp_secret=${xxx}|%*"
+        " || connect|reconnect|disconnect|del %(relay_remotes)"
+        " || send %(relay_remotes) {\"request\":\"\"}"
+        " || rename %(relay_remotes) %(relay_remotes)",
+        &relay_command_remote, NULL, NULL);
 }

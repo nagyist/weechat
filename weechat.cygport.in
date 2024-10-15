@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2013-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2013-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -20,8 +20,8 @@
 #
 # This file is used to build Cygwin packages using the "cygport" command.
 #
-# It must be used *ONLY* for a stable release (version "X.Y" or "X.Y.Z"),
-# not for a development version (version "X.Y-dev" or "X.Y-rcN").
+# It must be used *ONLY* for a stable release (version "X.Y.Z"),
+# not for a development version (version "X.Y.Z-dev" or "X.Y.Z-rcN").
 #
 # Instructions:
 #
@@ -30,12 +30,12 @@
 #      $ gem install -n /usr/local/bin asciidoctor
 #
 #   2. execute these commands inside your build directory, after running cmake
-#      or configure script (replace X.Y by WeeChat version):
+#      (replace X.Y.Z by WeeChat version):
 #
-#      $ cygport weechat-X.Y-1.cygport fetch
-#      $ cygport weechat-X.Y-1.cygport almostall
+#      $ make dist
+#      $ cygport weechat-X.Y.Z-1.cygport all
 #
-#      Packages are built in directory: ./weechat-X.Y-1.<arch>/dist/weechat/
+#      Packages are built in directory: ./weechat-X.Y.Z-1.<arch>/dist/weechat/
 #
 
 inherit cmake
@@ -48,12 +48,13 @@ RELEASE=1
 CATEGORY="Net"
 
 HOMEPAGE="https://weechat.org/"
-SRC_URI="https://weechat.org/files/src/weechat-${VERSION}.tar.bz2"
+LICENSE="GPL-3.0-or-later"
+SRC_URI="weechat-${VERSION}.tar.xz"
 
 # Build dependencies only
-DEPEND="cmake gettext gettext-devel libgnutls-devel libaspell-devel \
+BUILD_REQUIRES="cmake gettext gettext-devel libgnutls-devel libaspell-devel \
 libcurl-devel libgcrypt-devel libncurses-devel lua perl pkg-config \
-python3-devel ruby tcl-devel libguile2.2-devel php-devel libzstd-devel \
+python3-devel ruby tcl-devel libguile3.0-devel php-devel libzstd-devel \
 zlib-devel"
 
 #
@@ -61,7 +62,10 @@ zlib-devel"
 #   1. set prefix to /usr
 #   2. enable build of man pages and documentation
 #
-CYGCMAKE_ARGS="-DCMAKE_INSTALL_PREFIX=/usr -DENABLE_MAN=ON -DENABLE_DOC=ON"
+CYGCMAKE_ARGS="-DCMAKE_INSTALL_PREFIX=/usr \
+-DENABLE_CJSON=OFF \
+-DENABLE_MAN=ON \
+-DENABLE_DOC=ON"
 
 PKG_IGNORE="
     etc/postinstall/weechat.sh
@@ -112,12 +116,12 @@ weechat_CONTENTS="
     usr/share/icons/
     usr/share/locale/
     usr/share/man/
-    usr/share/doc/weechat/AUTHORS.adoc
-    usr/share/doc/weechat/ChangeLog.adoc
-    usr/share/doc/weechat/Contributing.adoc
+    usr/share/doc/weechat/AUTHORS.md
+    usr/share/doc/weechat/CHANGELOG.md
+    usr/share/doc/weechat/CONTRIBUTING.md
     usr/share/doc/weechat/COPYING
-    usr/share/doc/weechat/README.adoc
-    usr/share/doc/weechat/ReleaseNotes.adoc
+    usr/share/doc/weechat/README.md
+    usr/share/doc/weechat/UPGRADING.md
 "
 
 #

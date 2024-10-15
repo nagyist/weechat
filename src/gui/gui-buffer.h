@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -23,8 +23,9 @@
 #include <limits.h>
 #include <regex.h>
 
-struct t_hashtable;
+struct t_config_option;
 struct t_gui_window;
+struct t_hashtable;
 struct t_infolist;
 
 enum t_gui_buffer_type
@@ -45,6 +46,32 @@ enum t_gui_buffer_notify
     GUI_BUFFER_NUM_NOTIFY,
 };
 
+enum t_gui_buffer_search
+{
+    GUI_BUFFER_SEARCH_DISABLED = 0,
+    GUI_BUFFER_SEARCH_LINES,    /* search in buffer lines */
+    GUI_BUFFER_SEARCH_HISTORY,  /* search in buffer command line history */
+    /* number of search modes */
+    GUI_BUFFER_NUM_SEARCH,
+};
+
+enum t_gui_buffer_search_dir
+{
+    GUI_BUFFER_SEARCH_DIR_BACKWARD = 0,
+    GUI_BUFFER_SEARCH_DIR_FORWARD,
+    /* number of search directions */
+    GUI_BUFFER_NUM_SEARCH_DIR,
+};
+
+enum t_gui_buffer_search_history
+{
+    GUI_BUFFER_SEARCH_HISTORY_NONE = 0,
+    GUI_BUFFER_SEARCH_HISTORY_LOCAL,
+    GUI_BUFFER_SEARCH_HISTORY_GLOBAL,
+    /* number of search history */
+    GUI_BUFFER_NUM_SEARCH_HISTORY,
+};
+
 #define GUI_BUFFER_TYPE_DEFAULT GUI_BUFFER_TYPE_FORMATTED
 
 #define GUI_BUFFER_MAIN "weechat"
@@ -53,12 +80,9 @@ enum t_gui_buffer_notify
 
 #define GUI_BUFFER_NUMBER_MAX (INT_MAX - 10000)
 
-#define GUI_TEXT_SEARCH_DISABLED 0
-#define GUI_TEXT_SEARCH_BACKWARD 1
-#define GUI_TEXT_SEARCH_FORWARD  2
-
-#define GUI_TEXT_SEARCH_IN_MESSAGE 1
-#define GUI_TEXT_SEARCH_IN_PREFIX  2
+/* search where in buffer lines? */
+#define GUI_BUFFER_SEARCH_IN_MESSAGE        (1 << 0)
+#define GUI_BUFFER_SEARCH_IN_PREFIX         (1 << 1)
 
 #define GUI_BUFFER_INPUT_BLOCK_SIZE 256
 
@@ -74,6 +98,9 @@ struct t_gui_input_undo
 
 struct t_gui_buffer
 {
+    long long id;                      /* unique id for buffer              */
+                                       /* (timestamp with microseconds)     */
+    int opening;                       /* 1 if buffer is being opened       */
     struct t_weechat_plugin *plugin;   /* plugin which created this buffer  */
                                        /* (NULL for a WeeChat buffer)       */
     /*
@@ -119,6 +146,9 @@ struct t_gui_buffer
     /* buffer title */
     char *title;                       /* buffer title                      */
 
+    /* buffer modes */
+    char *modes;                       /* buffer modes                      */
+
     /* chat content */
     struct t_gui_lines *own_lines;     /* lines (for this buffer only)      */
     struct t_gui_lines *mixed_lines;   /* mixed lines (if buffers merged)   */
@@ -132,7 +162,7 @@ struct t_gui_buffer
 
     /* nicklist */
     int nicklist;                      /* = 1 if nicklist is enabled        */
-    int nicklist_case_sensitive;       /* nicks are case sensitive ?        */
+    int nicklist_case_sensitive;       /* nicks are case-sensitive ?        */
     struct t_gui_nick_group *nicklist_root; /* pointer to groups root       */
     int nicklist_max_length;           /* max length for a nick             */
     int nicklist_display_groups;       /* display groups ?                  */
@@ -142,6 +172,7 @@ struct t_gui_buffer
     int nicklist_groups_visible_count; /* number of groups displayed        */
     int nicklist_nicks_count;          /* number of nicks                   */
     int nicklist_nicks_visible_count;  /* number of nicks displayed         */
+    long long nicklist_last_id_assigned; /* last id assigned for a grp/nick */
     int (*nickcmp_callback)(const void *pointer, /* called to compare nicks */
                             void *data,          /* (search in nicklist)    */
                             struct t_gui_buffer *buffer,
@@ -159,12 +190,14 @@ struct t_gui_buffer
     const void *input_callback_pointer; /* pointer for callback             */
     void *input_callback_data;         /* data for callback                 */
                                        /* to this buffer                    */
+    int input_get_any_user_data;       /* get any user data, including cmds */
     int input_get_unknown_commands;    /* 1 if unknown commands are sent to */
                                        /* input_callback                    */
     int input_get_empty;               /* 1 if empty input is sent to       */
                                        /* input_callback                    */
     int input_multiline;               /* 1 if multiple lines are sent as   */
                                        /* one message to input_callback     */
+    char *input_prompt;                /* input prompt                      */
     char *input_buffer;                /* input buffer                      */
     int input_buffer_alloc;            /* input buffer: allocated size      */
     int input_buffer_size;             /* buffer size in bytes              */
@@ -188,14 +221,18 @@ struct t_gui_buffer
     struct t_gui_history *ptr_history; /* current command in history        */
     int num_history;                   /* number of commands in history     */
 
-    /* text search */
-    int text_search;                   /* text search type                  */
-    int text_search_exact;             /* exact search (case sensitive) ?   */
-    int text_search_regex;             /* search with a regex               */
-    regex_t *text_search_regex_compiled; /* regex used to search            */
-    int text_search_where;             /* search where? prefix and/or msg   */
-    int text_search_found;             /* 1 if text found, otherwise 0      */
-    char *text_search_input;           /* input saved before text search    */
+    /* text search (in buffer lines or command line history) */
+    enum t_gui_buffer_search text_search; /* text search type               */
+    enum t_gui_buffer_search_dir text_search_direction;
+                                          /* search dir.: backward/forward  */
+    int text_search_exact;                /* case-sensitive search?         */
+    int text_search_regex;                /* search with a regex            */
+    regex_t *text_search_regex_compiled;  /* regex used to search           */
+    int text_search_where;                /* prefix and/or msg              */
+    enum t_gui_buffer_search_history text_search_history; /* local/global   */
+    int text_search_found;                /* 1 if text found, otherwise 0   */
+    struct t_gui_history *text_search_ptr_history; /* ptr to history found  */
+    char *text_search_input;              /* input saved before text search */
 
     /* highlight settings for buffer */
     char *highlight_words;             /* list of words to highlight        */
@@ -247,6 +284,8 @@ extern int gui_buffers_visited_index;
 extern int gui_buffers_visited_count;
 extern int gui_buffers_visited_frozen;
 extern struct t_gui_buffer *gui_buffer_last_displayed;
+extern struct t_hashtable *gui_buffer_by_id;
+extern long long gui_buffer_last_id_assigned;
 extern char *gui_buffer_reserved_names[];
 extern char *gui_buffer_type_string[];
 extern char *gui_buffer_notify_string[];
@@ -259,8 +298,10 @@ extern char *gui_buffer_properties_set[];
 
 extern int gui_buffer_search_type (const char *type);
 extern int gui_buffer_search_notify (const char *notify);
+extern int gui_buffer_send_signal (struct t_gui_buffer *buffer,
+                                   const char *signal,
+                                   const char *type_data, void *signal_data);
 extern const char *gui_buffer_get_plugin_name (struct t_gui_buffer *buffer);
-extern const char *gui_buffer_get_short_name (struct t_gui_buffer *buffer);
 extern void gui_buffer_build_full_name (struct t_gui_buffer *buffer);
 extern void gui_buffer_local_var_add (struct t_gui_buffer *buffer,
                                       const char *name,
@@ -268,8 +309,25 @@ extern void gui_buffer_local_var_add (struct t_gui_buffer *buffer,
 extern void gui_buffer_local_var_remove (struct t_gui_buffer *buffer,
                                          const char *name);
 extern void gui_buffer_notify_set_all ();
-extern void gui_buffer_input_buffer_init (struct t_gui_buffer *buffer);
+extern long long gui_buffer_generate_id ();
 extern int gui_buffer_is_reserved_name (const char *name);
+extern void gui_buffer_apply_config_option_property (struct t_gui_buffer *buffer,
+                                                     struct t_config_option *option);
+extern struct t_gui_buffer *gui_buffer_new_props_with_id (long long id,
+                                                          struct t_weechat_plugin *plugin,
+                                                          const char *name,
+                                                          struct t_hashtable *properties,
+                                                          int (*input_callback)(const void *pointer,
+                                                                                void *data,
+                                                                                struct t_gui_buffer *buffer,
+                                                                                const char *input_data),
+                                                          const void *input_callback_pointer,
+                                                          void *input_callback_data,
+                                                          int (*close_callback)(const void *pointer,
+                                                                                void *data,
+                                                                                struct t_gui_buffer *buffer),
+                                                          const void *close_callback_pointer,
+                                                          void *close_callback_data);
 extern struct t_gui_buffer *gui_buffer_new_props (struct t_weechat_plugin *plugin,
                                                   const char *name,
                                                   struct t_hashtable *properties,
@@ -318,6 +376,10 @@ extern void gui_buffer_ask_chat_refresh (struct t_gui_buffer *buffer,
                                          int refresh);
 extern void gui_buffer_set_title (struct t_gui_buffer *buffer,
                                   const char *new_title);
+extern void gui_buffer_set_modes (struct t_gui_buffer *buffer,
+                                  const char *new_modes);
+extern void gui_buffer_set_time_for_each_line (struct t_gui_buffer *buffer,
+                                               int time_for_each_line);
 extern void gui_buffer_set_highlight_words (struct t_gui_buffer *buffer,
                                             const char *new_highlight_words);
 extern void gui_buffer_set_highlight_disable_regex (struct t_gui_buffer *buffer,
@@ -330,7 +392,8 @@ extern void gui_buffer_set_highlight_tags (struct t_gui_buffer *buffer,
                                            const char *new_tags);
 extern void gui_buffer_set_hotlist_max_level_nicks (struct t_gui_buffer *buffer,
                                                     const char *new_hotlist_max_level_nicks);
-extern void gui_buffer_set_unread (struct t_gui_buffer *buffer);
+extern void gui_buffer_set_input_prompt (struct t_gui_buffer *buffer,
+                                         const char *input_prompt);
 extern void gui_buffer_set (struct t_gui_buffer *buffer, const char *property,
                             const char *value);
 extern void gui_buffer_set_pointer (struct t_gui_buffer *buffer,
@@ -340,27 +403,23 @@ extern void gui_buffer_add_value_num_displayed (struct t_gui_buffer *buffer,
                                                 int value);
 extern int gui_buffer_is_main (const char *plugin_name, const char *name);
 extern struct t_gui_buffer *gui_buffer_search_main ();
+extern struct t_gui_buffer *gui_buffer_search_by_id (long long id);
 extern struct t_gui_buffer *gui_buffer_search_by_full_name (const char *full_name);
-extern struct t_gui_buffer *gui_buffer_search_by_name (const char *plugin,
-                                                       const char *name);
+extern struct t_gui_buffer *gui_buffer_search (const char *plugin, const char *name);
 extern struct t_gui_buffer *gui_buffer_search_by_partial_name (const char *plugin,
                                                                const char *name);
 extern struct t_gui_buffer *gui_buffer_search_by_number (int number);
-extern struct t_gui_buffer *gui_buffer_search_by_number_or_name (const char *string);
-extern struct t_gui_buffer *gui_buffer_search_by_layout_number (int layout_number,
-                                                                int layout_number_merge_order);
+extern struct t_gui_buffer *gui_buffer_search_by_id_number_name (const char *string);
 extern int gui_buffer_count_merged_buffers (int number);
-extern int gui_buffer_is_scrolled (struct t_gui_buffer *buffer);
 extern void gui_buffer_clear (struct t_gui_buffer *buffer);
 extern void gui_buffer_clear_all ();
 extern void gui_buffer_close (struct t_gui_buffer *buffer);
 extern void gui_buffer_switch_by_number (struct t_gui_window *window,
                                          int number);
 extern void gui_buffer_set_active_buffer (struct t_gui_buffer *buffer);
-extern struct t_gui_buffer *gui_buffer_get_next_active_buffer (struct t_gui_buffer *buffer,
-                                                               int allow_hidden_buffer);
-extern struct t_gui_buffer *gui_buffer_get_previous_active_buffer (struct t_gui_buffer *buffer,
-                                                                   int allow_hidden_buffer);
+extern void gui_buffer_switch_active_buffer (struct t_gui_buffer *buffer);
+extern void gui_buffer_switch_active_buffer_previous (struct t_gui_buffer *buffer);
+extern void gui_buffer_zoom (struct t_gui_buffer *buffer);
 extern void gui_buffer_renumber (int number1, int number2, int start_number);
 extern void gui_buffer_move_to_number (struct t_gui_buffer *buffer, int number);
 extern void gui_buffer_swap (int number1, int number2);
@@ -379,12 +438,14 @@ extern void gui_buffer_undo_add (struct t_gui_buffer *buffer);
 extern void gui_buffer_undo_free (struct t_gui_buffer *buffer,
                                   struct t_gui_input_undo *undo);
 extern void gui_buffer_undo_free_all (struct t_gui_buffer *buffer);
-extern struct t_gui_buffer_visited *gui_buffer_visited_search_by_number (int number);
-extern void gui_buffer_visited_remove (struct t_gui_buffer_visited *buffer_visited);
-extern void gui_buffer_visited_remove_by_buffer (struct t_gui_buffer *buffer);
+extern void gui_buffer_input_move_to_buffer (struct t_gui_buffer *from_buffer,
+                                             struct t_gui_buffer *to_buffer);
 extern struct t_gui_buffer_visited *gui_buffer_visited_add (struct t_gui_buffer *buffer);
-extern int gui_buffer_visited_get_index_previous ();
-extern int gui_buffer_visited_get_index_next ();
+extern void gui_buffer_jump_smart (struct t_gui_window *window);
+extern void gui_buffer_jump_last_visible_number (struct t_gui_window *window);
+extern void gui_buffer_jump_last_buffer_displayed (struct t_gui_window *window);
+extern void gui_buffer_jump_previously_visited_buffer (struct t_gui_window *window);
+extern void gui_buffer_jump_next_visited_buffer (struct t_gui_window *window);
 extern struct t_hdata *gui_buffer_hdata_buffer_cb (const void *pointer,
                                                    void *data,
                                                    const char *hdata_name);

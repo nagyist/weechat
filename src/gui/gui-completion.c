@@ -1,7 +1,7 @@
 /*
  * gui-completion.c - word completion according to context (used by all GUI)
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -33,17 +33,17 @@
 #include <unistd.h>
 
 #include "../core/weechat.h"
-#include "../core/wee-arraylist.h"
-#include "../core/wee-completion.h"
-#include "../core/wee-config.h"
-#include "../core/wee-eval.h"
-#include "../core/wee-hashtable.h"
-#include "../core/wee-hdata.h"
-#include "../core/wee-hook.h"
-#include "../core/wee-list.h"
-#include "../core/wee-log.h"
-#include "../core/wee-string.h"
-#include "../core/wee-utf8.h"
+#include "../core/core-arraylist.h"
+#include "../core/core-completion.h"
+#include "../core/core-config.h"
+#include "../core/core-eval.h"
+#include "../core/core-hashtable.h"
+#include "../core/core-hdata.h"
+#include "../core/core-hook.h"
+#include "../core/core-list.h"
+#include "../core/core-log.h"
+#include "../core/core-string.h"
+#include "../core/core-utf8.h"
 #include "../plugins/plugin.h"
 #include "gui-completion.h"
 #include "gui-buffer.h"
@@ -65,16 +65,21 @@ gui_completion_word_compare_cb (void *data,
                                 struct t_arraylist *arraylist,
                                 void *pointer1, void *pointer2)
 {
+    struct t_gui_completion *completion;
     struct t_gui_completion_word *completion_word1, *completion_word2;
 
     /* make C compiler happy */
-    (void) data;
     (void) arraylist;
+
+    completion = (struct t_gui_completion *)data;
 
     completion_word1 = (struct t_gui_completion_word *)pointer1;
     completion_word2 = (struct t_gui_completion_word *)pointer2;
 
-    return string_strcasecmp (completion_word1->word, completion_word2->word);
+    if (completion->case_sensitive)
+        return string_strcmp (completion_word1->word, completion_word2->word);
+    else
+        return string_strcasecmp (completion_word1->word, completion_word2->word);
 }
 
 /*
@@ -94,8 +99,7 @@ gui_completion_word_free_cb (void *data,
 
     completion_word = (struct t_gui_completion_word *)pointer;
 
-    if (completion_word->word)
-        free (completion_word->word);
+    free (completion_word->word);
 
     free (completion_word);
 }
@@ -112,6 +116,7 @@ gui_completion_init (struct t_gui_completion *completion,
     completion->plugin = plugin;
     completion->buffer = buffer;
     completion->context = GUI_COMPLETION_NULL;
+    completion->case_sensitive = CONFIG_BOOLEAN(config_completion_case_sensitive);
     completion->base_command = NULL;
     completion->base_command_arg_index = 0;
     completion->base_word = NULL;
@@ -125,7 +130,7 @@ gui_completion_init (struct t_gui_completion *completion,
 
     completion->list = arraylist_new (
         32, 1, 0,
-        &gui_completion_word_compare_cb, NULL,
+        &gui_completion_word_compare_cb, completion,
         &gui_completion_word_free_cb, NULL);
 
     completion->word_found = NULL;
@@ -136,7 +141,7 @@ gui_completion_init (struct t_gui_completion *completion,
 
     completion->partial_list = arraylist_new (
         0, 0, 0,
-        &gui_completion_word_compare_cb, NULL,
+        &gui_completion_word_compare_cb, completion,
         &gui_completion_word_free_cb, NULL);
 }
 
@@ -205,16 +210,13 @@ gui_completion_partial_list_add (struct t_gui_completion *completion,
 void
 gui_completion_free_data (struct t_gui_completion *completion)
 {
-    if (completion->base_command)
-        free (completion->base_command);
+    free (completion->base_command);
     completion->base_command = NULL;
 
-    if (completion->base_word)
-        free (completion->base_word);
+    free (completion->base_word);
     completion->base_word = NULL;
 
-    if (completion->args)
-        free (completion->args);
+    free (completion->args);
     completion->args = NULL;
 
     if (completion->list)
@@ -223,8 +225,7 @@ gui_completion_free_data (struct t_gui_completion *completion)
         completion->list = NULL;
     }
 
-    if (completion->word_found)
-        free (completion->word_found);
+    free (completion->word_found);
     completion->word_found = NULL;
 
     if (completion->partial_list)
@@ -304,57 +305,6 @@ gui_completion_stop (struct t_gui_completion *completion)
         (void) hook_signal_send ("partial_completion",
                                  WEECHAT_HOOK_SIGNAL_STRING, NULL);
     }
-}
-
-/*
- * Searches for a command hook.
- *
- * Returns pointer to hook found, NULL if not found.
- */
-
-struct t_hook *
-gui_completion_search_command (struct t_weechat_plugin *plugin,
-                               const char *command)
-{
-    struct t_hook *ptr_hook, *hook_for_other_plugin, *hook_incomplete_command;
-    int length_command, allow_incomplete_commands, count_incomplete_commands;
-
-    hook_for_other_plugin = NULL;
-    hook_incomplete_command = NULL;
-    length_command = utf8_strlen (command);
-    count_incomplete_commands = 0;
-    allow_incomplete_commands = CONFIG_BOOLEAN(config_look_command_incomplete);
-
-    for (ptr_hook = weechat_hooks[HOOK_TYPE_COMMAND]; ptr_hook;
-         ptr_hook = ptr_hook->next_hook)
-    {
-        if (!ptr_hook->deleted
-            && HOOK_COMMAND(ptr_hook, command)
-            && HOOK_COMMAND(ptr_hook, command)[0])
-        {
-            if (string_strcasecmp (HOOK_COMMAND(ptr_hook, command),
-                                   command) == 0)
-            {
-                if (ptr_hook->plugin == plugin)
-                    return ptr_hook;
-                hook_for_other_plugin = ptr_hook;
-            }
-            else if (allow_incomplete_commands
-                     && (string_strncasecmp (HOOK_COMMAND(ptr_hook, command),
-                                             command,
-                                             length_command) == 0))
-            {
-                hook_incomplete_command = ptr_hook;
-                count_incomplete_commands++;
-            }
-        }
-    }
-
-    if (hook_for_other_plugin)
-        return hook_for_other_plugin;
-
-    return (count_incomplete_commands == 1) ?
-        hook_incomplete_command : NULL;
 }
 
 /*
@@ -461,6 +411,48 @@ gui_completion_nickncmp (const char *base_word, const char *nick, int max)
 }
 
 /*
+ * Compares two strings (follows case-sensitive flag in completion structure).
+ *
+ * Returns:
+ *   < 0: string1 < string2
+ *     0: string1 == string2
+ *   > 0: string1 > string2
+ */
+
+int
+gui_completion_strcmp (struct t_gui_completion *completion,
+                       const char *string1, const char *string2)
+{
+    if (!completion)
+        return 0;
+
+    return (completion->case_sensitive) ?
+        string_strcmp (string1, string2) : string_strcasecmp (string1, string2);
+}
+
+/*
+ * Compares two strings with max length (follows case-sensitive flag in
+ * completion structure).
+ *
+ * Returns:
+ *   < 0: string1 < string2
+ *     0: string1 == string2
+ *   > 0: string1 > string2
+ */
+
+int
+gui_completion_strncmp (struct t_gui_completion *completion,
+                        const char *string1, const char *string2, int max)
+{
+    if (!completion)
+        return 0;
+
+    return (completion->case_sensitive) ?
+        string_strncmp (string1, string2, max) :
+        string_strncasecmp (string1, string2, max);
+}
+
+/*
  * Adds a word to completion list.
  */
 
@@ -476,10 +468,13 @@ gui_completion_list_add (struct t_gui_completion *completion, const char *word,
         return;
 
     if (!completion->base_word || !completion->base_word[0]
-        || (nick_completion && (gui_completion_nickncmp (completion->base_word, word,
-                                                         utf8_strlen (completion->base_word)) == 0))
-        || (!nick_completion && (string_strncasecmp (completion->base_word, word,
-                                                     utf8_strlen (completion->base_word)) == 0)))
+        || (nick_completion
+            && (gui_completion_nickncmp (completion->base_word, word,
+                                         utf8_strlen (completion->base_word)) == 0))
+        || (!nick_completion
+            && (gui_completion_strncmp (completion,
+                                        completion->base_word, word,
+                                        utf8_strlen (completion->base_word)) == 0)))
     {
         completion_word = malloc (sizeof (*completion_word));
         if (completion_word)
@@ -678,6 +673,61 @@ gui_completion_get_matching_template (struct t_gui_completion *completion,
 }
 
 /*
+ * Searches for a command hook.
+ *
+ * Returns pointer to hook found, NULL if not found.
+ */
+
+struct t_hook *
+gui_completion_search_command (struct t_gui_completion *completion,
+                               const char *command)
+{
+    struct t_hook *ptr_hook, *hook_for_other_plugin, *hook_incomplete_command;
+    int length_command, allow_incomplete_commands, count_incomplete_commands;
+
+    if (!completion || !command)
+        return NULL;
+
+    hook_for_other_plugin = NULL;
+    hook_incomplete_command = NULL;
+    length_command = utf8_strlen (command);
+    count_incomplete_commands = 0;
+    allow_incomplete_commands = CONFIG_BOOLEAN(config_look_command_incomplete);
+
+    for (ptr_hook = weechat_hooks[HOOK_TYPE_COMMAND]; ptr_hook;
+         ptr_hook = ptr_hook->next_hook)
+    {
+        if (!ptr_hook->deleted
+            && HOOK_COMMAND(ptr_hook, command)
+            && HOOK_COMMAND(ptr_hook, command)[0])
+        {
+            if (gui_completion_strcmp (completion,
+                                       HOOK_COMMAND(ptr_hook, command), command) == 0)
+            {
+                if (ptr_hook->plugin == completion->buffer->plugin)
+                    return ptr_hook;
+                hook_for_other_plugin = ptr_hook;
+            }
+            else if (allow_incomplete_commands
+                     && (gui_completion_strncmp (completion,
+                                                 HOOK_COMMAND(ptr_hook, command),
+                                                 command,
+                                                 length_command) == 0))
+            {
+                hook_incomplete_command = ptr_hook;
+                count_incomplete_commands++;
+            }
+        }
+    }
+
+    if (hook_for_other_plugin)
+        return hook_for_other_plugin;
+
+    return (count_incomplete_commands == 1) ?
+        hook_incomplete_command : NULL;
+}
+
+/*
  * Gets template according to user arguments for command.
  */
 
@@ -695,7 +745,7 @@ gui_completion_get_template_for_args (struct t_gui_completion *completion,
         && (HOOK_COMMAND(hook_command, cplt_templates)[0][1] == '%')
         && (HOOK_COMMAND(hook_command, cplt_templates)[0][1]))
     {
-        hook_command = gui_completion_search_command (completion->buffer->plugin,
+        hook_command = gui_completion_search_command (completion,
                                                       HOOK_COMMAND(hook_command, cplt_templates)[0] + 2);
         if (!hook_command
             || ((HOOK_COMMAND(hook_command, cplt_templates)[0][0] == '%')
@@ -738,8 +788,7 @@ gui_completion_build_list (struct t_gui_completion *completion)
 
     repeat_last = 0;
 
-    ptr_hook = gui_completion_search_command (completion->buffer->plugin,
-                                              completion->base_command);
+    ptr_hook = gui_completion_search_command (completion, completion->base_command);
     if (!ptr_hook || !HOOK_COMMAND(ptr_hook, completion))
     {
         completion->context = GUI_COMPLETION_AUTO;
@@ -810,7 +859,7 @@ gui_completion_find_context (struct t_gui_completion *completion,
                              const char *data, int pos)
 {
     int i, size, command_arg, pos_start, pos_end;
-    const char *ptr_command, *ptr_data, *prev_char;
+    const char *ptr_command, *ptr_data, *ptr_space, *ptr_newline, *prev_char;
 
     /* look for context */
     gui_completion_free_data (completion);
@@ -843,12 +892,15 @@ gui_completion_find_context (struct t_gui_completion *completion,
         ptr_data = data;
         while (ptr_data && (ptr_data < data + pos))
         {
-            ptr_data = strchr (ptr_data, ' ');
+            ptr_space = strchr (ptr_data, ' ');
+            ptr_newline = strchr (ptr_data, '\n');
+            ptr_data = (ptr_newline && (!ptr_space || (ptr_newline < ptr_space))) ?
+                ptr_newline : ptr_space;
             if (!ptr_data)
                 break;
             if (ptr_data < data + pos)
             {
-                while ((ptr_data < data + pos) && (ptr_data[0] == ' '))
+                while ((ptr_data < data + pos) && ((ptr_data[0] == ' ') || (ptr_data[0] == '\n')))
                 {
                     ptr_data++;
                 }
@@ -905,10 +957,10 @@ gui_completion_find_context (struct t_gui_completion *completion,
         pos_start = i;
         if (data[i] == ' ')
         {
-            if ((i > 0) && (data[i-1] != ' '))
+            if ((i > 0) && (data[i - 1] != ' ') && (data[i - 1] != '\n'))
             {
                 i--;
-                while ((i >= 0) && (data[i] != ' '))
+                while ((i >= 0) && (data[i] != ' ') && (data[i] != '\n'))
                 {
                     i--;
                 }
@@ -917,7 +969,7 @@ gui_completion_find_context (struct t_gui_completion *completion,
         }
         else
         {
-            while ((i >= 0) && (data[i] != ' '))
+            while ((i >= 0) && (data[i] != ' ') && (data[i] != '\n'))
             {
                 i--;
             }
@@ -932,7 +984,7 @@ gui_completion_find_context (struct t_gui_completion *completion,
         {
             /* base word stops after first space found (on or after cursor) */
             i = pos;
-            while ((i < size) && (data[i] != ' '))
+            while ((i < size) && (data[i] != ' ') && (data[i] != '\n'))
             {
                 i++;
             }
@@ -1034,11 +1086,11 @@ gui_completion_common_prefix_size (struct t_arraylist *list,
             ptr_completion_word =
                 (struct t_gui_completion_word *)(list->data[i]);
             if (!utf_char
-                || (utf8_charcasecmp (utf_char,
-                                      ptr_completion_word->word) == 0))
+                || (string_charcasecmp (utf_char,
+                                        ptr_completion_word->word) == 0))
             {
                 if ((ptr_completion_word->word[ptr_char - ptr_first_item] == '\0')
-                    || (utf8_charcasecmp (
+                    || (string_charcasecmp (
                             ptr_char,
                             ptr_completion_word->word + (ptr_char - ptr_first_item)) != 0))
                 {
@@ -1071,7 +1123,7 @@ gui_completion_partial_build_list (struct t_gui_completion *completion,
         return;
 
     list_temp = arraylist_new (completion->list->size, 1, 0,
-                               &gui_completion_word_compare_cb, NULL,
+                               &gui_completion_word_compare_cb, completion,
                                &gui_completion_word_free_cb, NULL);
     if (!list_temp)
         return;
@@ -1112,7 +1164,7 @@ gui_completion_partial_build_list (struct t_gui_completion *completion,
         {
             ptr_completion_word =
                 (struct t_gui_completion_word *)list_temp->data[index];
-            if (utf8_charcasecmp (utf_char, ptr_completion_word->word) == 0)
+            if (string_charcasecmp (utf_char, ptr_completion_word->word) == 0)
             {
                 arraylist_remove (list_temp, index);
                 items_count++;
@@ -1144,7 +1196,6 @@ gui_completion_complete (struct t_gui_completion *completion)
     int length, word_found_seen, other_completion, partial_completion;
     int common_prefix_size, index, index2;
     struct t_gui_completion_word *ptr_completion_word, *ptr_completion_word2;
-    char *word_found_lower;
 
     length = utf8_strlen (completion->base_word);
     word_found_seen = 0;
@@ -1202,14 +1253,14 @@ gui_completion_complete (struct t_gui_completion *completion)
                                           ptr_completion_word->word,
                                           length) == 0))
             || (!ptr_completion_word->nick_completion
-                && (string_strncasecmp (completion->base_word,
-                                        ptr_completion_word->word,
-                                        length) == 0)))
+                && (gui_completion_strncmp (completion,
+                                            completion->base_word,
+                                            ptr_completion_word->word,
+                                            length) == 0)))
         {
             if ((!completion->word_found) || word_found_seen)
             {
-                if (completion->word_found)
-                    free (completion->word_found);
+                free (completion->word_found);
                 completion->word_found = strdup (ptr_completion_word->word);
                 completion->word_found_is_nick =
                     ptr_completion_word->nick_completion;
@@ -1237,9 +1288,10 @@ gui_completion_complete (struct t_gui_completion *completion)
                                                       ptr_completion_word2->word,
                                                       length) == 0))
                         || (!ptr_completion_word->nick_completion
-                            && (string_strncasecmp (completion->base_word,
-                                                    ptr_completion_word2->word,
-                                                    length) == 0)))
+                            && (gui_completion_strncmp (completion,
+                                                        completion->base_word,
+                                                        ptr_completion_word2->word,
+                                                        length) == 0)))
                     {
                         other_completion++;
                     }
@@ -1263,12 +1315,6 @@ gui_completion_complete (struct t_gui_completion *completion)
                     completion->word_found_is_nick = 0;
                     completion->add_space = 0;
                     completion->position = -1;
-                    word_found_lower = string_tolower (completion->word_found);
-                    if (word_found_lower)
-                    {
-                        free (completion->word_found);
-                        completion->word_found = word_found_lower;
-                    }
 
                     /* alert user of partial completion */
                     if (CONFIG_BOOLEAN(config_completion_partial_completion_alert))
@@ -1297,8 +1343,12 @@ gui_completion_complete (struct t_gui_completion *completion)
             other_completion++;
         }
         if (completion->word_found &&
-            (strcmp (ptr_completion_word->word, completion->word_found) == 0))
+            (gui_completion_strcmp (completion,
+                                    ptr_completion_word->word,
+                                    completion->word_found) == 0))
+        {
             word_found_seen = 1;
+        }
 
         index = (completion->direction < 0) ? index - 1 : index + 1;
     }
@@ -1353,7 +1403,7 @@ gui_completion_command (struct t_gui_completion *completion)
  */
 
 char *
-gui_completion_get_default_template(struct t_gui_completion *completion)
+gui_completion_get_default_template (struct t_gui_completion *completion)
 {
     const char *ptr_default_template;
     char *value;
@@ -1378,8 +1428,7 @@ gui_completion_get_default_template(struct t_gui_completion *completion)
                               NULL, NULL);
     hashtable_set (pointers, "buffer", completion->buffer);
     value = eval_expression (ptr_default_template, pointers, NULL, NULL);
-    if (pointers)
-        hashtable_free (pointers);
+    hashtable_free (pointers);
 
     return (value) ? value : strdup ("");
 }
@@ -1412,8 +1461,7 @@ gui_completion_auto (struct t_gui_completion *completion)
             completion,
             (default_completion) ? default_completion : "",
             NULL);
-        if (default_completion)
-            free (default_completion);
+        free (default_completion);
     }
     gui_completion_complete (completion);
 }
@@ -1439,8 +1487,7 @@ gui_completion_search (struct t_gui_completion *completion, const char *data,
     /* if new completion => look for base word */
     if (real_position != completion->position)
     {
-        if (completion->word_found)
-            free (completion->word_found);
+        free (completion->word_found);
         completion->word_found = NULL;
         completion->word_found_is_nick = 0;
         gui_completion_find_context (completion, data, real_position);
@@ -1453,8 +1500,7 @@ gui_completion_search (struct t_gui_completion *completion, const char *data,
     switch (completion->context)
     {
         case GUI_COMPLETION_NULL:
-            if (old_word_found)
-                free (old_word_found);
+            free (old_word_found);
             return 0;
         case GUI_COMPLETION_COMMAND:
             gui_completion_command (completion);
@@ -1489,8 +1535,7 @@ gui_completion_search (struct t_gui_completion *completion, const char *data,
                 utf8_strlen (completion->base_word);
         }
     }
-    if (old_word_found)
-        free (old_word_found);
+    free (old_word_found);
 
     return 1;
 }
@@ -1503,15 +1548,15 @@ const char *
 gui_completion_get_string (struct t_gui_completion *completion,
                            const char *property)
 {
-    if (completion)
-    {
-        if (string_strcasecmp (property, "base_command") == 0)
-            return completion->base_command;
-        else if (string_strcasecmp (property, "base_word") == 0)
-            return completion->base_word;
-        else if (string_strcasecmp (property, "args") == 0)
-            return completion->args;
-    }
+    if (!completion || !property)
+        return NULL;
+
+    if (strcmp (property, "base_command") == 0)
+        return completion->base_command;
+    else if (strcmp (property, "base_word") == 0)
+        return completion->base_word;
+    else if (strcmp (property, "args") == 0)
+        return completion->args;
 
     return NULL;
 }
@@ -1537,6 +1582,7 @@ gui_completion_hdata_completion_cb (const void *pointer, void *data,
         HDATA_VAR(struct t_gui_completion, plugin, POINTER, 0, NULL, "plugin");
         HDATA_VAR(struct t_gui_completion, buffer, POINTER, 0, NULL, "buffer");
         HDATA_VAR(struct t_gui_completion, context, INTEGER, 0, NULL, NULL);
+        HDATA_VAR(struct t_gui_completion, case_sensitive, INTEGER, 0, NULL, NULL);
         HDATA_VAR(struct t_gui_completion, base_command, STRING, 0, NULL, NULL);
         HDATA_VAR(struct t_gui_completion, base_command_arg_index, INTEGER, 0, NULL, NULL);
         HDATA_VAR(struct t_gui_completion, base_word, STRING, 0, NULL, NULL);
@@ -1600,10 +1646,10 @@ gui_completion_list_words_print_log (struct t_arraylist *list,
     for (i = 0; i < list->size; i++)
     {
         ptr_completion_word = (struct t_gui_completion_word *)(list->data[i]);
-        log_printf ("[%s (addr:0x%lx)]", name, ptr_completion_word);
+        log_printf ("[%s (addr:%p)]", name, ptr_completion_word);
         log_printf ("  word. . . . . . . . . . : '%s'", ptr_completion_word->word);
-        log_printf ("  nicklist_completion . . : %d",   ptr_completion_word->nick_completion);
-        log_printf ("  count . . . . . . . . . : %d",   ptr_completion_word->count);
+        log_printf ("  nicklist_completion . . : %d", ptr_completion_word->nick_completion);
+        log_printf ("  count . . . . . . . . . : %d", ptr_completion_word->count);
     }
 }
 
@@ -1619,30 +1665,31 @@ gui_completion_print_log ()
     for (ptr_completion = weechat_completions; ptr_completion;
          ptr_completion = ptr_completion->next_completion)
     {
-        log_printf ("[completion (addr:0x%lx)]", ptr_completion);
-        log_printf ("  plugin. . . . . . . . . . : 0x%lx", ptr_completion->plugin);
-        log_printf ("  buffer. . . . . . . . . . : 0x%lx ('%s')",
+        log_printf ("[completion (addr:%p)]", ptr_completion);
+        log_printf ("  plugin. . . . . . . . . . : %p", ptr_completion->plugin);
+        log_printf ("  buffer. . . . . . . . . . : %p ('%s')",
                     ptr_completion->buffer,
                     ptr_completion->buffer->full_name);
-        log_printf ("  context . . . . . . . . . : %d",    ptr_completion->context);
-        log_printf ("  base_command. . . . . . . : '%s'",  ptr_completion->base_command);
-        log_printf ("  base_command_arg_index. . : %d",    ptr_completion->base_command_arg_index);
-        log_printf ("  base_word . . . . . . . . : '%s'",  ptr_completion->base_word);
-        log_printf ("  base_word_pos . . . . . . : %d",    ptr_completion->base_word_pos);
-        log_printf ("  position. . . . . . . . . : %d",    ptr_completion->position);
-        log_printf ("  args. . . . . . . . . . . : '%s'",  ptr_completion->args);
-        log_printf ("  direction . . . . . . . . : %d",    ptr_completion->direction);
-        log_printf ("  add_space . . . . . . . . : %d",    ptr_completion->add_space);
-        log_printf ("  force_partial_completion. : %d",    ptr_completion->force_partial_completion);
-        log_printf ("  reverse_partial_completion: %d",    ptr_completion->reverse_partial_completion);
-        log_printf ("  list. . . . . . . . . . . : 0x%lx", ptr_completion->list);
-        log_printf ("  word_found. . . . . . . . : '%s'",  ptr_completion->word_found);
-        log_printf ("  word_found_is_nick. . . . : %d",    ptr_completion->word_found_is_nick);
-        log_printf ("  position_replace. . . . . : %d",    ptr_completion->position_replace);
-        log_printf ("  diff_size . . . . . . . . : %d",    ptr_completion->diff_size);
-        log_printf ("  diff_length . . . . . . . : %d",    ptr_completion->diff_length);
-        log_printf ("  prev_completion . . . . . : 0x%lx", ptr_completion->prev_completion);
-        log_printf ("  next_completion . . . . . : 0x%lx", ptr_completion->next_completion);
+        log_printf ("  context . . . . . . . . . : %d", ptr_completion->context);
+        log_printf ("  case_sensitive. . . . . . : %d", ptr_completion->case_sensitive);
+        log_printf ("  base_command. . . . . . . : '%s'", ptr_completion->base_command);
+        log_printf ("  base_command_arg_index. . : %d", ptr_completion->base_command_arg_index);
+        log_printf ("  base_word . . . . . . . . : '%s'", ptr_completion->base_word);
+        log_printf ("  base_word_pos . . . . . . : %d", ptr_completion->base_word_pos);
+        log_printf ("  position. . . . . . . . . : %d", ptr_completion->position);
+        log_printf ("  args. . . . . . . . . . . : '%s'", ptr_completion->args);
+        log_printf ("  direction . . . . . . . . : %d", ptr_completion->direction);
+        log_printf ("  add_space . . . . . . . . : %d", ptr_completion->add_space);
+        log_printf ("  force_partial_completion. : %d", ptr_completion->force_partial_completion);
+        log_printf ("  reverse_partial_completion: %d", ptr_completion->reverse_partial_completion);
+        log_printf ("  list. . . . . . . . . . . : %p", ptr_completion->list);
+        log_printf ("  word_found. . . . . . . . : '%s'", ptr_completion->word_found);
+        log_printf ("  word_found_is_nick. . . . : %d", ptr_completion->word_found_is_nick);
+        log_printf ("  position_replace. . . . . : %d", ptr_completion->position_replace);
+        log_printf ("  diff_size . . . . . . . . : %d", ptr_completion->diff_size);
+        log_printf ("  diff_length . . . . . . . : %d", ptr_completion->diff_length);
+        log_printf ("  prev_completion . . . . . : %p", ptr_completion->prev_completion);
+        log_printf ("  next_completion . . . . . : %p", ptr_completion->next_completion);
         if (ptr_completion->list && (ptr_completion->list->size > 0))
         {
             log_printf ("");

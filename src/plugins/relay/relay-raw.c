@@ -1,7 +1,7 @@
 /*
  * relay-raw.c - functions for Relay raw data messages
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -31,6 +31,7 @@
 #include "relay-buffer.h"
 #include "relay-client.h"
 #include "relay-config.h"
+#include "relay-remote.h"
 
 
 struct t_gui_buffer *relay_raw_buffer = NULL;
@@ -49,11 +50,13 @@ relay_raw_message_print (struct t_relay_raw_message *raw_message)
 {
     if (relay_raw_buffer && raw_message)
     {
-        weechat_printf_date_tags (relay_raw_buffer,
-                                  raw_message->date, NULL,
-                                  "%s\t%s",
-                                  raw_message->prefix,
-                                  raw_message->message);
+        weechat_printf_datetime_tags (relay_raw_buffer,
+                                      raw_message->date,
+                                      raw_message->date_usec,
+                                      NULL,
+                                      "%s\t%s",
+                                      raw_message->prefix,
+                                      raw_message->message);
     }
 }
 
@@ -65,6 +68,7 @@ void
 relay_raw_open (int switch_to_buffer)
 {
     struct t_relay_raw_message *ptr_raw_message;
+    struct t_hashtable *buffer_props;
 
     if (!relay_raw_buffer)
     {
@@ -72,30 +76,38 @@ relay_raw_open (int switch_to_buffer)
                                                   RELAY_RAW_BUFFER_NAME);
         if (!relay_raw_buffer)
         {
-            relay_raw_buffer = weechat_buffer_new (
+            buffer_props = weechat_hashtable_new (
+                32,
+                WEECHAT_HASHTABLE_STRING,
+                WEECHAT_HASHTABLE_STRING,
+                NULL, NULL);
+            if (buffer_props)
+            {
+                weechat_hashtable_set (buffer_props,
+                                       "short_name", RELAY_RAW_BUFFER_NAME);
+                weechat_hashtable_set (buffer_props,
+                                       "title", _("Relay raw messages"));
+                weechat_hashtable_set (buffer_props,
+                                       "localvar_set_type", "debug");
+                weechat_hashtable_set (buffer_props,
+                                       "localvar_set_server", RELAY_RAW_BUFFER_NAME);
+                weechat_hashtable_set (buffer_props,
+                                       "localvar_set_channel", RELAY_RAW_BUFFER_NAME);
+                weechat_hashtable_set (buffer_props,
+                                       "localvar_set_no_log", "1");
+                /* disable all highlights on this buffer */
+                weechat_hashtable_set (buffer_props, "highlight_words", "-");
+            }
+            relay_raw_buffer = weechat_buffer_new_props (
                 RELAY_RAW_BUFFER_NAME,
+                buffer_props,
                 &relay_buffer_input_cb, NULL, NULL,
                 &relay_buffer_close_cb, NULL, NULL);
+            weechat_hashtable_free (buffer_props);
 
             /* failed to create buffer ? then return */
             if (!relay_raw_buffer)
                 return;
-
-            weechat_buffer_set (relay_raw_buffer,
-                                "title", _("Relay raw messages"));
-
-            if (!weechat_buffer_get_integer (relay_raw_buffer, "short_name_is_set"))
-            {
-                weechat_buffer_set (relay_raw_buffer, "short_name",
-                                    RELAY_RAW_BUFFER_NAME);
-            }
-            weechat_buffer_set (relay_raw_buffer, "localvar_set_type", "debug");
-            weechat_buffer_set (relay_raw_buffer, "localvar_set_server", RELAY_RAW_BUFFER_NAME);
-            weechat_buffer_set (relay_raw_buffer, "localvar_set_channel", RELAY_RAW_BUFFER_NAME);
-            weechat_buffer_set (relay_raw_buffer, "localvar_set_no_log", "1");
-
-            /* disable all highlights on this buffer */
-            weechat_buffer_set (relay_raw_buffer, "highlight_words", "-");
 
             /* print messages in list */
             for (ptr_raw_message = relay_raw_messages; ptr_raw_message;
@@ -137,10 +149,8 @@ relay_raw_message_free (struct t_relay_raw_message *raw_message)
         (raw_message->next_message)->prev_message = raw_message->prev_message;
 
     /* free data */
-    if (raw_message->prefix)
-        free (raw_message->prefix);
-    if (raw_message->message)
-        free (raw_message->message);
+    free (raw_message->prefix);
+    free (raw_message->message);
 
     free (raw_message);
 
@@ -185,8 +195,8 @@ relay_raw_message_remove_old ()
  */
 
 struct t_relay_raw_message *
-relay_raw_message_add_to_list (time_t date, const char *prefix,
-                               const char *message)
+relay_raw_message_add_to_list (time_t date, int date_usec,
+                               const char *prefix, const char *message)
 {
     struct t_relay_raw_message *new_raw_message;
 
@@ -199,6 +209,7 @@ relay_raw_message_add_to_list (time_t date, const char *prefix,
     if (new_raw_message)
     {
         new_raw_message->date = date;
+        new_raw_message->date_usec = date_usec;
         new_raw_message->prefix = strdup (prefix);
         new_raw_message->message = strdup (message);
 
@@ -218,75 +229,96 @@ relay_raw_message_add_to_list (time_t date, const char *prefix,
 }
 
 /*
+ * Converts a binary message for raw display.
+ */
+
+char *
+relay_raw_convert_binary_message (const char *data, int data_size)
+{
+    return weechat_string_hex_dump (data, data_size, 16, "  > ", NULL);
+}
+
+/*
+ * Converts a text message for raw display.
+ */
+
+char *
+relay_raw_convert_text_message (const char *data)
+{
+    const unsigned char *ptr_buf;
+    const char *hexa = "0123456789ABCDEF";
+    char *buf, *buf2;
+    int i, pos_buf, pos_buf2, char_size;
+
+    buf = weechat_iconv_to_internal (NULL, data);
+    if (!buf)
+        return NULL;
+    buf2 = weechat_string_replace (buf, "\r", "");
+    free (buf);
+    if (!buf2)
+        return NULL;
+    buf = buf2;
+    buf2 = malloc ((strlen (buf) * 4) + 1);
+    if (buf2)
+    {
+        ptr_buf = (unsigned char *)buf;
+        pos_buf = 0;
+        pos_buf2 = 0;
+        while (ptr_buf[pos_buf])
+        {
+            if ((ptr_buf[pos_buf] < 32) && (ptr_buf[pos_buf] != '\n'))
+            {
+                buf2[pos_buf2++] = '\\';
+                buf2[pos_buf2++] = 'x';
+                buf2[pos_buf2++] = hexa[ptr_buf[pos_buf] / 16];
+                buf2[pos_buf2++] = hexa[ptr_buf[pos_buf] % 16];
+                pos_buf++;
+            }
+            else
+            {
+                char_size = weechat_utf8_char_size ((const char *)(ptr_buf + pos_buf));
+                for (i = 0; i < char_size; i++)
+                {
+                    buf2[pos_buf2++] = ptr_buf[pos_buf++];
+                }
+            }
+        }
+        buf2[pos_buf2] = '\0';
+    }
+    free (buf);
+    return buf2;
+}
+
+/*
  * Adds a new raw message to list.
  */
 
 void
-relay_raw_message_add (struct t_relay_client *client,
-                       enum t_relay_client_msg_type msg_type,
+relay_raw_message_add (enum t_relay_msg_type msg_type,
                        int flags,
+                       const char *peer_id,
                        const char *data, int data_size)
 {
-    char *buf, *buf2, *buf3, prefix[256], prefix_arrow[16];
-    const unsigned char *ptr_buf;
-    const char *hexa = "0123456789ABCDEF";
-    int pos_buf, pos_buf2, char_size, i, length;
+    char *raw_data, *raw_data_cut, *buf, prefix[1024], prefix_arrow[16];
+    const char *ptr_raw_data;
+    int max_length;
     struct t_relay_raw_message *new_raw_message;
-
-    buf = NULL;
-    buf2 = NULL;
-    buf3 = NULL;
+    struct timeval tv_now;
 
     if (flags & RELAY_RAW_FLAG_BINARY)
-    {
-        /* binary message */
-        buf = weechat_string_hex_dump (data, data_size, 16, "  > ", NULL);
-        snprintf (prefix, sizeof (prefix), " ");
-    }
+        raw_data = relay_raw_convert_binary_message (data, data_size);
     else
-    {
-        /* text message */
-        buf = weechat_iconv_to_internal (NULL, data);
-        buf2 = weechat_string_replace (buf, "\r", "");
-        if (buf2)
-        {
-            free (buf);
-            buf = buf2;
-            buf2 = NULL;
-        }
-        buf2 = malloc ((strlen (buf) * 4) + 1);
-        if (buf2)
-        {
-            ptr_buf = (buf) ? (unsigned char *)buf : (unsigned char *)data;
-            pos_buf = 0;
-            pos_buf2 = 0;
-            while (ptr_buf[pos_buf])
-            {
-                if ((ptr_buf[pos_buf] < 32) && (ptr_buf[pos_buf] != '\n'))
-                {
-                    buf2[pos_buf2++] = '\\';
-                    buf2[pos_buf2++] = 'x';
-                    buf2[pos_buf2++] = hexa[ptr_buf[pos_buf] / 16];
-                    buf2[pos_buf2++] = hexa[ptr_buf[pos_buf] % 16];
-                    pos_buf++;
-                }
-                else
-                {
-                    char_size = weechat_utf8_char_size ((const char *)(ptr_buf + pos_buf));
-                    for (i = 0; i < char_size; i++)
-                    {
-                        buf2[pos_buf2++] = ptr_buf[pos_buf++];
-                    }
-                }
-            }
-            buf2[pos_buf2] = '\0';
-        }
-    }
+        raw_data = relay_raw_convert_text_message (data);
+
+    if (!raw_data)
+        return;
+
+    snprintf (prefix, sizeof (prefix), " ");
 
     if (!(flags & RELAY_RAW_FLAG_BINARY)
-        || (msg_type == RELAY_CLIENT_MSG_PING)
-        || (msg_type == RELAY_CLIENT_MSG_PONG)
-        || (msg_type == RELAY_CLIENT_MSG_CLOSE))
+        || (msg_type == RELAY_MSG_PING)
+        || (msg_type == RELAY_MSG_PONG)
+        || (msg_type == RELAY_MSG_CLOSE))
     {
         /* build prefix with arrow */
         prefix_arrow[0] = '\0';
@@ -306,46 +338,33 @@ relay_raw_message_add (struct t_relay_client *client,
                 break;
         }
 
-        if (client)
-        {
-            snprintf (prefix, sizeof (prefix), "%s%s %s[%s%d%s] %s%s%s%s",
-                      (flags & RELAY_RAW_FLAG_SEND) ?
-                      weechat_color ("chat_prefix_quit") :
-                      weechat_color ("chat_prefix_join"),
-                      prefix_arrow,
-                      weechat_color ("chat_delimiters"),
-                      weechat_color ("chat"),
-                      client->id,
-                      weechat_color ("chat_delimiters"),
-                      weechat_color ("chat_server"),
-                      relay_protocol_string[client->protocol],
-                      (client->protocol_args) ? "." : "",
-                      (client->protocol_args) ? client->protocol_args : "");
-        }
-        else
-        {
-            snprintf (prefix, sizeof (prefix), "%s%s",
-                      (flags & RELAY_RAW_FLAG_SEND) ?
-                      weechat_color ("chat_prefix_quit") :
-                      weechat_color ("chat_prefix_join"),
-                      prefix_arrow);
-        }
+        snprintf (prefix, sizeof (prefix), "%s%s%s%s",
+                  (flags & RELAY_RAW_FLAG_SEND) ?
+                  weechat_color ("chat_prefix_quit") :
+                  weechat_color ("chat_prefix_join"),
+                  prefix_arrow,
+                  (peer_id && peer_id[0]) ? " " : "",
+                  (peer_id && peer_id[0]) ? peer_id : "");
     }
 
-    length = strlen (relay_client_msg_type_string[msg_type]) +
-        strlen ((buf2) ? buf2 : ((buf) ? buf : data)) + 1;
-    buf3 = malloc (length);
-    if (buf3)
+    raw_data_cut = NULL;
+    ptr_raw_data = raw_data;
+    max_length = weechat_config_integer (relay_config_look_raw_messages_max_length);
+    if (max_length > 0)
     {
-        snprintf (buf3, length, "%s%s",
-                  relay_client_msg_type_string[msg_type],
-                  (buf2) ? buf2 : ((buf) ? buf : data));
+        raw_data_cut = weechat_string_cut (raw_data, max_length, 0, 0, " (...)");
+        ptr_raw_data = raw_data_cut;
     }
-
+    weechat_asprintf (&buf, "%s%s",
+                      relay_msg_type_string[msg_type],
+                      (ptr_raw_data) ? ptr_raw_data : "");
+    free (raw_data_cut);
+    gettimeofday (&tv_now, NULL);
     new_raw_message = relay_raw_message_add_to_list (
-        time (NULL),
+        tv_now.tv_sec,
+        tv_now.tv_usec,
         prefix,
-        (buf3) ? buf3 : ((buf2) ? buf2 : ((buf) ? buf : data)));
+        (buf) ? buf : raw_data);
 
     if (new_raw_message)
     {
@@ -355,28 +374,77 @@ relay_raw_message_add (struct t_relay_client *client,
             relay_raw_message_free (new_raw_message);
     }
 
-    if (buf)
-        free (buf);
-    if (buf2)
-        free (buf2);
-    if (buf3)
-        free (buf3);
+    free (buf);
+    free (raw_data);
 }
 
 /*
- * Prints a message on relay raw buffer.
+ * Prints a message for a client on relay raw buffer.
  */
 
 void
-relay_raw_print (struct t_relay_client *client,
-                 enum t_relay_client_msg_type msg_type, int flags,
-                 const char *data, int data_size)
+relay_raw_print_client (struct t_relay_client *client,
+                        enum t_relay_msg_type msg_type,
+                        int flags,
+                        const char *data, int data_size)
 {
-    /* auto-open Relay raw buffer if debug for irc plugin is >= 1 */
+    char peer_id[256];
+
+    /* auto-open relay raw buffer if debug for irc plugin is >= 1 */
     if (!relay_raw_buffer && (weechat_relay_plugin->debug >= 1))
         relay_raw_open (0);
 
-    relay_raw_message_add (client, msg_type, flags, data, data_size);
+    if (client)
+    {
+        snprintf (peer_id, sizeof (peer_id), "%s[%s%d%s] %s%s%s%s",
+                  weechat_color ("chat_delimiters"),
+                  weechat_color ("chat"),
+                  client->id,
+                  weechat_color ("chat_delimiters"),
+                  weechat_color ("chat_server"),
+                  relay_protocol_string[client->protocol],
+                  (client->protocol_args) ? "." : "",
+                  (client->protocol_args) ? client->protocol_args : "");
+    }
+    else
+    {
+        peer_id[0] = '\0';
+    }
+
+    relay_raw_message_add (msg_type, flags, peer_id, data, data_size);
+}
+
+/*
+ * Prints a message for a remote on relay raw buffer.
+ */
+
+void
+relay_raw_print_remote (struct t_relay_remote *remote,
+                        enum t_relay_msg_type msg_type,
+                        int flags,
+                        const char *data, int data_size)
+{
+    char peer_id[256];
+
+    /* auto-open relay raw buffer if debug for irc plugin is >= 1 */
+    if (!relay_raw_buffer && (weechat_relay_plugin->debug >= 1))
+        relay_raw_open (0);
+
+    if (remote)
+    {
+        snprintf (peer_id, sizeof (peer_id), "%s<%sR%s> %s%s",
+                  weechat_color ("chat_delimiters"),
+                  weechat_color ("chat"),
+                  weechat_color ("chat_delimiters"),
+                  weechat_color ("chat_server"),
+                  remote->name);
+    }
+    else
+    {
+        peer_id[0] = '\0';
+    }
+
+    relay_raw_message_add (msg_type, flags, peer_id, data, data_size);
 }
 
 /*
@@ -401,6 +469,8 @@ relay_raw_add_to_infolist (struct t_infolist *infolist,
         return 0;
 
     if (!weechat_infolist_new_var_time (ptr_item, "date", raw_message->date))
+        return 0;
+    if (!weechat_infolist_new_var_integer (ptr_item, "date_usec", raw_message->date_usec))
         return 0;
     if (!weechat_infolist_new_var_string (ptr_item, "prefix", raw_message->prefix))
         return 0;

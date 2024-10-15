@@ -1,7 +1,7 @@
 /*
  * gui-color.c - color functions (used by all GUI)
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -34,11 +34,11 @@
 #include <limits.h>
 
 #include "../core/weechat.h"
-#include "../core/wee-config.h"
-#include "../core/wee-hashtable.h"
-#include "../core/wee-list.h"
-#include "../core/wee-string.h"
-#include "../core/wee-utf8.h"
+#include "../core/core-config.h"
+#include "../core/core-hashtable.h"
+#include "../core/core-list.h"
+#include "../core/core-string.h"
+#include "../core/core-utf8.h"
 #include "../plugins/plugin.h"
 #include "gui-color.h"
 #include "gui-chat.h"
@@ -161,7 +161,7 @@ gui_color_search_config (const char *color_name)
     for (ptr_option = weechat_config_section_color->options;
          ptr_option; ptr_option = ptr_option->next_option)
     {
-        if (string_strcasecmp (ptr_option->name, color_name) == 0)
+        if (strcmp (ptr_option->name, color_name) == 0)
             return gui_color_from_option (ptr_option);
     }
 
@@ -276,111 +276,111 @@ gui_color_get_custom (const char *color_name)
                                      ptr_color_name - color_name);
     }
 
-    if (string_strcasecmp (ptr_color_name, "reset") == 0)
+    if (strcmp (ptr_color_name, "reset") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c",
                   GUI_COLOR_RESET_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "resetcolor") == 0)
+    else if (strcmp (ptr_color_name, "resetcolor") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_COLOR_CHAR,
                   GUI_COLOR_RESET_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "emphasis") == 0)
+    else if (strcmp (ptr_color_name, "emphasis") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_COLOR_CHAR,
                   GUI_COLOR_EMPHASIS_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "blink") == 0)
+    else if (strcmp (ptr_color_name, "blink") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_SET_ATTR_CHAR,
                   GUI_COLOR_ATTR_BLINK_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "-blink") == 0)
+    else if (strcmp (ptr_color_name, "-blink") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_REMOVE_ATTR_CHAR,
                   GUI_COLOR_ATTR_BLINK_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "dim") == 0)
+    else if (strcmp (ptr_color_name, "dim") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_SET_ATTR_CHAR,
                   GUI_COLOR_ATTR_DIM_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "-dim") == 0)
+    else if (strcmp (ptr_color_name, "-dim") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_REMOVE_ATTR_CHAR,
                   GUI_COLOR_ATTR_DIM_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "bold") == 0)
+    else if (strcmp (ptr_color_name, "bold") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_SET_ATTR_CHAR,
                   GUI_COLOR_ATTR_BOLD_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "-bold") == 0)
+    else if (strcmp (ptr_color_name, "-bold") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_REMOVE_ATTR_CHAR,
                   GUI_COLOR_ATTR_BOLD_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "reverse") == 0)
+    else if (strcmp (ptr_color_name, "reverse") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_SET_ATTR_CHAR,
                   GUI_COLOR_ATTR_REVERSE_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "-reverse") == 0)
+    else if (strcmp (ptr_color_name, "-reverse") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_REMOVE_ATTR_CHAR,
                   GUI_COLOR_ATTR_REVERSE_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "italic") == 0)
+    else if (strcmp (ptr_color_name, "italic") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_SET_ATTR_CHAR,
                   GUI_COLOR_ATTR_ITALIC_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "-italic") == 0)
+    else if (strcmp (ptr_color_name, "-italic") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_REMOVE_ATTR_CHAR,
                   GUI_COLOR_ATTR_ITALIC_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "underline") == 0)
+    else if (strcmp (ptr_color_name, "underline") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_SET_ATTR_CHAR,
                   GUI_COLOR_ATTR_UNDERLINE_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "-underline") == 0)
+    else if (strcmp (ptr_color_name, "-underline") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c",
                   GUI_COLOR_REMOVE_ATTR_CHAR,
                   GUI_COLOR_ATTR_UNDERLINE_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "bar_fg") == 0)
+    else if (strcmp (ptr_color_name, "bar_fg") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c%c",
@@ -388,7 +388,7 @@ gui_color_get_custom (const char *color_name)
                   GUI_COLOR_BAR_CHAR,
                   GUI_COLOR_BAR_FG_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "bar_delim") == 0)
+    else if (strcmp (ptr_color_name, "bar_delim") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c%c",
@@ -396,7 +396,7 @@ gui_color_get_custom (const char *color_name)
                   GUI_COLOR_BAR_CHAR,
                   GUI_COLOR_BAR_DELIM_CHAR);
     }
-    else if (string_strcasecmp (ptr_color_name, "bar_bg") == 0)
+    else if (strcmp (ptr_color_name, "bar_bg") == 0)
     {
         snprintf (color[index_color], sizeof (color[index_color]),
                   "%c%c%c",
@@ -424,7 +424,7 @@ gui_color_get_custom (const char *color_name)
             else
                 str_fg = string_strndup (ptr_color_name,
                                          pos_delim - ptr_color_name);
-            pos_bg = pos_delim + 1;
+            pos_bg = (pos_delim[1]) ? pos_delim + 1 : NULL;
         }
         else
         {
@@ -528,12 +528,10 @@ gui_color_get_custom (const char *color_name)
                       color_bg);
         }
 
-        if (str_fg)
-            free (str_fg);
+        free (str_fg);
     }
 
-    if (color_attr)
-        free (color_attr);
+    free (color_attr);
 
     return color[index_color];
 }
@@ -762,30 +760,23 @@ gui_color_code_size (const char *string)
                     break;
             }
             return ptr_string - string;
-            break;
         case GUI_COLOR_SET_ATTR_CHAR:
         case GUI_COLOR_REMOVE_ATTR_CHAR:
             ptr_string++;
             if (ptr_string[0])
                 ptr_string++;
             return ptr_string - string;
-            break;
         case GUI_COLOR_RESET_CHAR:
             ptr_string++;
             return ptr_string - string;
-            break;
     }
 
     return 0;
 }
 
 /*
- * Removes WeeChat color codes from a message.
- *
- * If replacement is not NULL and not empty, it is used to replace color codes
- * by first char of replacement (and next chars in string are NOT removed).
- * If replacement is NULL or empty, color codes are removed, with following
- * chars if they are related to color code.
+ * Removes WeeChat color codes from a message and optionally replaces them
+ * by a string.
  *
  * Note: result must be freed after use.
  */
@@ -794,20 +785,18 @@ char *
 gui_color_decode (const char *string, const char *replacement)
 {
     const unsigned char *ptr_string;
-    unsigned char *out;
-    int out_length, out_pos, length;
+    char **out;
+    int length;
 
     if (!string)
         return NULL;
 
-    out_length = (strlen ((char *)string) * 2) + 1;
-    out = malloc (out_length);
+    out = string_dyn_alloc (strlen (string) + 1);
     if (!out)
         return NULL;
 
     ptr_string = (unsigned char *)string;
-    out_pos = 0;
-    while (ptr_string && ptr_string[0] && (out_pos < out_length - 1))
+    while (ptr_string && ptr_string[0])
     {
         switch (ptr_string[0])
         {
@@ -945,10 +934,7 @@ gui_color_decode (const char *string, const char *replacement)
                         break;
                 }
                 if (replacement && replacement[0])
-                {
-                    out[out_pos] = replacement[0];
-                    out_pos++;
-                }
+                    string_dyn_concat (out, replacement, -1);
                 break;
             case GUI_COLOR_SET_ATTR_CHAR:
             case GUI_COLOR_REMOVE_ATTR_CHAR:
@@ -956,32 +942,24 @@ gui_color_decode (const char *string, const char *replacement)
                 if (ptr_string[0])
                     ptr_string++;
                 if (replacement && replacement[0])
-                {
-                    out[out_pos] = replacement[0];
-                    out_pos++;
-                }
+                    string_dyn_concat (out, replacement, -1);
                 break;
             case GUI_COLOR_RESET_CHAR:
                 ptr_string++;
                 if (replacement && replacement[0])
-                {
-                    out[out_pos] = replacement[0];
-                    out_pos++;
-                }
+                    string_dyn_concat (out, replacement, -1);
                 break;
             default:
                 length = utf8_char_size ((char *)ptr_string);
                 if (length == 0)
                     length = 1;
-                memcpy (out + out_pos, ptr_string, length);
-                out_pos += length;
+                string_dyn_concat (out, (const char *)ptr_string, length);
                 ptr_string += length;
                 break;
         }
     }
-    out[out_pos] = '\0';
 
-    return (char *)out;
+    return string_dyn_free (out, 0);
 }
 
 /*
@@ -1202,10 +1180,8 @@ gui_color_decode_ansi_cb (void *data, const char *text)
     }
 
 end:
-    if (items)
-        string_free_split (items);
-    if (text2)
-        free (text2);
+    string_free_split (items);
+    free (text2);
 
     return (output) ? output : strdup ("");
 }
@@ -1317,6 +1293,8 @@ gui_color_encode_ansi (const char *string)
         return NULL;
 
     out = string_dyn_alloc (((strlen (string) * 3) / 2) + 1);
+    if (!out)
+        return NULL;
 
     ptr_string = (unsigned char *)string;
     while (ptr_string && ptr_string[0])
@@ -1370,14 +1348,13 @@ gui_color_encode_ansi (const char *string)
                                 if (error && !error[0])
                                 {
                                     ansi_color = gui_color_weechat_to_ansi (color);
-                                    if (ansi_color >= 0)
-                                    {
-                                        snprintf (str_concat, sizeof (str_concat),
-                                                  "\x1B[%dm",
-                                                  (ansi_color < 8) ?
-                                                  ansi_color + 30 : ansi_color - 8 + 90);
-                                        string_dyn_concat (out, str_concat, -1);
-                                    }
+                                    snprintf (str_concat, sizeof (str_concat),
+                                              "\x1B[%dm",
+                                              (ansi_color < 0) ?
+                                              GUI_COLOR_ANSI_DEFAULT_FG :
+                                              ((ansi_color < 8) ?
+                                               ansi_color + 30 : ansi_color - 8 + 90));
+                                    string_dyn_concat (out, str_concat, -1);
                                 }
                                 ptr_string += 2;
                             }
@@ -1416,14 +1393,13 @@ gui_color_encode_ansi (const char *string)
                                 if (error && !error[0])
                                 {
                                     ansi_color = gui_color_weechat_to_ansi (color);
-                                    if (ansi_color >= 0)
-                                    {
-                                        snprintf (str_concat, sizeof (str_concat),
-                                                  "\x1B[%dm",
-                                                  (ansi_color < 8) ?
-                                                  ansi_color + 40 : ansi_color - 8 + 100);
-                                        string_dyn_concat (out, str_concat, -1);
-                                    }
+                                    snprintf (str_concat, sizeof (str_concat),
+                                              "\x1B[%dm",
+                                              (ansi_color < 0) ?
+                                              GUI_COLOR_ANSI_DEFAULT_BG :
+                                              ((ansi_color < 8) ?
+                                               ansi_color + 40 : ansi_color - 8 + 100));
+                                    string_dyn_concat (out, str_concat, -1);
                                 }
                                 ptr_string += 2;
                             }
@@ -1472,14 +1448,13 @@ gui_color_encode_ansi (const char *string)
                                 if (error && !error[0])
                                 {
                                     ansi_color = gui_color_weechat_to_ansi (color);
-                                    if (ansi_color >= 0)
-                                    {
-                                        snprintf (str_concat, sizeof (str_concat),
-                                                  "\x1B[%dm",
-                                                  (ansi_color < 8) ?
-                                                  ansi_color + 30 : ansi_color - 8 + 90);
-                                        string_dyn_concat (out, str_concat, -1);
-                                    }
+                                    snprintf (str_concat, sizeof (str_concat),
+                                              "\x1B[%dm",
+                                              (ansi_color < 0) ?
+                                              GUI_COLOR_ANSI_DEFAULT_FG :
+                                              ((ansi_color < 8) ?
+                                               ansi_color + 30 : ansi_color - 8 + 90));
+                                    string_dyn_concat (out, str_concat, -1);
                                 }
                                 ptr_string += 2;
                             }
@@ -1525,14 +1500,13 @@ gui_color_encode_ansi (const char *string)
                                     if (error && !error[0])
                                     {
                                         ansi_color = gui_color_weechat_to_ansi (color);
-                                        if (ansi_color >= 0)
-                                        {
-                                            snprintf (str_concat, sizeof (str_concat),
-                                                      "\x1B[%dm",
-                                                      (ansi_color < 8) ?
-                                                      ansi_color + 40 : ansi_color - 8 + 100);
-                                            string_dyn_concat (out, str_concat, -1);
-                                        }
+                                        snprintf (str_concat, sizeof (str_concat),
+                                                  "\x1B[%dm",
+                                                  (ansi_color < 0) ?
+                                                  GUI_COLOR_ANSI_DEFAULT_BG :
+                                                  ((ansi_color < 8) ?
+                                                   ansi_color + 40 : ansi_color - 8 + 100));
+                                        string_dyn_concat (out, str_concat, -1);
                                     }
                                     ptr_string += 2;
                                 }
@@ -1567,8 +1541,41 @@ gui_color_encode_ansi (const char *string)
                         switch (ptr_string[0])
                         {
                             case GUI_COLOR_BAR_FG_CHAR:
+                                snprintf (str_concat, sizeof (str_concat),
+                                          "\x1B[%dm",
+                                          GUI_COLOR_ANSI_DEFAULT_FG);
+                                string_dyn_concat (out, str_concat, -1);
+                                ptr_string++;
+                                break;
                             case GUI_COLOR_BAR_BG_CHAR:
+                                snprintf (str_concat, sizeof (str_concat),
+                                          "\x1B[%dm",
+                                          GUI_COLOR_ANSI_DEFAULT_BG);
+                                string_dyn_concat (out, str_concat, -1);
+                                ptr_string++;
+                                break;
                             case GUI_COLOR_BAR_DELIM_CHAR:
+                                color = CONFIG_COLOR(config_color_chat_delimiters);
+                                if (color & GUI_COLOR_EXTENDED_FLAG)
+                                {
+                                    snprintf (str_concat, sizeof (str_concat),
+                                              "\x1B[48;5;%dm",
+                                              color & GUI_COLOR_EXTENDED_MASK);
+                                }
+                                else
+                                {
+                                    ansi_color = gui_color_weechat_to_ansi (
+                                        CONFIG_COLOR(config_color_chat_delimiters));
+                                    snprintf (str_concat, sizeof (str_concat),
+                                              "\x1B[%dm",
+                                              (ansi_color < 0) ?
+                                              GUI_COLOR_ANSI_DEFAULT_FG :
+                                              ((ansi_color < 8) ?
+                                               ansi_color + 40 : ansi_color - 8 + 100));
+                                }
+                                string_dyn_concat (out, str_concat, -1);
+                                ptr_string++;
+                                break;
                             case GUI_COLOR_BAR_START_INPUT_CHAR:
                             case GUI_COLOR_BAR_START_INPUT_HIDDEN_CHAR:
                             case GUI_COLOR_BAR_MOVE_CURSOR_CHAR:
@@ -1883,8 +1890,7 @@ gui_color_free (struct t_gui_color *color)
     if (!color)
         return;
 
-    if (color->string)
-        free (color->string);
+    free (color->string);
 
     free (color);
 }
@@ -1904,9 +1910,7 @@ gui_color_palette_free_value_cb (struct t_hashtable *hashtable,
     (void) key;
 
     color_palette = (struct t_gui_color_palette *)value;
-
-    if (color_palette)
-        gui_color_palette_free (color_palette);
+    gui_color_palette_free (color_palette);
 }
 
 /*
@@ -2032,12 +2036,9 @@ gui_color_palette_remove (int number)
 void
 gui_color_palette_free_structs ()
 {
-    if (gui_color_hash_palette_color)
-        hashtable_free (gui_color_hash_palette_color);
-    if (gui_color_hash_palette_alias)
-        hashtable_free (gui_color_hash_palette_alias);
-    if (gui_color_list_with_alias)
-        weelist_free (gui_color_list_with_alias);
+    hashtable_free (gui_color_hash_palette_color);
+    hashtable_free (gui_color_hash_palette_alias);
+    weelist_free (gui_color_list_with_alias);
 }
 
 /*

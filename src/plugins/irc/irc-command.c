@@ -1,7 +1,7 @@
 /*
  * irc-command.c - IRC commands
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  * Copyright (C) 2006 Emmanuel Bouthenot <kolter@openics.org>
  *
  * This file is part of WeeChat, the extensible chat client.
@@ -35,6 +35,7 @@
 #include "../weechat-plugin.h"
 #include "irc.h"
 #include "irc-command.h"
+#include "irc-ctcp.h"
 #include "irc-buffer.h"
 #include "irc-channel.h"
 #include "irc-color.h"
@@ -42,6 +43,7 @@
 #include "irc-ignore.h"
 #include "irc-input.h"
 #include "irc-join.h"
+#include "irc-list.h"
 #include "irc-message.h"
 #include "irc-mode.h"
 #include "irc-modelist.h"
@@ -219,6 +221,77 @@ irc_command_mode_nicks (struct t_irc_server *server,
 }
 
 /*
+ * Returns arguments with ranges of numbers converted to individual numbers.
+ * Arguments that are not range (format: "N1-N2") are kept as-is.
+ *
+ * For example: ["2" "5-8" "abc"] -> ["2" "5" "6" "7" "8" "abc"]
+ */
+
+char **
+irc_command_mode_masks_convert_ranges (char **argv, int arg_start)
+{
+    char **str_masks, **masks, *error1, *error2, *pos, str_number[32];
+    int i, length, added;
+    long j, number1, number2;
+
+    if (!argv || (arg_start < 0))
+        return NULL;
+
+    str_masks = weechat_string_dyn_alloc (128);
+    if (!str_masks)
+        return NULL;
+
+    for (i = arg_start; argv[i]; i++)
+    {
+        added = 0;
+
+        length = strlen (argv[i]);
+        pos = strchr (argv[i], '-');
+        if ((length > 2)
+            && pos
+            && (argv[i][0] != '-')
+            && (argv[i][length - 1] != '-'))
+        {
+            pos[0] = '\0';
+            error1 = NULL;
+            number1 = strtol (argv[i], &error1, 10);
+            error2 = NULL;
+            number2 = strtol (pos + 1, &error2, 10);
+            if (error1 && !error1[0]
+                && error2 && !error2[0]
+                && (number1 > 0) && (number1 < 128)
+                && (number2 > 0) && (number2 < 128)
+                && (number1 < number2))
+            {
+                for (j = number1; j <= number2; j++)
+                {
+                    if ((*str_masks)[0])
+                        weechat_string_dyn_concat (str_masks, " ", -1);
+                    snprintf (str_number, sizeof (str_number),
+                              "%ld", j);
+                    weechat_string_dyn_concat (str_masks, str_number, -1);
+                }
+                added = 1;
+            }
+            pos[0] = '-';
+        }
+
+        if (!added)
+        {
+            if ((*str_masks)[0])
+                weechat_string_dyn_concat (str_masks, " ", -1);
+            weechat_string_dyn_concat (str_masks, argv[i], -1);
+        }
+    }
+
+    masks = weechat_string_split (*str_masks, " ", NULL, 0, 0, NULL);
+
+    weechat_string_dyn_free (str_masks, 1);
+
+    return masks;
+}
+
+/*
  * Sends mode change for many masks on a channel.
  *
  * Argument "set" is "+" or "-", mode can be "b", "q", or any other mode
@@ -237,8 +310,8 @@ irc_command_mode_masks (struct t_irc_server *server,
                         const char *set, const char *mode,
                         char **argv, int pos_masks)
 {
-    int max_modes, modes_added, msg_priority, mask_fits;
-    char modes[128+1], masks[1024], *mask;
+    int max_modes, modes_added, msg_priority;
+    char **modes, **masks, *mask;
     struct t_irc_channel *ptr_channel;
     struct t_irc_nick *ptr_nick;
     struct t_irc_modelist *ptr_modelist;
@@ -256,6 +329,17 @@ irc_command_mode_masks (struct t_irc_server *server,
         return;
     }
 
+    modes = weechat_string_dyn_alloc (128);
+    if (!modes)
+        return;
+
+    masks = weechat_string_dyn_alloc (512);
+    if (!masks)
+    {
+        weechat_string_dyn_free (modes, 1);
+        return;
+    }
+
     /* get the max number of modes we can send in a message */
     max_modes = irc_server_get_max_modes (server);
 
@@ -268,8 +352,6 @@ irc_command_mode_masks (struct t_irc_server *server,
     msg_priority = IRC_SERVER_SEND_OUTQ_PRIO_HIGH;
 
     modes_added = 0;
-    modes[0] = '\0';
-    masks[0] = '\0';
 
     ptr_channel = irc_channel_search (server, channel_name);
     ptr_modelist = irc_modelist_search (ptr_channel, mode[0]);
@@ -306,24 +388,18 @@ irc_command_mode_masks (struct t_irc_server *server,
             }
         }
 
-        /* check if the mask fits in the string */
-        mask_fits = (strlen (masks) + 1 +
-                     strlen ((mask) ? mask : argv[pos_masks]) + 1 <
-                     sizeof (masks));
-
         /*
-         * if we reached the max number of modes allowed or if the mask doesn't
-         * fits in string, send the MODE command now and flush the modes/masks
-         * strings
+         * if we reached the max number of modes allowed, send the MODE
+         * command now and flush the modes/masks strings
          */
-        if (modes[0] && ((modes_added == max_modes) || !mask_fits))
+        if ((*modes)[0] && (modes_added == max_modes))
         {
             irc_server_sendf (server, msg_priority, NULL,
                               "MODE %s %s%s %s",
-                              channel_name, set, modes, masks);
+                              channel_name, set, *modes, *masks);
 
-            modes[0] = '\0';
-            masks[0] = '\0';
+            weechat_string_dyn_copy (modes, NULL);
+            weechat_string_dyn_copy (masks, NULL);
             modes_added = 0;
 
             /* subsequent messages will have low priority */
@@ -331,26 +407,188 @@ irc_command_mode_masks (struct t_irc_server *server,
         }
 
         /* add one mode letter (after +/-) and add the mask in masks */
-        if (mask_fits)
-        {
-            strcat (modes, mode);
-            if (masks[0])
-                strcat (masks, " ");
-            strcat (masks, (mask) ? mask : argv[pos_masks]);
-            modes_added++;
-        }
+        weechat_string_dyn_concat (modes, mode, -1);
+        if ((*masks)[0])
+            weechat_string_dyn_concat (masks, " ", -1);
+        weechat_string_dyn_concat (masks, (mask) ? mask : argv[pos_masks], -1);
+        modes_added++;
 
-        if (mask)
-            free (mask);
+        free (mask);
     }
 
     /* send a final MODE command if some masks are remaining */
-    if (modes[0] && masks[0])
+    if ((*modes)[0] && (*masks)[0])
     {
         irc_server_sendf (server, msg_priority, NULL,
                           "MODE %s %s%s %s",
-                          channel_name, set, modes, masks);
+                          channel_name, set, *modes, *masks);
     }
+
+    weechat_string_dyn_free (modes, 1);
+    weechat_string_dyn_free (masks, 1);
+}
+
+/*
+ * Sends a CTCP ACTION to a channel for a single message
+ * (internal function called by irc_command_me_channel).
+ */
+
+void
+irc_command_me_channel_message (struct t_irc_server *server,
+                                const char *channel_name,
+                                const char *message)
+{
+    struct t_arraylist *list_messages;
+    int i, list_size;
+
+    list_messages = irc_server_sendf (
+        server,
+        IRC_SERVER_SEND_OUTQ_PRIO_HIGH | IRC_SERVER_SEND_RETURN_LIST
+        | IRC_SERVER_SEND_MULTILINE,
+        NULL,
+        "PRIVMSG %s :\001ACTION%s%s\001",
+        channel_name,
+        (message && message[0]) ? " " : "",
+        (message && message[0]) ? message : "");
+    if (list_messages)
+    {
+        /* display only if capability "echo-message" is NOT enabled */
+        if (!weechat_hashtable_has_key (server->cap_list, "echo-message"))
+        {
+            list_size = weechat_arraylist_size (list_messages);
+            for (i = 0; i < list_size; i++)
+            {
+                irc_input_user_message_display (
+                    server,
+                    0,  /* date */
+                    0,  /* date_usec */
+                    NULL,  /* tags */
+                    channel_name,
+                    NULL,  /* address */
+                    "privmsg",
+                    "action",
+                    (const char *)weechat_arraylist_get (list_messages, i),
+                    1);  /* decode_colors */
+            }
+        }
+        weechat_arraylist_free (list_messages);
+    }
+}
+
+/*
+ * Sends a CTCP ACTION to a channel.
+ */
+
+void
+irc_command_me_channel (struct t_irc_server *server,
+                        const char *channel_name,
+                        const char *arguments)
+{
+    char **list_arguments;
+    int i, count_arguments;
+
+    list_arguments = weechat_string_split ((arguments) ? arguments : "",
+                                           "\n", NULL, 0, 0, &count_arguments);
+    if (list_arguments)
+    {
+        for (i = 0; i < count_arguments; i++)
+        {
+            irc_command_me_channel_message (server, channel_name,
+                                            list_arguments[i]);
+        }
+    }
+    else
+    {
+        irc_command_me_channel_message (server, channel_name, "");
+    }
+
+    weechat_string_free_split (list_arguments);
+}
+
+/*
+ * Sends a CTCP ACTION to all channels of a server.
+ */
+
+void
+irc_command_me_all_channels (struct t_irc_server *server, const char *arguments)
+{
+    struct t_irc_channel *ptr_channel;
+
+    for (ptr_channel = server->channels; ptr_channel;
+         ptr_channel = ptr_channel->next_channel)
+    {
+        if (ptr_channel->type == IRC_CHANNEL_TYPE_CHANNEL)
+            irc_command_me_channel (server, ptr_channel->name, arguments);
+    }
+}
+
+/*
+ * Callback for command "/action": sends an action message to a nick or channel.
+ */
+
+IRC_COMMAND_CALLBACK(action)
+{
+    char **targets;
+    int num_targets, i, arg_target, arg_text;
+
+    IRC_BUFFER_GET_SERVER_CHANNEL(buffer);
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+
+    WEECHAT_COMMAND_MIN_ARGS(2, "");
+
+    arg_target = 1;
+    arg_text = 2;
+
+    if ((argc >= 5) && (weechat_strcmp (argv[1], "-server") == 0))
+    {
+        ptr_server = irc_server_search (argv[2]);
+        ptr_channel = NULL;
+        arg_target = 3;
+        arg_text = 4;
+    }
+
+    IRC_COMMAND_CHECK_SERVER("action", 1, 1);
+
+    targets = weechat_string_split (argv[arg_target], ",", NULL,
+                                    WEECHAT_STRING_SPLIT_STRIP_LEFT
+                                    | WEECHAT_STRING_SPLIT_STRIP_RIGHT
+                                    | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS,
+                                    0, &num_targets);
+    if (!targets)
+        WEECHAT_COMMAND_ERROR;
+
+    for (i = 0; i < num_targets; i++)
+    {
+        if (strcmp (targets[i], "*") == 0)
+        {
+            if (!ptr_channel
+                || ((ptr_channel->type != IRC_CHANNEL_TYPE_CHANNEL)
+                    && (ptr_channel->type != IRC_CHANNEL_TYPE_PRIVATE)))
+            {
+                weechat_printf (
+                    ptr_server->buffer,
+                    _("%s%s: \"%s\" command can only be executed in a channel "
+                      "or private buffer"),
+                    weechat_prefix ("error"), IRC_PLUGIN_NAME, "action *");
+            }
+            else
+            {
+                irc_command_me_channel (ptr_server, ptr_channel->name,
+                                        argv_eol[arg_text]);
+            }
+        }
+        else
+        {
+            irc_command_me_channel (ptr_server, targets[i], argv_eol[arg_text]);
+        }
+    }
+
+    weechat_string_free_split (targets);
+
+    return WEECHAT_RC_OK;
 }
 
 /*
@@ -439,10 +677,8 @@ irc_command_exec_buffers (struct t_weelist *list_buffers,
         weechat_command (
             (ptr_channel) ? ptr_channel->buffer : ptr_server->buffer,
             (cmd_eval) ? cmd_eval : ((cmd_vars_replaced) ? cmd_vars_replaced : command));
-        if (cmd_vars_replaced)
-            free (cmd_vars_replaced);
-        if (cmd_eval)
-            free (cmd_eval);
+        free (cmd_vars_replaced);
+        free (cmd_eval);
     }
 
     weechat_hashtable_free (pointers);
@@ -458,6 +694,7 @@ irc_command_exec_buffers (struct t_weelist *list_buffers,
 void
 irc_command_exec_all_channels (struct t_irc_server *server,
                                int channel_type,
+                               int all_channels,
                                int parted_channels,
                                int inclusive,
                                const char *str_channels,
@@ -498,7 +735,9 @@ irc_command_exec_all_channels (struct t_irc_server *server,
                     parted = ((ptr_channel->type == IRC_CHANNEL_TYPE_CHANNEL)
                               && !ptr_channel->nicks) ?
                         1 : 0;
-                    state_ok = (!parted_channels || parted);
+                    state_ok = (all_channels
+                                || (parted_channels && parted)
+                                || (!parted_channels && !parted));
 
                     if ((ptr_channel->type == channel_type) && state_ok)
                     {
@@ -540,8 +779,7 @@ irc_command_exec_all_channels (struct t_irc_server *server,
     irc_command_exec_buffers (list_buffers, command);
 
     weechat_list_free (list_buffers);
-    if (channels)
-        weechat_string_free_split (channels);
+    weechat_string_free_split (channels);
 }
 
 /*
@@ -551,7 +789,7 @@ irc_command_exec_all_channels (struct t_irc_server *server,
 
 IRC_COMMAND_CALLBACK(allchan)
 {
-    int i, current_server, parted_channels, inclusive;
+    int i, current_server, all_channels, parted_channels, inclusive;
     const char *ptr_channels, *ptr_command;
 
     IRC_BUFFER_GET_SERVER(buffer);
@@ -563,13 +801,14 @@ IRC_COMMAND_CALLBACK(allchan)
     WEECHAT_COMMAND_MIN_ARGS(2, "");
 
     current_server = 0;
+    all_channels = 0;
     parted_channels = 0;
     ptr_channels = NULL;
     inclusive = 0;
     ptr_command = argv_eol[1];
     for (i = 1; i < argc; i++)
     {
-        if (weechat_strcasecmp (argv[i], "-current") == 0)
+        if (weechat_strcmp (argv[i], "-current") == 0)
         {
             if (!ptr_server)
             {
@@ -579,23 +818,30 @@ IRC_COMMAND_CALLBACK(allchan)
                                   "irc buffer (server, channel or private)"),
                                 weechat_prefix ("error"), IRC_PLUGIN_NAME,
                                 "allchan", "-current");
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
             current_server = 1;
             ptr_command = argv_eol[i + 1];
         }
-        else if (weechat_strcasecmp (argv[i], "-parted") == 0)
+        else if (weechat_strcmp (argv[i], "-all") == 0)
         {
-            parted_channels = 1;
+            all_channels = 1;
+            parted_channels = 0;
             ptr_command = argv_eol[i + 1];
         }
-        else if (weechat_strncasecmp (argv[i], "-exclude=", 9) == 0)
+        else if (weechat_strcmp (argv[i], "-parted") == 0)
+        {
+            parted_channels = 1;
+            all_channels = 0;
+            ptr_command = argv_eol[i + 1];
+        }
+        else if (weechat_strncmp (argv[i], "-exclude=", 9) == 0)
         {
             ptr_channels = argv[i] + 9;
             ptr_command = argv_eol[i + 1];
             inclusive = 0;
         }
-        else if (weechat_strncasecmp (argv[i], "-include=", 9) == 0)
+        else if (weechat_strncmp (argv[i], "-include=", 9) == 0)
         {
             ptr_channels = argv[i] + 9;
             ptr_command = argv_eol[i + 1];
@@ -610,6 +856,7 @@ IRC_COMMAND_CALLBACK(allchan)
         weechat_buffer_set (NULL, "hotlist", "-");
         irc_command_exec_all_channels ((current_server) ? ptr_server : NULL,
                                        IRC_CHANNEL_TYPE_CHANNEL,
+                                       all_channels,
                                        parted_channels,
                                        inclusive,
                                        ptr_channels,
@@ -644,7 +891,7 @@ IRC_COMMAND_CALLBACK(allpv)
     ptr_command = argv_eol[1];
     for (i = 1; i < argc; i++)
     {
-        if (weechat_strcasecmp (argv[i], "-current") == 0)
+        if (weechat_strcmp (argv[i], "-current") == 0)
         {
             if (!ptr_server)
             {
@@ -654,18 +901,18 @@ IRC_COMMAND_CALLBACK(allpv)
                                   "irc buffer (server, channel or private)"),
                                 weechat_prefix ("error"), IRC_PLUGIN_NAME,
                                 "allpv", "-current");
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
             current_server = 1;
             ptr_command = argv_eol[i + 1];
         }
-        else if (weechat_strncasecmp (argv[i], "-exclude=", 9) == 0)
+        else if (weechat_strncmp (argv[i], "-exclude=", 9) == 0)
         {
             ptr_channels = argv[i] + 9;
             ptr_command = argv_eol[i + 1];
             inclusive = 0;
         }
-        else if (weechat_strncasecmp (argv[i], "-include=", 9) == 0)
+        else if (weechat_strncmp (argv[i], "-include=", 9) == 0)
         {
             ptr_channels = argv[i] + 9;
             ptr_command = argv_eol[i + 1];
@@ -680,6 +927,7 @@ IRC_COMMAND_CALLBACK(allpv)
         weechat_buffer_set (NULL, "hotlist", "-");
         irc_command_exec_all_channels ((current_server) ? ptr_server : NULL,
                                        IRC_CHANNEL_TYPE_PRIVATE,
+                                       1,  /* all channels */
                                        0,  /* parted channels */
                                        inclusive,
                                        ptr_channels,
@@ -730,7 +978,7 @@ irc_command_exec_all_servers (int inclusive, const char *str_servers, const char
                 for (i = 0; i < num_servers; i++)
                 {
                     if (weechat_string_match (ptr_server->name,
-                                              servers[i], 0))
+                                              servers[i], 1))
                     {
                         picked = (inclusive) ? 1 : 0;
                         break;
@@ -756,8 +1004,7 @@ irc_command_exec_all_servers (int inclusive, const char *str_servers, const char
     irc_command_exec_buffers (list_buffers, command);
 
     weechat_list_free (list_buffers);
-    if (servers)
-        weechat_string_free_split (servers);
+    weechat_string_free_split (servers);
 }
 
 /*
@@ -781,13 +1028,13 @@ IRC_COMMAND_CALLBACK(allserv)
     ptr_command = argv_eol[1];
     for (i = 1; i < argc; i++)
     {
-        if (weechat_strncasecmp (argv[i], "-exclude=", 9) == 0)
+        if (weechat_strncmp (argv[i], "-exclude=", 9) == 0)
         {
             ptr_servers = argv[i] + 9;
             ptr_command = argv_eol[i + 1];
             inclusive = 0;
         }
-        else if (weechat_strncasecmp (argv[i], "-include=", 9) == 0)
+        else if (weechat_strncmp (argv[i], "-include=", 9) == 0)
         {
             ptr_servers = argv[i] + 9;
             ptr_command = argv_eol[i + 1];
@@ -813,7 +1060,7 @@ IRC_COMMAND_CALLBACK(allserv)
 
 IRC_COMMAND_CALLBACK(auth)
 {
-    char str_msg_auth[512];
+    char str_msg_auth[512], *str_msg_auth_upper;
     int sasl_mechanism;
 
     IRC_BUFFER_GET_SERVER(buffer);
@@ -842,13 +1089,13 @@ IRC_COMMAND_CALLBACK(auth)
               "via server options \"sasl_*\" (or you must give username and "
               "password)"),
             weechat_prefix ("error"), IRC_PLUGIN_NAME, "auth");
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     if (weechat_hashtable_has_key (ptr_server->cap_list, "sasl"))
     {
         /* SASL capability already enabled, authenticate */
-        sasl_mechanism = IRC_SERVER_OPTION_INTEGER(
+        sasl_mechanism = IRC_SERVER_OPTION_ENUM(
             ptr_server, IRC_SERVER_OPTION_SASL_MECHANISM);
         if ((sasl_mechanism >= 0)
             && (sasl_mechanism < IRC_NUM_SASL_MECHANISMS))
@@ -861,9 +1108,14 @@ IRC_COMMAND_CALLBACK(auth)
             snprintf (str_msg_auth, sizeof (str_msg_auth),
                       "AUTHENTICATE %s",
                       irc_sasl_mechanism_string[sasl_mechanism]);
-            weechat_string_toupper (str_msg_auth);
-            irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
-                              str_msg_auth);
+            str_msg_auth_upper = weechat_string_toupper (str_msg_auth);
+            if (str_msg_auth_upper)
+            {
+                irc_server_sendf (ptr_server,
+                                  IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
+                                  str_msg_auth_upper);
+                free (str_msg_auth_upper);
+            }
         }
     }
     else
@@ -890,6 +1142,7 @@ IRC_COMMAND_CALLBACK(auth)
                 ptr_server->buffer,
                 _("%s%s: SASL is not supported by the server"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME);
+            return WEECHAT_RC_ERROR;
         }
     }
 
@@ -904,8 +1157,9 @@ IRC_COMMAND_CALLBACK(autojoin)
 {
     struct t_irc_channel *ptr_channel2;
     const char *ptr_autojoin;
-    char *old_autojoin;
-    int i;
+    char *old_autojoin, *autojoin;
+    enum t_irc_join_sort sort;
+    int i, rc;
 
     IRC_BUFFER_GET_SERVER_CHANNEL(buffer);
     IRC_COMMAND_CHECK_SERVER("autojoin", 1, 1);
@@ -916,12 +1170,30 @@ IRC_COMMAND_CALLBACK(autojoin)
 
     WEECHAT_COMMAND_MIN_ARGS(2, "");
 
+    rc = WEECHAT_RC_OK;
+
     ptr_autojoin = IRC_SERVER_OPTION_STRING(ptr_server,
                                             IRC_SERVER_OPTION_AUTOJOIN);
+
+    /* join channels in server "autojoin" option */
+    if (weechat_strcmp (argv[1], "join") == 0)
+    {
+        if (ptr_autojoin)
+        {
+            autojoin = irc_server_eval_expression (ptr_server, ptr_autojoin);
+            if (autojoin && autojoin[0])
+            {
+                irc_command_join_server (ptr_server, autojoin, 0, 0);
+            }
+            free (autojoin);
+        }
+        return WEECHAT_RC_OK;
+    }
+
     old_autojoin = strdup ((ptr_autojoin) ? ptr_autojoin : "");
 
     /* add channel(s) */
-    if (weechat_strcasecmp (argv[1], "add") == 0)
+    if (weechat_strcmp (argv[1], "add") == 0)
     {
         if (argc < 3)
         {
@@ -933,6 +1205,7 @@ IRC_COMMAND_CALLBACK(autojoin)
                     _("%s%s: \"%s\" command can only be executed in a channel "
                       "buffer"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, "autojoin add");
+                rc = WEECHAT_RC_ERROR;
                 goto end;
             }
             irc_join_add_channel_to_autojoin (ptr_server, ptr_channel->name,
@@ -956,20 +1229,19 @@ IRC_COMMAND_CALLBACK(autojoin)
     }
 
     /* add raw channel(s) */
-    if (weechat_strcasecmp (argv[1], "addraw") == 0)
+    if (weechat_strcmp (argv[1], "addraw") == 0)
     {
         if (argc < 3)
         {
-            if (old_autojoin)
-                free (old_autojoin);
-            WEECHAT_COMMAND_MIN_ARGS(3, "addraw");
+            free (old_autojoin);
+            WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
         }
         irc_join_add_channels_to_autojoin (ptr_server, argv_eol[2]);
         goto end;
     }
 
     /* delete channel(s) */
-    if (weechat_strcasecmp (argv[1], "del") == 0)
+    if (weechat_strcmp (argv[1], "del") == 0)
     {
         if (argc < 3)
         {
@@ -981,6 +1253,7 @@ IRC_COMMAND_CALLBACK(autojoin)
                     _("%s%s: \"%s\" command can only be executed in a channel "
                       "buffer"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, "autojoin add");
+                rc = WEECHAT_RC_ERROR;
                 goto end;
             }
             irc_join_remove_channel_from_autojoin (ptr_server,
@@ -994,16 +1267,18 @@ IRC_COMMAND_CALLBACK(autojoin)
     }
 
     /* apply currently joined channels in server "autojoin" option */
-    if (weechat_strcasecmp (argv[1], "apply") == 0)
+    if (weechat_strcmp (argv[1], "apply") == 0)
     {
         irc_join_save_channels_to_autojoin (ptr_server);
         goto end;
     }
 
     /* sort channels */
-    if (weechat_strcasecmp (argv[1], "sort") == 0)
+    if (weechat_strcmp (argv[1], "sort") == 0)
     {
-        irc_join_sort_autojoin (ptr_server);
+        sort = ((argc > 2) && (weechat_strcmp (argv[2], "buffer") == 0)) ?
+            IRC_JOIN_SORT_BUFFER : IRC_JOIN_SORT_ALPHA;
+        irc_join_sort_autojoin (ptr_server, sort);
         goto end;
     }
 
@@ -1028,99 +1303,9 @@ end:
                             ptr_autojoin);
         }
     }
-    if (old_autojoin)
-        free (old_autojoin);
+    free (old_autojoin);
 
-    return WEECHAT_RC_OK;
-}
-
-/*
- * Displays a ctcp action on a channel.
- */
-
-void
-irc_command_me_channel_display (struct t_irc_server *server,
-                                struct t_irc_channel *channel,
-                                const char *arguments)
-{
-    char *string;
-    struct t_irc_nick *ptr_nick;
-
-    string = (arguments && arguments[0]) ?
-        irc_color_decode (arguments,
-                          weechat_config_boolean (irc_config_network_colors_send)) : NULL;
-    ptr_nick = irc_nick_search (server, channel, server->nick);
-    weechat_printf_date_tags (
-        channel->buffer,
-        0,
-        irc_protocol_tags ("privmsg",
-                           NULL,
-                           "irc_action,self_msg,notify_none,no_highlight",
-                           server->nick, NULL),
-        "%s%s%s%s%s%s%s",
-        weechat_prefix ("action"),
-        irc_nick_mode_for_display (server, ptr_nick, 0),
-        IRC_COLOR_CHAT_NICK_SELF,
-        server->nick,
-        (string) ? IRC_COLOR_RESET : "",
-        (string) ? " " : "",
-        (string) ? string : "");
-    if (string)
-        free (string);
-}
-
-/*
- * Sends a ctcp action to a channel.
- */
-
-void
-irc_command_me_channel (struct t_irc_server *server,
-                        struct t_irc_channel *channel,
-                        const char *arguments)
-{
-    struct t_hashtable *hashtable;
-    int number;
-    char hash_key[32];
-    const char *str_args;
-
-    hashtable = irc_server_sendf (
-        server,
-        IRC_SERVER_SEND_OUTQ_PRIO_HIGH | IRC_SERVER_SEND_RETURN_HASHTABLE,
-        NULL,
-        "PRIVMSG %s :\01ACTION %s\01",
-        channel->name,
-        (arguments && arguments[0]) ? arguments : "");
-    if (hashtable)
-    {
-        number = 1;
-        while (1)
-        {
-            snprintf (hash_key, sizeof (hash_key), "args%d", number);
-            str_args = weechat_hashtable_get (hashtable, hash_key);
-            if (!str_args)
-                break;
-            irc_command_me_channel_display (server, channel, str_args);
-            number++;
-        }
-        weechat_hashtable_free (hashtable);
-    }
-}
-
-/*
- * Sends a ctcp action to all channels of a server.
- */
-
-void
-irc_command_me_all_channels (struct t_irc_server *server, const char *arguments)
-{
-    struct t_irc_channel *ptr_channel;
-
-    for (ptr_channel = server->channels; ptr_channel;
-         ptr_channel = ptr_channel->next_channel)
-    {
-        if (ptr_channel->type == IRC_CHANNEL_TYPE_CHANNEL)
-            irc_command_me_channel (server, ptr_channel, arguments);
-    }
+    return rc;
 }
 
 /*
@@ -1171,8 +1356,7 @@ irc_command_away_server (struct t_irc_server *server, const char *arguments,
 
     if (arguments)
     {
-        if (server->away_message)
-            free (server->away_message);
+        free (server->away_message);
         server->away_message = strdup (arguments);
 
         /* if server is connected, send away command now */
@@ -1182,11 +1366,11 @@ irc_command_away_server (struct t_irc_server *server, const char *arguments,
             server->away_time = time (NULL);
             irc_server_sendf (server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
                               "AWAY :%s", arguments);
-            if (weechat_config_integer (irc_config_look_display_away) != IRC_CONFIG_DISPLAY_AWAY_OFF)
+            if (weechat_config_enum (irc_config_look_display_away) != IRC_CONFIG_DISPLAY_AWAY_OFF)
             {
                 string = irc_color_decode (arguments,
                                            weechat_config_boolean (irc_config_network_colors_send));
-                if (weechat_config_integer (irc_config_look_display_away) == IRC_CONFIG_DISPLAY_AWAY_LOCAL)
+                if (weechat_config_enum (irc_config_look_display_away) == IRC_CONFIG_DISPLAY_AWAY_LOCAL)
                 {
                     irc_command_display_away (server, "away",
                                               (string) ? string : arguments);
@@ -1197,8 +1381,7 @@ irc_command_away_server (struct t_irc_server *server, const char *arguments,
                               (string) ? string : arguments);
                     irc_command_me_all_channels (server, buffer);
                 }
-                if (string)
-                    free (string);
+                free (string);
             }
             irc_server_set_away (server, server->nick, 1);
 
@@ -1230,8 +1413,7 @@ irc_command_away_server (struct t_irc_server *server, const char *arguments,
                             _("%s: future away: %s"),
                             IRC_PLUGIN_NAME,
                             (string) ? string : arguments);
-            if (string)
-                free (string);
+            free (string);
         }
     }
     else
@@ -1254,9 +1436,9 @@ irc_command_away_server (struct t_irc_server *server, const char *arguments,
                 elapsed = (time_now >= server->away_time) ?
                     time_now - server->away_time : 0;
                 server->away_time = 0;
-                if (weechat_config_integer (irc_config_look_display_away) != IRC_CONFIG_DISPLAY_AWAY_OFF)
+                if (weechat_config_enum (irc_config_look_display_away) != IRC_CONFIG_DISPLAY_AWAY_OFF)
                 {
-                    if (weechat_config_integer (irc_config_look_display_away) == IRC_CONFIG_DISPLAY_AWAY_LOCAL)
+                    if (weechat_config_enum (irc_config_look_display_away) == IRC_CONFIG_DISPLAY_AWAY_LOCAL)
                     {
                         snprintf (buffer, sizeof (buffer),
                                   "gone %.2ld:%.2ld:%.2ld",
@@ -1306,7 +1488,7 @@ IRC_COMMAND_CALLBACK(away)
     (void) pointer;
     (void) data;
 
-    if ((argc >= 2) && (weechat_strcasecmp (argv[1], "-all") == 0))
+    if ((argc >= 2) && (weechat_strcmp (argv[1], "-all") == 0))
     {
         weechat_buffer_set (NULL, "hotlist", "-");
         for (ptr_server = irc_servers; ptr_server;
@@ -1360,10 +1542,8 @@ irc_command_run_away (const void *pointer, void *data,
         irc_command_away (pointer, data, buffer, argc, argv, argv_eol);
     }
 
-    if (argv)
-        weechat_string_free_split (argv);
-    if (argv_eol)
-        weechat_string_free_split (argv_eol);
+    weechat_string_free_split (argv);
+    weechat_string_free_split (argv_eol);
 
     return WEECHAT_RC_OK;
 }
@@ -1403,8 +1583,7 @@ irc_command_send_ban (struct t_irc_server *server,
                       mode,
                       (mask) ? mask : nick);
 
-    if (mask)
-        free (mask);
+    free (mask);
 }
 
 /*
@@ -1449,7 +1628,7 @@ IRC_COMMAND_CALLBACK(ban)
                     _("%s%s: \"%s\" command can only be executed in a channel "
                       "buffer"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, "ban");
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
         }
 
@@ -1475,7 +1654,7 @@ IRC_COMMAND_CALLBACK(ban)
                 _("%s%s: \"%s\" command can only be executed in a channel "
                   "buffer"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "ban");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
         irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
                           "MODE %s +b", ptr_channel->name);
@@ -1488,7 +1667,7 @@ IRC_COMMAND_CALLBACK(ban)
  * Callback for command "/cap": client capability negotiation.
  *
  * Docs on capability negotiation:
- *   https://tools.ietf.org/html/draft-mitchell-irc-capabilities-01
+ *   https://datatracker.ietf.org/doc/html/draft-mitchell-irc-capabilities-01
  *   https://ircv3.net/specs/extensions/capability-negotiation
  */
 
@@ -1505,11 +1684,9 @@ IRC_COMMAND_CALLBACK(cap)
 
     if (argc > 1)
     {
-        cap_cmd = strdup (argv[1]);
+        cap_cmd = weechat_string_toupper (argv[1]);
         if (!cap_cmd)
             WEECHAT_COMMAND_ERROR;
-
-        weechat_string_toupper (cap_cmd);
 
         if ((strcmp (cap_cmd, "LS") == 0) && !argv_eol[2])
         {
@@ -1583,7 +1760,6 @@ irc_command_connect_one_server (struct t_irc_server *server,
     {
         server->reconnect_delay = 0;
         server->reconnect_start = 0;
-        server->reconnect_join = (server->channels) ? 1 : 0;
     }
 
     /* connect OK */
@@ -1616,15 +1792,15 @@ IRC_COMMAND_CALLBACK(connect)
     autoconnect = 0;
     for (i = 1; i < argc; i++)
     {
-        if (weechat_strcasecmp (argv[i], "-all") == 0)
+        if (weechat_strcmp (argv[i], "-all") == 0)
             all_servers = 1;
-        else if (weechat_strcasecmp (argv[i], "-open") == 0)
+        else if (weechat_strcmp (argv[i], "-open") == 0)
             all_opened = 1;
-        else if (weechat_strcasecmp (argv[i], "-switch") == 0)
+        else if (weechat_strcmp (argv[i], "-switch") == 0)
             switch_address = 1;
-        else if (weechat_strcasecmp (argv[i], "-nojoin") == 0)
+        else if (weechat_strcmp (argv[i], "-nojoin") == 0)
             no_join = 1;
-        else if (weechat_strcasecmp (argv[i], "-auto") == 0)
+        else if (weechat_strcmp (argv[i], "-auto") == 0)
             autoconnect = 1;
     }
 
@@ -1718,8 +1894,7 @@ IRC_COMMAND_CALLBACK(connect)
                         /* add server with address */
                         name = irc_server_get_name_without_port (argv[i]);
                         ptr_server = irc_server_alloc ((name) ? name : argv[i]);
-                        if (name)
-                            free (name);
+                        free (name);
                         if (ptr_server)
                         {
                             ptr_server->temp_server = 1;
@@ -1772,7 +1947,7 @@ IRC_COMMAND_CALLBACK(connect)
             }
             else
             {
-                if (weechat_strcasecmp (argv[i], "-port") == 0)
+                if (weechat_strcmp (argv[i], "-port") == 0)
                     i++;
             }
         }
@@ -1810,7 +1985,7 @@ IRC_COMMAND_CALLBACK(ctcp)
     arg_type = 2;
     arg_args = 3;
 
-    if ((argc >= 5) && (weechat_strcasecmp (argv[1], "-server") == 0))
+    if ((argc >= 5) && (weechat_strcmp (argv[1], "-server") == 0))
     {
         ptr_server = irc_server_search (argv[2]);
         ptr_channel = NULL;
@@ -1829,14 +2004,12 @@ IRC_COMMAND_CALLBACK(ctcp)
     if (!targets)
         WEECHAT_COMMAND_ERROR;
 
-    ctcp_type = strdup (argv[arg_type]);
+    ctcp_type = weechat_string_toupper (argv[arg_type]);
     if (!ctcp_type)
     {
         weechat_string_free_split (targets);
         WEECHAT_COMMAND_ERROR;
     }
-
-    weechat_string_toupper (ctcp_type);
 
     if ((strcmp (ctcp_type, "PING") == 0) && !argv_eol[arg_args])
     {
@@ -1874,30 +2047,22 @@ IRC_COMMAND_CALLBACK(ctcp)
 
         if (ctcp_target)
         {
-            irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
-                              "PRIVMSG %s :\01%s%s%s\01",
-                              ctcp_target,
-                              ctcp_type,
-                              (ctcp_args) ? " " : "",
-                              (ctcp_args) ? ctcp_args : "");
-            weechat_printf_date_tags (
-                irc_msgbuffer_get_target_buffer (
-                    ptr_server, ctcp_target, NULL, "ctcp", NULL),
-                0,
-                irc_protocol_tags ("privmsg",
-                                   NULL,
-                                   "irc_ctcp,self_msg,notify_none,no_highlight",
-                                   NULL, NULL),
-                _("%sCTCP query to %s%s%s: %s%s%s%s%s"),
-                weechat_prefix ("network"),
-                irc_nick_color_for_msg (ptr_server, 0, NULL, ctcp_target),
-                ctcp_target,
-                IRC_COLOR_RESET,
-                IRC_COLOR_CHAT_CHANNEL,
-                ctcp_type,
-                IRC_COLOR_RESET,
-                (ctcp_args) ? " " : "",
-                (ctcp_args) ? ctcp_args : "");
+            /* display only if capability "echo-message" is NOT enabled */
+            if (!weechat_hashtable_has_key (ptr_server->cap_list, "echo-message"))
+            {
+                irc_input_user_message_display (
+                    ptr_server,
+                    0,  /* date */
+                    0,  /* date_usec */
+                    NULL,  /* tags */
+                    ctcp_target,
+                    NULL,  /* address */
+                    "privmsg",
+                    ctcp_type,
+                    ctcp_args,
+                    1);  /* decode_colors */
+            }
+            irc_ctcp_send (ptr_server, ctcp_target, ctcp_type, ctcp_args);
         }
     }
 
@@ -1956,10 +2121,10 @@ IRC_COMMAND_CALLBACK(cycle)
             {
                 weechat_printf (
                     ptr_server->buffer,
-                    _("%s%s: \"%s\" command can not be executed on a server "
+                    _("%s%s: \"%s\" command cannot be executed on a server "
                       "buffer"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, "cycle");
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
 
             /* does nothing on private buffer (cycle has no sense!) */
@@ -1977,10 +2142,10 @@ IRC_COMMAND_CALLBACK(cycle)
         {
             weechat_printf (
                 ptr_server->buffer,
-                _("%s%s: \"%s\" command can not be executed on a server "
+                _("%s%s: \"%s\" command cannot be executed on a server "
                   "buffer"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "part");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         /* does nothing on private buffer (cycle has no sense!) */
@@ -2009,8 +2174,7 @@ IRC_COMMAND_CALLBACK(cycle)
                           "PART %s", channel_name);
     }
 
-    if (msg)
-        free (msg);
+    free (msg);
 
     return WEECHAT_RC_OK;
 }
@@ -2021,11 +2185,9 @@ IRC_COMMAND_CALLBACK(cycle)
 
 IRC_COMMAND_CALLBACK(dcc)
 {
-    struct sockaddr_storage addr;
-    socklen_t length;
     struct t_infolist *infolist;
     struct t_infolist_item *item;
-    char str_address[NI_MAXHOST], charset_modifier[1024];
+    char charset_modifier[1024];
     int rc;
 
     IRC_BUFFER_GET_SERVER_CHANNEL(buffer);
@@ -2036,27 +2198,12 @@ IRC_COMMAND_CALLBACK(dcc)
     (void) data;
 
     WEECHAT_COMMAND_MIN_ARGS(3, "");
-
-    /* use the local interface, from the server socket */
-    memset (&addr, 0, sizeof (addr));
-    length = sizeof (addr);
-    getsockname (ptr_server->sock, (struct sockaddr *)&addr, &length);
-    rc = getnameinfo ((struct sockaddr *)&addr, length, str_address,
-                      sizeof (str_address), NULL, 0, NI_NUMERICHOST);
-    if (rc != 0)
-    {
-        weechat_printf (
-            ptr_server->buffer,
-            _("%s%s: unable to resolve local address of server socket: error "
-              "%d %s"),
-            weechat_prefix ("error"), IRC_PLUGIN_NAME, rc, gai_strerror (rc));
-        return WEECHAT_RC_OK;
-    }
+    rc = WEECHAT_RC_ERROR;
 
     /* DCC SEND file */
-    if (weechat_strcasecmp (argv[1], "send") == 0)
+    if (weechat_strcmp (argv[1], "send") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(4, "send");
+        WEECHAT_COMMAND_MIN_ARGS(4, argv[1]);
         infolist = weechat_infolist_new ();
         if (infolist)
         {
@@ -2065,12 +2212,11 @@ IRC_COMMAND_CALLBACK(dcc)
             {
                 weechat_infolist_new_var_string (item, "plugin_name", weechat_plugin->name);
                 weechat_infolist_new_var_string (item, "plugin_id", ptr_server->name);
-                weechat_infolist_new_var_string (item, "type_string", "file_send");
+                weechat_infolist_new_var_string (item, "type_string", "file_send_passive");
                 weechat_infolist_new_var_string (item, "protocol_string", "dcc");
                 weechat_infolist_new_var_string (item, "remote_nick", argv[2]);
                 weechat_infolist_new_var_string (item, "local_nick", ptr_server->nick);
                 weechat_infolist_new_var_string (item, "filename", argv_eol[3]);
-                weechat_infolist_new_var_string (item, "local_address", str_address);
                 weechat_infolist_new_var_integer (item, "socket", ptr_server->sock);
                 rc = weechat_hook_signal_send ("xfer_add",
                                                WEECHAT_HOOK_SIGNAL_POINTER,
@@ -2082,9 +2228,9 @@ IRC_COMMAND_CALLBACK(dcc)
     }
 
     /* DCC CHAT */
-    if (weechat_strcasecmp (argv[1], "chat") == 0)
+    if (weechat_strcmp (argv[1], "chat") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "chat");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
         infolist = weechat_infolist_new ();
         if (infolist)
         {
@@ -2099,7 +2245,7 @@ IRC_COMMAND_CALLBACK(dcc)
                 snprintf (charset_modifier, sizeof (charset_modifier),
                           "irc.%s.%s", ptr_server->name, argv[2]);
                 weechat_infolist_new_var_string (item, "charset_modifier", charset_modifier);
-                weechat_infolist_new_var_string (item, "local_address", str_address);
+                weechat_infolist_new_var_integer (item, "socket", ptr_server->sock);
                 rc = weechat_hook_signal_send ("xfer_add",
                                                WEECHAT_HOOK_SIGNAL_POINTER,
                                                infolist);
@@ -2155,7 +2301,7 @@ IRC_COMMAND_CALLBACK(dehalfop)
             ptr_server->buffer,
             _("%s%s: \"%s\" command can only be executed in a channel buffer"),
             weechat_prefix ("error"), IRC_PLUGIN_NAME, "dehalfop");
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     if (argc < 2)
@@ -2194,7 +2340,7 @@ IRC_COMMAND_CALLBACK(deop)
             ptr_server->buffer,
             _("%s%s: \"%s\" command can only be executed in a channel buffer"),
             weechat_prefix ("error"), IRC_PLUGIN_NAME, "deop");
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     if (argc < 2)
@@ -2233,7 +2379,7 @@ IRC_COMMAND_CALLBACK(devoice)
             ptr_server->buffer,
             _("%s%s: \"%s\" command can only be executed in a channel buffer"),
             weechat_prefix ("error"), IRC_PLUGIN_NAME, "devoice");
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     if (argc < 2)
@@ -2300,15 +2446,16 @@ irc_command_quit_server (struct t_irc_server *server, const char *arguments)
     if (ptr_arg && ptr_arg[0])
     {
         msg = irc_server_get_default_msg (ptr_arg, server, NULL, NULL);
-        irc_server_sendf (server, 0, NULL, "QUIT :%s", msg);
+        irc_server_sendf (server, IRC_SERVER_SEND_OUTQ_PRIO_IMMEDIATE, NULL,
+                          "QUIT :%s", msg);
     }
     else
     {
-        irc_server_sendf (server, 0, NULL, "QUIT");
+        irc_server_sendf (server, IRC_SERVER_SEND_OUTQ_PRIO_IMMEDIATE, NULL,
+                          "QUIT");
     }
 
-    if (msg)
-        free (msg);
+    free (msg);
 }
 
 /*
@@ -2377,7 +2524,7 @@ IRC_COMMAND_CALLBACK(disconnect)
     {
         disconnect_ok = 1;
 
-        if (weechat_strcasecmp (argv[1], "-all") == 0)
+        if (weechat_strcmp (argv[1], "-all") == 0)
         {
             for (ptr_server = irc_servers; ptr_server;
                  ptr_server = ptr_server->next_server)
@@ -2391,7 +2538,7 @@ IRC_COMMAND_CALLBACK(disconnect)
                 }
             }
         }
-        else if (weechat_strcasecmp (argv[1], "-pending") == 0)
+        else if (weechat_strcmp (argv[1], "-pending") == 0)
         {
             for (ptr_server = irc_servers; ptr_server;
                  ptr_server = ptr_server->next_server)
@@ -2447,7 +2594,7 @@ IRC_COMMAND_CALLBACK(halfop)
             ptr_server->buffer,
             _("%s%s: \"%s\" command can only be executed in a channel buffer"),
             weechat_prefix ("error"), IRC_PLUGIN_NAME, "halfop");
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     if (argc < 2)
@@ -2494,7 +2641,7 @@ IRC_COMMAND_CALLBACK(ignore)
 {
     struct t_irc_ignore *ptr_ignore;
     char *mask, *regex, *regex2, *ptr_regex, *pos, *server, *channel, *error;
-    int length;
+    int length, update;
     long number;
 
     /* make C compiler happy */
@@ -2504,7 +2651,7 @@ IRC_COMMAND_CALLBACK(ignore)
     (void) argv_eol;
 
     if ((argc == 1)
-        || ((argc == 2) && (weechat_strcasecmp (argv[1], "list") == 0)))
+        || ((argc == 2) && (weechat_strcmp (argv[1], "list") == 0)))
     {
         /* display all ignores */
         if (irc_ignore_list)
@@ -2523,10 +2670,12 @@ IRC_COMMAND_CALLBACK(ignore)
     }
 
     /* add ignore */
-    if (weechat_strcasecmp (argv[1], "add") == 0)
+    if ((weechat_strcmp (argv[1], "add") == 0)
+        || (weechat_strcmp (argv[1], "addreplace") == 0))
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "add");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
 
+        update = 0;
         mask = argv[2];
         server = (argc > 3) ? argv[3] : NULL;
         channel = (argc > 4) ? argv[4] : NULL;
@@ -2577,46 +2726,55 @@ IRC_COMMAND_CALLBACK(ignore)
             }
         }
 
-        if (irc_ignore_search (ptr_regex, server, channel))
+        ptr_ignore = irc_ignore_search (ptr_regex, server, channel);
+        if (ptr_ignore)
         {
-            if (regex)
+            if (weechat_strcmp (argv[1], "addreplace") == 0)
+            {
+                update = 1;
+                irc_ignore_free (ptr_ignore);
+            }
+            else
+            {
                 free (regex);
-            if (regex2)
                 free (regex2);
-            weechat_printf (NULL,
-                            _("%s%s: ignore already exists"),
-                            weechat_prefix ("error"), IRC_PLUGIN_NAME);
-            return WEECHAT_RC_OK;
+                weechat_printf (NULL,
+                                _("%s%s: ignore already exists"),
+                                weechat_prefix ("error"), IRC_PLUGIN_NAME);
+                return WEECHAT_RC_ERROR;
+            }
         }
 
         ptr_ignore = irc_ignore_new (ptr_regex, server, channel);
 
-        if (regex)
-            free (regex);
-        if (regex2)
-            free (regex2);
+        free (regex);
+        free (regex2);
 
         if (ptr_ignore)
         {
             weechat_printf (NULL, "");
-            weechat_printf (NULL, _("%s: ignore added:"), IRC_PLUGIN_NAME);
+            weechat_printf (
+                NULL,
+                (update) ? _("%s: ignore updated:") : _("%s: ignore added:"),
+                IRC_PLUGIN_NAME);
             irc_command_ignore_display (ptr_ignore);
         }
         else
         {
             weechat_printf (NULL, _("%s%s: error adding ignore"),
                             weechat_prefix ("error"), IRC_PLUGIN_NAME);
+            return WEECHAT_RC_ERROR;
         }
 
         return WEECHAT_RC_OK;
     }
 
     /* delete ignore */
-    if (weechat_strcasecmp (argv[1], "del") == 0)
+    if (weechat_strcmp (argv[1], "del") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "del");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
 
-        if (weechat_strcasecmp (argv[2], "-all") == 0)
+        if (weechat_strcmp (argv[2], "-all") == 0)
         {
             if (irc_ignore_list)
             {
@@ -2643,15 +2801,14 @@ IRC_COMMAND_CALLBACK(ignore)
                     irc_ignore_free (ptr_ignore);
                     weechat_printf (NULL, _("%s: ignore \"%s\" deleted"),
                                     IRC_PLUGIN_NAME, mask);
-                    if (mask)
-                        free (mask);
+                    free (mask);
                 }
                 else
                 {
                     weechat_printf (NULL,
                                     _("%s%s: ignore not found"),
                                     weechat_prefix ("error"), IRC_PLUGIN_NAME);
-                    return WEECHAT_RC_OK;
+                    return WEECHAT_RC_ERROR;
                 }
             }
             else
@@ -2659,7 +2816,7 @@ IRC_COMMAND_CALLBACK(ignore)
                 weechat_printf (NULL,
                                 _("%s%s: wrong ignore number"),
                                 weechat_prefix ("error"), IRC_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
         }
 
@@ -2758,7 +2915,7 @@ error:
         ptr_server->buffer,
         _("%s%s: \"%s\" command can only be executed in a channel buffer"),
         weechat_prefix ("error"), IRC_PLUGIN_NAME, "invite");
-    return WEECHAT_RC_OK;
+    return WEECHAT_RC_ERROR;
 }
 
 /*
@@ -2792,8 +2949,8 @@ irc_command_join_server (struct t_irc_server *server, const char *arguments,
                          int manual_join, int noswitch)
 {
     char *new_args, **channels, **keys, *pos_space, *pos_keys, *pos_channel;
-    char *channel_name, *ptr_key;
-    int i, num_channels, num_keys, length, save_autojoin;
+    char *channel_name_lower;
+    int i, num_channels, num_keys, length;
     time_t time_now;
     struct t_irc_channel *ptr_channel;
 
@@ -2805,9 +2962,6 @@ irc_command_join_server (struct t_irc_server *server, const char *arguments,
             weechat_prefix ("error"), IRC_PLUGIN_NAME, "join");
         return;
     }
-
-    save_autojoin = IRC_SERVER_OPTION_BOOLEAN(server,
-                                              IRC_SERVER_OPTION_AUTOJOIN_DYNAMIC);
 
     /* split channels and keys */
     channels = NULL;
@@ -2825,11 +2979,13 @@ irc_command_join_server (struct t_irc_server *server, const char *arguments,
             pos_keys++;
         }
         if (pos_keys[0])
+        {
             keys = weechat_string_split (pos_keys, ",", NULL,
                                          WEECHAT_STRING_SPLIT_STRIP_LEFT
                                          | WEECHAT_STRING_SPLIT_STRIP_RIGHT
                                          | WEECHAT_STRING_SPLIT_COLLAPSE_SEPS,
                                          0, &num_keys);
+        }
     }
     else
         new_args = strdup (arguments);
@@ -2875,41 +3031,37 @@ irc_command_join_server (struct t_irc_server *server, const char *arguments,
                 strcat (new_args,
                         irc_channel_get_auto_chantype (server, channels[i]));
                 strcat (new_args, channels[i]);
+                channel_name_lower = weechat_string_tolower (pos_channel);
                 if (manual_join || noswitch)
                 {
-                    channel_name = weechat_string_tolower (pos_channel);
-                    if (channel_name)
+                    if (channel_name_lower)
                     {
                         if (manual_join)
                         {
                             weechat_hashtable_set (server->join_manual,
-                                                   channel_name,
+                                                   channel_name_lower,
                                                    &time_now);
                         }
                         if (noswitch)
                         {
                             weechat_hashtable_set (server->join_noswitch,
-                                                   channel_name,
+                                                   channel_name_lower,
                                                    &time_now);
                         }
-                        free (channel_name);
                     }
                 }
-                ptr_key = NULL;
                 if (keys && (i < num_keys))
                 {
-                    ptr_key = keys[i];
                     ptr_channel = irc_channel_search (server, pos_channel);
                     if (ptr_channel)
                     {
-                        if (ptr_channel->key)
-                            free (ptr_channel->key);
+                        free (ptr_channel->key);
                         ptr_channel->key = strdup (keys[i]);
                     }
-                    else
+                    else if (channel_name_lower)
                     {
                         weechat_hashtable_set (server->join_channel_key,
-                                               pos_channel, keys[i]);
+                                               channel_name_lower, keys[i]);
                     }
                 }
                 if (manual_join
@@ -2926,12 +3078,8 @@ irc_command_join_server (struct t_irc_server *server, const char *arguments,
                             server, IRC_CHANNEL_TYPE_CHANNEL, pos_channel,
                             1, 1);
                     }
-                    if (save_autojoin)
-                    {
-                        irc_join_add_channel_to_autojoin (server, pos_channel,
-                                                          ptr_key);
-                    }
                 }
+                free (channel_name_lower);
             }
             if (pos_space)
                 strcat (new_args, pos_space);
@@ -2943,6 +3091,8 @@ irc_command_join_server (struct t_irc_server *server, const char *arguments,
         }
         weechat_string_free_split (channels);
     }
+
+    weechat_string_free_split (keys);
 }
 
 /*
@@ -2965,7 +3115,7 @@ IRC_COMMAND_CALLBACK(join)
 
     for (i = 1; i < argc; i++)
     {
-        if (weechat_strcasecmp (argv[i], "-server") == 0)
+        if (weechat_strcmp (argv[i], "-server") == 0)
         {
             if (argc <= i + 1)
                 WEECHAT_COMMAND_ERROR;
@@ -2975,7 +3125,7 @@ IRC_COMMAND_CALLBACK(join)
             arg_channels = i + 2;
             i++;
         }
-        else if (weechat_strcasecmp (argv[i], "-noswitch") == 0)
+        else if (weechat_strcmp (argv[i], "-noswitch") == 0)
         {
             noswitch = 1;
             arg_channels = i + 1;
@@ -3011,8 +3161,7 @@ IRC_COMMAND_CALLBACK(join)
         if (ptr_channel && (ptr_channel->type == IRC_CHANNEL_TYPE_CHANNEL)
             && !ptr_channel->nicks)
         {
-            irc_command_join_server (ptr_server, ptr_channel->name,
-                                     1, noswitch);
+            irc_channel_rejoin (ptr_server, ptr_channel, 1, noswitch);
         }
         else
         {
@@ -3066,8 +3215,7 @@ irc_command_kick_channel (struct t_irc_server *server,
                           channel_name, nick_name);
     }
 
-    if (msg)
-        free (msg);
+    free (msg);
 }
 
 /*
@@ -3103,7 +3251,7 @@ IRC_COMMAND_CALLBACK(kick)
                 _("%s%s: \"%s\" command can only be executed in a channel "
                   "buffer"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "kick");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
         pos_channel = ptr_channel->name;
         pos_nick = argv[1];
@@ -3151,7 +3299,7 @@ IRC_COMMAND_CALLBACK(kickban)
                 _("%s%s: \"%s\" command can only be executed in a channel "
                   "buffer"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "kickban");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
         pos_channel = ptr_channel->name;
         pos_nick = argv[1];
@@ -3177,7 +3325,7 @@ IRC_COMMAND_CALLBACK(kickban)
             _("%s%s: mask must begin with nick"),
             weechat_prefix ("error"), IRC_PLUGIN_NAME);
         free (nick_only);
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     /* set ban for nick(+host) on channel */
@@ -3241,6 +3389,36 @@ IRC_COMMAND_CALLBACK(kill)
 }
 
 /*
+ * Callback for command "/knock": sends a notice to an invitation-only channel,
+ * requesting an invite.
+ */
+
+IRC_COMMAND_CALLBACK(knock)
+{
+    IRC_BUFFER_GET_SERVER(buffer);
+    IRC_COMMAND_CHECK_SERVER("knock", 1, 1);
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+
+    WEECHAT_COMMAND_MIN_ARGS(2, "");
+
+    if (argc < 3)
+    {
+        irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
+                          "KNOCK %s", argv[1]);
+    }
+    else
+    {
+        irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
+                          "KNOCK %s :%s", argv[1], argv_eol[2]);
+    }
+
+    return WEECHAT_RC_OK;
+}
+
+/*
  * Callback for command "/links": lists all server names which are known by the
  * server answering the query.
  */
@@ -3270,14 +3448,37 @@ IRC_COMMAND_CALLBACK(links)
 }
 
 /*
+ * Gets an integer argument given to the /list command.
+ */
+
+int
+irc_command_list_get_int_arg (int argc, char **argv, int arg_number,
+                              int default_value)
+{
+    long value;
+    char *error;
+
+    value = default_value;
+    if (argc > arg_number)
+    {
+        error = NULL;
+        value = strtol (argv[arg_number], &error, 10);
+        if (!error || error[0])
+            value = default_value;
+    }
+    return (int)value;
+}
+
+/*
  * Callback for command "/list": lists channels and their topics.
  */
 
 IRC_COMMAND_CALLBACK(list)
 {
+    struct t_hashtable *hashtable;
     char buf[512], *ptr_channel_name, *ptr_server_name, *ptr_regex;
     regex_t *new_regexp;
-    int i, ret;
+    int i, ret, value, use_list_buffer;
 
     IRC_BUFFER_GET_SERVER(buffer);
 
@@ -3289,10 +3490,104 @@ IRC_COMMAND_CALLBACK(list)
     ptr_server_name = NULL;
     ptr_regex = NULL;
     new_regexp = NULL;
+    use_list_buffer = weechat_config_boolean (irc_config_look_list_buffer);
+
+    if ((argc > 0) && (weechat_strcmp (argv[1], "-up") == 0))
+    {
+        if (ptr_server && ptr_server->list->buffer)
+        {
+            irc_list_move_line_relative (
+                ptr_server,
+                -1 * irc_command_list_get_int_arg (argc, argv, 2, 1));
+        }
+        return WEECHAT_RC_OK;
+    }
+    if ((argc > 0) && (weechat_strcmp (argv[1], "-down") == 0))
+    {
+        if (ptr_server && ptr_server->list->buffer)
+        {
+            irc_list_move_line_relative (
+                ptr_server,
+                irc_command_list_get_int_arg (argc, argv, 2, 1));
+        }
+        return WEECHAT_RC_OK;
+    }
+    if ((argc > 0) && (weechat_strcmp (argv[1], "-go") == 0))
+    {
+        if (ptr_server && ptr_server->list->buffer)
+        {
+            if (argc < 3)
+                WEECHAT_COMMAND_ERROR;
+            value = (weechat_strcmp (argv[2], "end") == 0) ?
+                -1 : irc_command_list_get_int_arg (argc, argv, 2, -2);
+            if (value < -1)
+                WEECHAT_COMMAND_ERROR;
+            irc_list_move_line_absolute (ptr_server, value);
+        }
+        return WEECHAT_RC_OK;
+    }
+    if ((argc > 0) && (weechat_strcmp (argv[1], "-left") == 0))
+    {
+        if (ptr_server && ptr_server->list->buffer)
+        {
+            value = irc_command_list_get_int_arg (
+                argc, argv, 2,
+                weechat_config_integer (irc_config_look_list_buffer_scroll_horizontal));
+            irc_list_scroll_horizontal (ptr_server, -1 * value);
+        }
+        return WEECHAT_RC_OK;
+    }
+    if ((argc > 0) && (weechat_strcmp (argv[1], "-right") == 0))
+    {
+        if (ptr_server && ptr_server->list->buffer)
+        {
+            value = irc_command_list_get_int_arg (
+                argc, argv, 2,
+                weechat_config_integer (irc_config_look_list_buffer_scroll_horizontal));
+            irc_list_scroll_horizontal (ptr_server, value);
+        }
+        return WEECHAT_RC_OK;
+    }
+    if ((argc > 0) && (weechat_strcmp (argv[1], "-join") == 0))
+    {
+        if (ptr_server && ptr_server->list->buffer)
+            irc_list_join_channel (ptr_server);
+        return WEECHAT_RC_OK;
+    }
+    if ((argc > 0) && (weechat_strcmp (argv[1], "-export") == 0))
+    {
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
+        IRC_COMMAND_CHECK_SERVER("list", 1, 1);
+        if (!ptr_server->list->buffer)
+        {
+            weechat_printf (
+                ptr_server->buffer,
+                _("%s%s: list buffer is not displayed"),
+                weechat_prefix ("error"), IRC_PLUGIN_NAME);
+            return WEECHAT_RC_ERROR;
+        }
+        if (weechat_arraylist_size (ptr_server->list->channels) == 0)
+        {
+            weechat_printf (
+                ptr_server->buffer,
+                _("%s%s: no channels displayed on list buffer"),
+                weechat_prefix ("error"), IRC_PLUGIN_NAME);
+            return WEECHAT_RC_ERROR;
+        }
+        if (!irc_list_export (ptr_server, argv_eol[2]))
+        {
+            weechat_printf (
+                ptr_server->buffer,
+                _("%s%s: error exporting channels to file \"%s\""),
+                weechat_prefix ("error"), IRC_PLUGIN_NAME, argv_eol[2]);
+            return WEECHAT_RC_ERROR;
+        }
+        return WEECHAT_RC_OK;
+    }
 
     for (i = 1; i < argc; i++)
     {
-        if (weechat_strcasecmp (argv[i], "-server") == 0)
+        if (weechat_strcmp (argv[i], "-server") == 0)
         {
             if (argc <= i + 1)
                 WEECHAT_COMMAND_ERROR;
@@ -3301,12 +3596,13 @@ IRC_COMMAND_CALLBACK(list)
                 WEECHAT_COMMAND_ERROR;
             i++;
         }
-        else if (weechat_strcasecmp (argv[i], "-re") == 0)
+        else if (weechat_strcmp (argv[i], "-raw") == 0)
         {
             if (argc <= i + 1)
                 WEECHAT_COMMAND_ERROR;
             ptr_regex = argv_eol[i + 1];
-            i++;
+            use_list_buffer = 0;
+            break;
         }
         else if (!ptr_channel_name)
             ptr_channel_name = argv[i];
@@ -3327,11 +3623,12 @@ IRC_COMMAND_CALLBACK(list)
                 ptr_server->buffer,
                 _("%s%s: not enough memory for regular expression"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME);
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
-        ret = weechat_string_regcomp (new_regexp,
-                                      ptr_regex,
-                                      REG_EXTENDED | REG_ICASE | REG_NOSUB);
+        ret = weechat_string_regcomp (
+            new_regexp,
+            (weechat_strcmp (ptr_regex, "*") == 0) ? ".*" : ptr_regex,
+            REG_EXTENDED | REG_ICASE | REG_NOSUB);
         if (ret != 0)
         {
             regerror (ret, new_regexp, buf, sizeof (buf));
@@ -3342,7 +3639,7 @@ IRC_COMMAND_CALLBACK(list)
                 weechat_prefix ("error"), IRC_PLUGIN_NAME,
                 ptr_regex, buf);
             free (new_regexp);
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
         if (ptr_server->cmd_list_regexp)
         {
@@ -3356,6 +3653,39 @@ IRC_COMMAND_CALLBACK(list)
         regfree (ptr_server->cmd_list_regexp);
         free (ptr_server->cmd_list_regexp);
         ptr_server->cmd_list_regexp = NULL;
+    }
+
+    if (ptr_server->list && use_list_buffer)
+    {
+        hashtable = weechat_hashtable_new (32,
+                                           WEECHAT_HASHTABLE_STRING,
+                                           WEECHAT_HASHTABLE_STRING,
+                                           NULL,
+                                           NULL);
+        if (hashtable)
+        {
+            weechat_hashtable_set (hashtable, "server", ptr_server->name);
+            weechat_hashtable_set (hashtable, "pattern", "list");
+            snprintf (buf, sizeof (buf), "server_%s", ptr_server->name);
+            weechat_hashtable_set (hashtable, "signal", buf);
+            weechat_hook_hsignal_send ("irc_redirect_command", hashtable);
+            weechat_hashtable_free (hashtable);
+        }
+
+        irc_list_reset (ptr_server);
+
+        if (ptr_server->list->buffer)
+            weechat_buffer_clear (ptr_server->list->buffer);
+        else
+            ptr_server->list->buffer = irc_list_create_buffer (ptr_server);
+        if (ptr_server->list->buffer)
+        {
+            weechat_printf_y (ptr_server->list->buffer, 1,
+                              "%s",
+                              _("Receiving list of channels, please wait..."));
+            irc_list_buffer_set_title (ptr_server);
+            weechat_buffer_set (ptr_server->list->buffer, "display", "1");
+        }
     }
 
     irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
@@ -3426,7 +3756,7 @@ IRC_COMMAND_CALLBACK(map)
 }
 
 /*
- * Callback for command "/me": sends a ctcp action to the current channel.
+ * Callback for command "/me": sends a CTCP ACTION to the current channel.
  */
 
 IRC_COMMAND_CALLBACK(me)
@@ -3443,12 +3773,12 @@ IRC_COMMAND_CALLBACK(me)
     {
         weechat_printf (
             ptr_server->buffer,
-            _("%s%s: \"%s\" command can not be executed on a server buffer"),
+            _("%s%s: \"%s\" command cannot be executed on a server buffer"),
             weechat_prefix ("error"), IRC_PLUGIN_NAME, "me");
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
-    irc_command_me_channel (ptr_server, ptr_channel,
+    irc_command_me_channel (ptr_server, ptr_channel->name,
                             (argc > 1) ? argv_eol[1] : NULL);
 
     return WEECHAT_RC_OK;
@@ -3508,7 +3838,7 @@ IRC_COMMAND_CALLBACK(mode)
                     _("%s%s: you must specify channel for \"%s\" command if "
                       "you're not in a channel"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, "mode");
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
             irc_command_mode_server (ptr_server, "MODE", ptr_channel,
                                      argv_eol[1],
@@ -3573,10 +3903,8 @@ IRC_COMMAND_CALLBACK(motd)
 
 IRC_COMMAND_CALLBACK(msg)
 {
-    char **targets, *msg_pwd_hidden, *string;
-    int num_targets, i, j, arg_target, arg_text, is_channel, status_msg;
-    int hide_password;
-    struct t_irc_channel *ptr_channel2;
+    char **targets;
+    int num_targets, i, arg_target, arg_text;
 
     IRC_BUFFER_GET_SERVER_CHANNEL(buffer);
 
@@ -3589,7 +3917,7 @@ IRC_COMMAND_CALLBACK(msg)
     arg_target = 1;
     arg_text = 2;
 
-    if ((argc >= 5) && (weechat_strcasecmp (argv[1], "-server") == 0))
+    if ((argc >= 5) && (weechat_strcmp (argv[1], "-server") == 0))
     {
         ptr_server = irc_server_search (argv[2]);
         ptr_channel = NULL;
@@ -3623,157 +3951,52 @@ IRC_COMMAND_CALLBACK(msg)
             }
             else
             {
-                irc_input_user_message_display (ptr_channel->buffer, 0,
-                                                argv_eol[arg_text]);
+                /* display only if capability "echo-message" is NOT enabled */
+                if (!weechat_hashtable_has_key (ptr_server->cap_list, "echo-message"))
+                {
+                    irc_input_user_message_display (
+                        ptr_server,
+                        0,  /* date */
+                        0,  /* date_usec */
+                        NULL,  /* tags */
+                        ptr_channel->name,
+                        NULL,  /* address */
+                        "privmsg",
+                        NULL,  /* ctcp_type */
+                        argv_eol[arg_text],
+                        1);  /* decode_colors */
+                }
                 irc_server_sendf (ptr_server,
-                                  IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
+                                  IRC_SERVER_SEND_OUTQ_PRIO_HIGH
+                                  | IRC_SERVER_SEND_MULTILINE,
+                                  NULL,
                                   "PRIVMSG %s :%s",
                                   ptr_channel->name, argv_eol[arg_text]);
             }
         }
         else
         {
-            is_channel = 0;
-            ptr_channel2 = NULL;
-            status_msg = 0;
-            if (irc_server_prefix_char_statusmsg (ptr_server,
-                                                  targets[i][0])
-                && irc_channel_is_channel (ptr_server, targets[i] + 1))
+            /* display only if capability "echo-message" is NOT enabled */
+            if (!weechat_hashtable_has_key (ptr_server->cap_list, "echo-message"))
             {
-                ptr_channel2 = irc_channel_search (ptr_server, targets[i] + 1);
-                is_channel = 1;
-                status_msg = 1;
+                irc_input_user_message_display (
+                    ptr_server,
+                    0,  /* date */
+                    0,  /* date_usec */
+                    NULL,  /* tags */
+                    targets[i],
+                    NULL,  /* address */
+                    "privmsg",
+                    NULL,  /* ctcp_type */
+                    argv_eol[arg_text],
+                    1);  /* decode_colors */
             }
-            else
-            {
-                ptr_channel2 = irc_channel_search (ptr_server, targets[i]);
-                if (ptr_channel2)
-                    is_channel = 1;
-            }
-            if (is_channel)
-            {
-                if (ptr_channel2)
-                {
-                    if (status_msg)
-                    {
-                        /*
-                         * message to channel ops/voiced
-                         * (to "@#channel" or "+#channel")
-                         */
-                        string = irc_color_decode (
-                            argv_eol[arg_text],
-                            weechat_config_boolean (irc_config_network_colors_send));
-                        weechat_printf_date_tags (
-                            ptr_channel2->buffer,
-                            0,
-                            "self_msg,notify_none,no_highlight",
-                            "%s%s%s -> %s%s%s: %s",
-                            weechat_prefix ("network"),
-                            "Msg",
-                            IRC_COLOR_RESET,
-                            IRC_COLOR_CHAT_CHANNEL,
-                            targets[i],
-                            IRC_COLOR_RESET,
-                            (string) ? string : argv_eol[arg_text]);
-                        if (string)
-                            free (string);
-                    }
-                    else
-                    {
-                        /* standard message (to "#channel") */
-                        irc_input_user_message_display (ptr_channel2->buffer,
-                                                        0, argv_eol[arg_text]);
-                    }
-                }
-                irc_server_sendf (ptr_server,
-                                  IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
-                                  "PRIVMSG %s :%s",
-                                  targets[i], argv_eol[arg_text]);
-            }
-            else
-            {
-                /* check if the password must be hidden for this nick */
-                hide_password = 0;
-                if (irc_config_nicks_hide_password)
-                {
-                    for (j = 0; j < irc_config_num_nicks_hide_password; j++)
-                    {
-                        if (weechat_strcasecmp (irc_config_nicks_hide_password[j],
-                                                targets[i]) == 0)
-                        {
-                            hide_password = 1;
-                            break;
-                        }
-                    }
-                }
-                if (hide_password)
-                {
-                    /* hide password in message displayed using modifier */
-                    msg_pwd_hidden = weechat_hook_modifier_exec (
-                        "irc_message_auth",
-                        ptr_server->name,
-                        argv_eol[arg_text]);
-                    string = irc_color_decode (
-                        (msg_pwd_hidden) ? msg_pwd_hidden : argv_eol[arg_text],
-                        weechat_config_boolean (irc_config_network_colors_send));
-                    weechat_printf (
-                        ptr_server->buffer,
-                        "%sMSG%s(%s%s%s)%s: %s",
-                        weechat_prefix ("network"),
-                        IRC_COLOR_CHAT_DELIMITERS,
-                        irc_nick_color_for_msg (ptr_server, 0, NULL,
-                                                targets[i]),
-                        targets[i],
-                        IRC_COLOR_CHAT_DELIMITERS,
-                        IRC_COLOR_RESET,
-                        (string) ?
-                        string : ((msg_pwd_hidden) ?
-                                  msg_pwd_hidden : argv_eol[arg_text]));
-                    if (string)
-                        free (string);
-                    if (msg_pwd_hidden)
-                        free (msg_pwd_hidden);
-                }
-                else
-                {
-                    ptr_channel2 = irc_channel_search (ptr_server,
-                                                       targets[i]);
-                    if (ptr_channel2)
-                    {
-                        irc_input_user_message_display (ptr_channel2->buffer,
-                                                        0, argv_eol[arg_text]);
-                    }
-                    else
-                    {
-                        string = irc_color_decode (
-                            argv_eol[arg_text],
-                            weechat_config_boolean (irc_config_network_colors_send));
-                        weechat_printf_date_tags (
-                            ptr_server->buffer,
-                            0,
-                            irc_protocol_tags (
-                                "privmsg",
-                                NULL,
-                                "self_msg,notify_none,no_highlight",
-                                ptr_server->nick, NULL),
-                            "%sMSG%s(%s%s%s)%s: %s",
-                            weechat_prefix ("network"),
-                            IRC_COLOR_CHAT_DELIMITERS,
-                            irc_nick_color_for_msg (
-                                ptr_server, 0, NULL, targets[i]),
-                            targets[i],
-                            IRC_COLOR_CHAT_DELIMITERS,
-                            IRC_COLOR_RESET,
-                            (string) ? string : argv_eol[arg_text]);
-                        if (string)
-                            free (string);
-                    }
-                }
-                irc_server_sendf (ptr_server,
-                                  IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
-                                  "PRIVMSG %s :%s",
-                                  targets[i], argv_eol[arg_text]);
-            }
+            irc_server_sendf (ptr_server,
+                              IRC_SERVER_SEND_OUTQ_PRIO_HIGH
+                              | IRC_SERVER_SEND_MULTILINE,
+                              NULL,
+                              "PRIVMSG %s :%s",
+                              targets[i], argv_eol[arg_text]);
         }
     }
 
@@ -3788,6 +4011,10 @@ IRC_COMMAND_CALLBACK(msg)
 
 IRC_COMMAND_CALLBACK(names)
 {
+    int i, arg_channels;
+    char filter[2], **channels, *channel_name_lower;
+    int num_channels;
+
     IRC_BUFFER_GET_SERVER_CHANNEL(buffer);
     IRC_COMMAND_CHECK_SERVER("names", 1, 1);
 
@@ -3796,25 +4023,63 @@ IRC_COMMAND_CALLBACK(names)
     (void) data;
     (void) argv;
 
-    if (argc > 1)
+    arg_channels = argc;
+    filter[0] = '\0';
+    filter[1] = '\0';
+
+    for (i = 1; i < argc; i++)
     {
-        irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
-                          "NAMES %s", argv_eol[1]);
-    }
-    else
-    {
-        if (!ptr_channel || (ptr_channel->type != IRC_CHANNEL_TYPE_CHANNEL))
+        if (argv[i][0] == '-')
         {
-            weechat_printf (
-                ptr_server->buffer,
-                _("%s%s: \"%s\" command can only be executed in a channel "
-                  "buffer"),
-                weechat_prefix ("error"), IRC_PLUGIN_NAME, "names");
-            return WEECHAT_RC_OK;
+            if (weechat_strcmp (argv[i], "-count") == 0)
+                filter[0] = '#';
+            else if (argv[i][1])
+                filter[0] = argv[i][1];
         }
-        irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
-                          "NAMES %s", ptr_channel->name);
+        else
+        {
+            arg_channels = i;
+            break;
+        }
     }
+
+    if ((arg_channels >= argc)
+        && (!ptr_channel || (ptr_channel->type != IRC_CHANNEL_TYPE_CHANNEL)))
+    {
+        weechat_printf (
+            ptr_server->buffer,
+            _("%s%s: \"%s\" command can only be executed in a channel "
+              "buffer"),
+            weechat_prefix ("error"), IRC_PLUGIN_NAME, "names");
+        return WEECHAT_RC_ERROR;
+    }
+
+    if (filter[0])
+    {
+        channels = weechat_string_split (
+            (arg_channels < argc) ? argv_eol[arg_channels] : ptr_channel->name,
+            ",", NULL, 0, 0, &num_channels);
+        if (channels)
+        {
+            for (i = 0; i < num_channels; i++)
+            {
+                channel_name_lower = weechat_string_tolower (channels[i]);
+                if (channel_name_lower)
+                {
+                    weechat_hashtable_set (ptr_server->names_channel_filter,
+                                           channel_name_lower,
+                                           filter);
+                    free (channel_name_lower);
+                }
+            }
+            weechat_string_free_split (channels);
+        }
+    }
+
+    irc_server_sendf (
+        ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
+        "NAMES %s",
+        (arg_channels < argc) ? argv_eol[arg_channels] : ptr_channel->name);
 
     return WEECHAT_RC_OK;
 }
@@ -3858,7 +4123,7 @@ IRC_COMMAND_CALLBACK(nick)
 
     if (argc > 2)
     {
-        if (weechat_strcasecmp (argv[1], "-all") != 0)
+        if (weechat_strcmp (argv[1], "-all") != 0)
             WEECHAT_COMMAND_ERROR;
         for (ptr_server = irc_servers; ptr_server;
              ptr_server = ptr_server->next_server)
@@ -3878,10 +4143,9 @@ IRC_COMMAND_CALLBACK(nick)
 
 IRC_COMMAND_CALLBACK(notice)
 {
-    char *string, hash_key[32], *str_args;
-    int arg_target, arg_text, number, is_channel;
-    struct t_irc_channel *ptr_channel;
-    struct t_hashtable *hashtable;
+    const char *ptr_message;
+    int i, arg_target, arg_text, list_size;
+    struct t_arraylist *list_messages;
 
     IRC_BUFFER_GET_SERVER(buffer);
 
@@ -3893,7 +4157,7 @@ IRC_COMMAND_CALLBACK(notice)
 
     arg_target = 1;
     arg_text = 2;
-    if ((argc >= 5) && (weechat_strcasecmp (argv[1], "-server") == 0))
+    if ((argc >= 5) && (weechat_strcmp (argv[1], "-server") == 0))
     {
         ptr_server = irc_server_search (argv[2]);
         arg_target = 3;
@@ -3901,58 +4165,37 @@ IRC_COMMAND_CALLBACK(notice)
     }
 
     IRC_COMMAND_CHECK_SERVER("notice", 1, 1);
-    is_channel = 0;
-    if (irc_server_prefix_char_statusmsg (ptr_server, argv[arg_target][0])
-        && irc_channel_is_channel (ptr_server, argv[arg_target] + 1))
-    {
-        ptr_channel = irc_channel_search (ptr_server, argv[arg_target] + 1);
-        is_channel = 1;
-    }
-    else
-    {
-        ptr_channel = irc_channel_search (ptr_server, argv[arg_target]);
-        if (ptr_channel)
-            is_channel = 1;
-    }
-    hashtable = irc_server_sendf (
+
+    list_messages = irc_server_sendf (
         ptr_server,
-        IRC_SERVER_SEND_OUTQ_PRIO_HIGH | IRC_SERVER_SEND_RETURN_HASHTABLE,
+        IRC_SERVER_SEND_OUTQ_PRIO_HIGH | IRC_SERVER_SEND_RETURN_LIST
+        | IRC_SERVER_SEND_MULTILINE,
         NULL,
         "NOTICE %s :%s",
         argv[arg_target], argv_eol[arg_text]);
-    if (hashtable)
+    if (list_messages)
     {
-        number = 1;
-        while (1)
+        /* display only if capability "echo-message" is NOT enabled */
+        if (!weechat_hashtable_has_key (ptr_server->cap_list, "echo-message"))
         {
-            snprintf (hash_key, sizeof (hash_key), "args%d", number);
-            str_args = weechat_hashtable_get (hashtable, hash_key);
-            if (!str_args)
-                break;
-            string = irc_color_decode (
-                str_args,
-                weechat_config_boolean (irc_config_network_colors_send));
-            weechat_printf_date_tags (
-                irc_msgbuffer_get_target_buffer (
-                    ptr_server, argv[arg_target], "notice", NULL,
-                    (ptr_channel) ? ptr_channel->buffer : NULL),
-                0,
-                "self_msg,notify_none,no_highlight",
-                "%s%s%s%s -> %s%s%s: %s",
-                weechat_prefix ("network"),
-                IRC_COLOR_NOTICE,
-                /* TRANSLATORS: "Notice" is command name in IRC protocol (translation is frequently the same word) */
-                _("Notice"),
-                IRC_COLOR_RESET,
-                (is_channel) ? IRC_COLOR_CHAT_CHANNEL : irc_nick_color_for_msg (ptr_server, 0, NULL, argv[arg_target]),
-                argv[arg_target],
-                IRC_COLOR_RESET,
-                (string) ? string : str_args);
-            if (string)
-                free (string);
-            number++;
+            list_size = weechat_arraylist_size (list_messages);
+            for (i = 0; i < list_size; i++)
+            {
+                ptr_message = (const char *)weechat_arraylist_get (list_messages, i);
+                irc_input_user_message_display (
+                    ptr_server,
+                    0,  /* date */
+                    0,  /* date_usec */
+                    NULL,  /* tags */
+                    argv[arg_target],
+                    NULL,  /* address */
+                    "notice",
+                    NULL,  /* ctcp_type */
+                    ptr_message,
+                    1);  /* decode_colors */
+            }
         }
-        weechat_hashtable_free (hashtable);
+        weechat_arraylist_free (list_messages);
     }
 
     return WEECHAT_RC_OK;
@@ -3965,7 +4208,7 @@ IRC_COMMAND_CALLBACK(notice)
 IRC_COMMAND_CALLBACK(notify)
 {
     struct t_irc_notify *ptr_notify;
-    int i, check_away;
+    int i, check_away, update;
 
     IRC_BUFFER_GET_SERVER(buffer);
 
@@ -3983,10 +4226,12 @@ IRC_COMMAND_CALLBACK(notify)
     }
 
     /* add notify */
-    if (weechat_strcasecmp (argv[1], "add") == 0)
+    if ((weechat_strcmp (argv[1], "add") == 0)
+        || (weechat_strcmp (argv[1], "addreplace") == 0))
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "add");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
 
+        update = 0;
         check_away = 0;
 
         if (argc > 3)
@@ -3998,7 +4243,7 @@ IRC_COMMAND_CALLBACK(notify)
                     NULL,
                     _("%s%s: server \"%s\" not found"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, argv[3]);
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
         }
 
@@ -4009,14 +4254,14 @@ IRC_COMMAND_CALLBACK(notify)
                 _("%s%s: server must be specified because you are not on an "
                   "irc server or channel"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME);
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         if (argc > 4)
         {
             for (i = 4; i < argc; i++)
             {
-                if (weechat_strcasecmp (argv[i], "-away") == 0)
+                if (weechat_strcmp (argv[i], "-away") == 0)
                     check_away = 1;
             }
         }
@@ -4024,11 +4269,20 @@ IRC_COMMAND_CALLBACK(notify)
         ptr_notify = irc_notify_search (ptr_server, argv[2]);
         if (ptr_notify)
         {
-            weechat_printf (
-                NULL,
-                _("%s%s: notify already exists"),
-                weechat_prefix ("error"), IRC_PLUGIN_NAME);
-            return WEECHAT_RC_OK;
+            if (weechat_strcmp (argv[1], "addreplace") == 0)
+            {
+                update = 1;
+                irc_notify_free (ptr_server, ptr_notify, 1);
+                irc_notify_set_server_option (ptr_server);
+            }
+            else
+            {
+                weechat_printf (
+                    NULL,
+                    _("%s%s: notify already exists"),
+                    weechat_prefix ("error"), IRC_PLUGIN_NAME);
+                return WEECHAT_RC_ERROR;
+            }
         }
 
         if ((ptr_server->monitor > 0)
@@ -4038,7 +4292,7 @@ IRC_COMMAND_CALLBACK(notify)
                 ptr_server->buffer,
                 _("%sMonitor list is full (%d)"),
                 weechat_prefix ("error"), ptr_server->monitor);
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         ptr_notify = irc_notify_new (ptr_server, argv[2], check_away);
@@ -4047,6 +4301,8 @@ IRC_COMMAND_CALLBACK(notify)
             irc_notify_set_server_option (ptr_server);
             weechat_printf (
                 ptr_server->buffer,
+                (update) ?
+                _("%s: notification updated for %s%s%s") :
                 _("%s: notification added for %s%s%s"),
                 IRC_PLUGIN_NAME,
                 irc_nick_color_for_msg (ptr_server, 1, NULL, ptr_notify->nick),
@@ -4060,15 +4316,16 @@ IRC_COMMAND_CALLBACK(notify)
                 NULL,
                 _("%s%s: error adding notification"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME);
+            return WEECHAT_RC_ERROR;
         }
 
         return WEECHAT_RC_OK;
     }
 
     /* delete notify */
-    if (weechat_strcasecmp (argv[1], "del") == 0)
+    if (weechat_strcmp (argv[1], "del") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "del");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
 
         if (argc > 3)
         {
@@ -4079,7 +4336,7 @@ IRC_COMMAND_CALLBACK(notify)
                     NULL,
                     _("%s%s: server \"%s\" not found"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, argv[3]);
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
         }
 
@@ -4090,10 +4347,10 @@ IRC_COMMAND_CALLBACK(notify)
                 _("%s%s: server must be specified because you are not on an "
                   "irc server or channel"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME);
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
-        if (weechat_strcasecmp (argv[2], "-all") == 0)
+        if (weechat_strcmp (argv[2], "-all") == 0)
         {
             if (ptr_server->notify_list)
             {
@@ -4134,7 +4391,7 @@ IRC_COMMAND_CALLBACK(notify)
                     NULL,
                     _("%s%s: notification not found"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
         }
 
@@ -4164,7 +4421,7 @@ IRC_COMMAND_CALLBACK(op)
             ptr_server->buffer,
             _("%s%s: \"%s\" command can only be executed in a channel buffer"),
             weechat_prefix ("error"), IRC_PLUGIN_NAME, "op");
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     if (argc < 2)
@@ -4232,12 +4489,11 @@ irc_command_part_channel (struct t_irc_server *server, const char *channel_name,
                           "PART %s", channel_name);
     }
 
-    if (msg)
-        free (msg);
+    free (msg);
 }
 
 /*
- * Callback for command "/part": leaves a channel or close a private window.
+ * Callback for command "/part": leaves a channel or close a private buffer.
  */
 
 IRC_COMMAND_CALLBACK(part)
@@ -4269,7 +4525,7 @@ IRC_COMMAND_CALLBACK(part)
                     _("%s%s: \"%s\" command can only be executed in a channel "
                       "or private buffer"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, "part");
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
             channel_name = ptr_channel->name;
             pos_args = argv_eol[1];
@@ -4284,7 +4540,7 @@ IRC_COMMAND_CALLBACK(part)
                 _("%s%s: \"%s\" command can only be executed in a channel or "
                   "private buffer"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "part");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
         channel_name = ptr_channel->name;
         pos_args = NULL;
@@ -4389,7 +4645,7 @@ IRC_COMMAND_CALLBACK(query)
 
     for (i = 1; i < argc; i++)
     {
-        if (weechat_strcasecmp (argv[i], "-server") == 0)
+        if (weechat_strcmp (argv[i], "-server") == 0)
         {
             if (argc <= i + 1)
                 WEECHAT_COMMAND_ERROR;
@@ -4400,7 +4656,7 @@ IRC_COMMAND_CALLBACK(query)
             arg_text = i + 3;
             i++;
         }
-        else if (weechat_strcasecmp (argv[i], "-noswitch") == 0)
+        else if (weechat_strcmp (argv[i], "-noswitch") == 0)
         {
             noswitch = 1;
             arg_nick = i + 1;
@@ -4434,14 +4690,14 @@ IRC_COMMAND_CALLBACK(query)
         {
             weechat_printf (
                     ptr_server->buffer,
-                    _("%s%s: \"%s\" command can not be executed with a "
+                    _("%s%s: \"%s\" command cannot be executed with a "
                       "channel name (\"%s\")"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, "query",
                     nicks[i]);
             continue;
         }
 
-        /* create private window if not already opened */
+        /* create private buffer if not already opened */
         ptr_channel = irc_channel_search (ptr_server, nicks[i]);
         if (!ptr_channel)
         {
@@ -4468,9 +4724,24 @@ IRC_COMMAND_CALLBACK(query)
             /* display text if given */
             if (argv_eol[arg_text])
             {
-                irc_input_user_message_display (ptr_channel->buffer, 0,
-                                                argv_eol[arg_text]);
-                irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH,
+                /* display only if capability "echo-message" is NOT enabled */
+                if (!weechat_hashtable_has_key (ptr_server->cap_list, "echo-message"))
+                {
+                    irc_input_user_message_display (
+                        ptr_server,
+                        0,  /* date */
+                        0,  /* date_usec */
+                        NULL,  /* tags */
+                        ptr_channel->name,
+                        NULL,  /* address */
+                        "privmsg",
+                        NULL,  /* ctcp_type */
+                        argv_eol[arg_text],
+                        1);  /* decode_colors */
+                }
+                irc_server_sendf (ptr_server,
+                                  IRC_SERVER_SEND_OUTQ_PRIO_HIGH
+                                  | IRC_SERVER_SEND_MULTILINE,
                                   NULL,
                                   "PRIVMSG %s :%s",
                                   nicks[i], argv_eol[arg_text]);
@@ -4525,7 +4796,7 @@ IRC_COMMAND_CALLBACK(quiet)
                     _("%s%s: \"%s\" command can only be executed in a channel "
                       "buffer"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, "quiet");
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
         }
 
@@ -4551,7 +4822,7 @@ IRC_COMMAND_CALLBACK(quiet)
                 _("%s%s: \"%s\" command can only be executed in a channel "
                   "buffer"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "quiet");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
         irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
                           "MODE %s +q", ptr_channel->name);
@@ -4574,19 +4845,25 @@ IRC_COMMAND_CALLBACK(quote)
 
     WEECHAT_COMMAND_MIN_ARGS(2, "");
 
-    if ((argc >= 4) && (weechat_strcasecmp (argv[1], "-server") == 0))
+    if ((argc >= 4) && (weechat_strcmp (argv[1], "-server") == 0))
     {
         ptr_server = irc_server_search (argv[2]);
         if (!ptr_server || (ptr_server->sock < 0))
             WEECHAT_COMMAND_ERROR;
-        irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
+        irc_server_sendf (ptr_server,
+                          IRC_SERVER_SEND_OUTQ_PRIO_HIGH
+                          | IRC_SERVER_SEND_MULTILINE,
+                          NULL,
                           "%s", argv_eol[3]);
     }
     else
     {
         if (!ptr_server || (ptr_server->sock < 0))
             WEECHAT_COMMAND_ERROR;
-        irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
+        irc_server_sendf (ptr_server,
+                          IRC_SERVER_SEND_OUTQ_PRIO_HIGH
+                          | IRC_SERVER_SEND_MULTILINE,
+                          NULL,
                           "%s", argv_eol[1]);
     }
 
@@ -4629,7 +4906,6 @@ irc_command_reconnect_one_server (struct t_irc_server *server,
     {
         server->reconnect_delay = 0;
         server->reconnect_start = 0;
-        server->reconnect_join = (server->channels) ? 1 : 0;
     }
 
     /* reconnect OK */
@@ -4658,11 +4934,11 @@ IRC_COMMAND_CALLBACK(reconnect)
     no_join = 0;
     for (i = 1; i < argc; i++)
     {
-        if (weechat_strcasecmp (argv[i], "-all") == 0)
+        if (weechat_strcmp (argv[i], "-all") == 0)
             all_servers = 1;
-        else if (weechat_strcasecmp (argv[i], "-switch") == 0)
+        else if (weechat_strcmp (argv[i], "-switch") == 0)
             switch_address = 1;
-        else if (weechat_strcasecmp (argv[i], "-nojoin") == 0)
+        else if (weechat_strcmp (argv[i], "-nojoin") == 0)
             no_join = 1;
     }
 
@@ -4787,7 +5063,7 @@ IRC_COMMAND_CALLBACK(remove)
             ptr_server->buffer,
             _("%s%s: \"%s\" command can only be executed in a channel buffer"),
             weechat_prefix ("error"), IRC_PLUGIN_NAME, "remove");
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     if (argc > index_nick + 1)
@@ -4800,8 +5076,7 @@ IRC_COMMAND_CALLBACK(remove)
                           ptr_channel_name,
                           argv[index_nick],
                           (msg_vars_replaced) ? msg_vars_replaced : argv_eol[index_nick + 1]);
-        if (msg_vars_replaced)
-            free (msg_vars_replaced);
+        free (msg_vars_replaced);
     }
     else
     {
@@ -4838,6 +5113,28 @@ IRC_COMMAND_CALLBACK(restart)
         irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
                           "RESTART");
     }
+
+    return WEECHAT_RC_OK;
+}
+
+/*
+ * Callback for command "/rules": requests the server rules
+ */
+
+IRC_COMMAND_CALLBACK(rules)
+{
+    IRC_BUFFER_GET_SERVER(buffer);
+    IRC_COMMAND_CHECK_SERVER("rules", 1, 1);
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) argc;
+    (void) argv;
+    (void) argv_eol;
+
+    irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
+                      "RULES");
 
     return WEECHAT_RC_OK;
 }
@@ -4889,7 +5186,7 @@ IRC_COMMAND_CALLBACK(samode)
                     _("%s%s: you must specify channel for \"%s\" command if "
                       "you're not in a channel"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME, "samode");
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
             irc_command_mode_server (ptr_server, "SAMODE", ptr_channel,
                                      argv_eol[1],
@@ -4916,7 +5213,7 @@ IRC_COMMAND_CALLBACK(samode)
                 _("%s%s: you must specify channel for \"%s\" command if "
                   "you're not in a channel"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "samode");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
     }
 
@@ -5040,73 +5337,71 @@ irc_command_display_server (struct t_irc_server *server, int with_detail)
                             weechat_config_string (server->options[IRC_SERVER_OPTION_PROXY]));
         /* ipv6 */
         if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_IPV6]))
-            weechat_printf (NULL, "  ipv6 . . . . . . . . :   (%s)",
-                            (IRC_SERVER_OPTION_BOOLEAN(server, IRC_SERVER_OPTION_IPV6)) ?
+            weechat_printf (NULL, "  ipv6 . . . . . . . . :   ('%s')",
+                            irc_server_ipv6_string[IRC_SERVER_OPTION_ENUM(server, IRC_SERVER_OPTION_IPV6)]);
+        else
+            weechat_printf (NULL, "  ipv6 . . . . . . . . : %s'%s'",
+                            IRC_COLOR_CHAT_VALUE,
+                            irc_server_ipv6_string[weechat_config_enum (server->options[IRC_SERVER_OPTION_IPV6])]);
+        /* tls */
+        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_TLS]))
+            weechat_printf (NULL, "  tls. . . . . . . . . :   (%s)",
+                            (IRC_SERVER_OPTION_BOOLEAN(server, IRC_SERVER_OPTION_TLS)) ?
                             _("on") : _("off"));
         else
-            weechat_printf (NULL, "  ipv6 . . . . . . . . : %s%s",
+            weechat_printf (NULL, "  tls. . . . . . . . . : %s%s",
                             IRC_COLOR_CHAT_VALUE,
-                            (weechat_config_boolean (server->options[IRC_SERVER_OPTION_IPV6])) ?
+                            (weechat_config_boolean (server->options[IRC_SERVER_OPTION_TLS])) ?
                             _("on") : _("off"));
-        /* ssl */
-        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_SSL]))
-            weechat_printf (NULL, "  ssl. . . . . . . . . :   (%s)",
-                            (IRC_SERVER_OPTION_BOOLEAN(server, IRC_SERVER_OPTION_SSL)) ?
-                            _("on") : _("off"));
+        /* tls_cert */
+        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_TLS_CERT]))
+            weechat_printf (NULL, "  tls_cert . . . . . . :   ('%s')",
+                            IRC_SERVER_OPTION_STRING(server, IRC_SERVER_OPTION_TLS_CERT));
         else
-            weechat_printf (NULL, "  ssl. . . . . . . . . : %s%s",
+            weechat_printf (NULL, "  tls_cert . . . . . . : %s'%s'",
                             IRC_COLOR_CHAT_VALUE,
-                            (weechat_config_boolean (server->options[IRC_SERVER_OPTION_SSL])) ?
-                            _("on") : _("off"));
-        /* ssl_cert */
-        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_SSL_CERT]))
-            weechat_printf (NULL, "  ssl_cert . . . . . . :   ('%s')",
-                            IRC_SERVER_OPTION_STRING(server, IRC_SERVER_OPTION_SSL_CERT));
-        else
-            weechat_printf (NULL, "  ssl_cert . . . . . . : %s'%s'",
-                            IRC_COLOR_CHAT_VALUE,
-                            weechat_config_string (server->options[IRC_SERVER_OPTION_SSL_CERT]));
-        /* ssl_password */
-        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_SSL_PASSWORD]))
-            weechat_printf (NULL, "  ssl_password . . . . :   %s",
+                            weechat_config_string (server->options[IRC_SERVER_OPTION_TLS_CERT]));
+        /* tls_password */
+        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_TLS_PASSWORD]))
+            weechat_printf (NULL, "  tls_password . . . . :   %s",
                             _("(hidden)"));
         else
-            weechat_printf (NULL, "  ssl_password . . . . : %s%s",
+            weechat_printf (NULL, "  tls_password . . . . : %s%s",
                             IRC_COLOR_CHAT_VALUE,
                             _("(hidden)"));
-        /* ssl_priorities */
-        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_SSL_PRIORITIES]))
-            weechat_printf (NULL, "  ssl_priorities . . . :   ('%s')",
-                            IRC_SERVER_OPTION_STRING(server, IRC_SERVER_OPTION_SSL_PRIORITIES));
+        /* tls_priorities */
+        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_TLS_PRIORITIES]))
+            weechat_printf (NULL, "  tls_priorities . . . :   ('%s')",
+                            IRC_SERVER_OPTION_STRING(server, IRC_SERVER_OPTION_TLS_PRIORITIES));
         else
-            weechat_printf (NULL, "  ssl_priorities . . . : %s'%s'",
+            weechat_printf (NULL, "  tls_priorities . . . : %s'%s'",
                             IRC_COLOR_CHAT_VALUE,
-                            weechat_config_string (server->options[IRC_SERVER_OPTION_SSL_PRIORITIES]));
-        /* ssl_dhkey_size */
-        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_SSL_DHKEY_SIZE]))
-            weechat_printf (NULL, "  ssl_dhkey_size . . . :   (%d)",
-                            IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_SSL_DHKEY_SIZE));
+                            weechat_config_string (server->options[IRC_SERVER_OPTION_TLS_PRIORITIES]));
+        /* tls_dhkey_size */
+        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_TLS_DHKEY_SIZE]))
+            weechat_printf (NULL, "  tls_dhkey_size . . . :   (%d)",
+                            IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_TLS_DHKEY_SIZE));
         else
-            weechat_printf (NULL, "  ssl_dhkey_size . . . : %s%d",
+            weechat_printf (NULL, "  tls_dhkey_size . . . : %s%d",
                             IRC_COLOR_CHAT_VALUE,
-                            weechat_config_integer (server->options[IRC_SERVER_OPTION_SSL_DHKEY_SIZE]));
-        /* ssl_fingerprint */
-        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_SSL_FINGERPRINT]))
-            weechat_printf (NULL, "  ssl_fingerprint. . . :   ('%s')",
-                            IRC_SERVER_OPTION_STRING(server, IRC_SERVER_OPTION_SSL_FINGERPRINT));
+                            weechat_config_integer (server->options[IRC_SERVER_OPTION_TLS_DHKEY_SIZE]));
+        /* tls_fingerprint */
+        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_TLS_FINGERPRINT]))
+            weechat_printf (NULL, "  tls_fingerprint. . . :   ('%s')",
+                            IRC_SERVER_OPTION_STRING(server, IRC_SERVER_OPTION_TLS_FINGERPRINT));
         else
-            weechat_printf (NULL, "  ssl_fingerprint. . . : %s'%s'",
+            weechat_printf (NULL, "  tls_fingerprint. . . : %s'%s'",
                             IRC_COLOR_CHAT_VALUE,
-                            weechat_config_string (server->options[IRC_SERVER_OPTION_SSL_FINGERPRINT]));
-        /* ssl_verify */
-        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_SSL_VERIFY]))
-            weechat_printf (NULL, "  ssl_verify . . . . . :   (%s)",
-                            (IRC_SERVER_OPTION_BOOLEAN(server, IRC_SERVER_OPTION_SSL_VERIFY)) ?
+                            weechat_config_string (server->options[IRC_SERVER_OPTION_TLS_FINGERPRINT]));
+        /* tls_verify */
+        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_TLS_VERIFY]))
+            weechat_printf (NULL, "  tls_verify . . . . . :   (%s)",
+                            (IRC_SERVER_OPTION_BOOLEAN(server, IRC_SERVER_OPTION_TLS_VERIFY)) ?
                             _("on") : _("off"));
         else
-            weechat_printf (NULL, "  ssl_verify . . . . . : %s%s",
+            weechat_printf (NULL, "  tls_verify . . . . . : %s%s",
                             IRC_COLOR_CHAT_VALUE,
-                            (weechat_config_boolean (server->options[IRC_SERVER_OPTION_SSL_VERIFY])) ?
+                            (weechat_config_boolean (server->options[IRC_SERVER_OPTION_TLS_VERIFY])) ?
                             _("on") : _("off"));
         /* password */
         if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_PASSWORD]))
@@ -5127,11 +5422,11 @@ irc_command_display_server (struct t_irc_server *server, int with_detail)
         /* sasl_mechanism */
         if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_SASL_MECHANISM]))
             weechat_printf (NULL, "  sasl_mechanism . . . :   ('%s')",
-                            irc_sasl_mechanism_string[IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_SASL_MECHANISM)]);
+                            irc_sasl_mechanism_string[IRC_SERVER_OPTION_ENUM(server, IRC_SERVER_OPTION_SASL_MECHANISM)]);
         else
             weechat_printf (NULL, "  sasl_mechanism . . . : %s'%s'",
                             IRC_COLOR_CHAT_VALUE,
-                            irc_sasl_mechanism_string[weechat_config_integer (server->options[IRC_SERVER_OPTION_SASL_MECHANISM])]);
+                            irc_sasl_mechanism_string[weechat_config_enum (server->options[IRC_SERVER_OPTION_SASL_MECHANISM])]);
         /* sasl_username */
         if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_SASL_USERNAME]))
             weechat_printf (NULL, "  sasl_username. . . . :   ('%s')",
@@ -5169,11 +5464,11 @@ irc_command_display_server (struct t_irc_server *server, int with_detail)
         /* sasl_fail */
         if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_SASL_FAIL]))
             weechat_printf (NULL, "  sasl_fail. . . . . . :   ('%s')",
-                            irc_server_sasl_fail_string[IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_SASL_FAIL)]);
+                            irc_server_sasl_fail_string[IRC_SERVER_OPTION_ENUM(server, IRC_SERVER_OPTION_SASL_FAIL)]);
         else
             weechat_printf (NULL, "  sasl_fail. . . . . . : %s'%s'",
                             IRC_COLOR_CHAT_VALUE,
-                            irc_server_sasl_fail_string[weechat_config_integer (server->options[IRC_SERVER_OPTION_SASL_FAIL])]);
+                            irc_server_sasl_fail_string[weechat_config_enum (server->options[IRC_SERVER_OPTION_SASL_FAIL])]);
         /* autoconnect */
         if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_AUTOCONNECT]))
             weechat_printf (NULL, "  autoconnect. . . . . :   (%s)",
@@ -5254,28 +5549,6 @@ irc_command_display_server (struct t_irc_server *server, int with_detail)
             weechat_printf (NULL, "  usermode . . . . . . : %s'%s'",
                             IRC_COLOR_CHAT_VALUE,
                             weechat_config_string (server->options[IRC_SERVER_OPTION_USERMODE]));
-        /* command */
-        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_COMMAND]))
-        {
-            cmd_pwd_hidden = weechat_hook_modifier_exec ("irc_command_auth",
-                                                         server->name,
-                                                         IRC_SERVER_OPTION_STRING(server, IRC_SERVER_OPTION_COMMAND));
-            weechat_printf (NULL, "  command. . . . . . . :   ('%s')",
-                            (cmd_pwd_hidden) ? cmd_pwd_hidden : IRC_SERVER_OPTION_STRING(server, IRC_SERVER_OPTION_COMMAND));
-            if (cmd_pwd_hidden)
-                free (cmd_pwd_hidden);
-        }
-        else
-        {
-            cmd_pwd_hidden = weechat_hook_modifier_exec ("irc_command_auth",
-                                                         server->name,
-                                                         weechat_config_string (server->options[IRC_SERVER_OPTION_COMMAND]));
-            weechat_printf (NULL, "  command. . . . . . . : %s'%s'",
-                            IRC_COLOR_CHAT_VALUE,
-                            (cmd_pwd_hidden) ? cmd_pwd_hidden : weechat_config_string (server->options[IRC_SERVER_OPTION_COMMAND]));
-            if (cmd_pwd_hidden)
-                free (cmd_pwd_hidden);
-        }
         /* command_delay */
         if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_COMMAND_DELAY]))
             weechat_printf (NULL, "  command_delay. . . . :   (%d %s)",
@@ -5286,6 +5559,36 @@ irc_command_display_server (struct t_irc_server *server, int with_detail)
                             IRC_COLOR_CHAT_VALUE,
                             weechat_config_integer (server->options[IRC_SERVER_OPTION_COMMAND_DELAY]),
                             NG_("second", "seconds", weechat_config_integer (server->options[IRC_SERVER_OPTION_COMMAND_DELAY])));
+        /* command */
+        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_COMMAND]))
+        {
+            cmd_pwd_hidden = weechat_hook_modifier_exec ("irc_command_auth",
+                                                         server->name,
+                                                         IRC_SERVER_OPTION_STRING(server, IRC_SERVER_OPTION_COMMAND));
+            weechat_printf (NULL, "  command. . . . . . . :   ('%s')",
+                            (cmd_pwd_hidden) ? cmd_pwd_hidden : IRC_SERVER_OPTION_STRING(server, IRC_SERVER_OPTION_COMMAND));
+            free (cmd_pwd_hidden);
+        }
+        else
+        {
+            cmd_pwd_hidden = weechat_hook_modifier_exec ("irc_command_auth",
+                                                         server->name,
+                                                         weechat_config_string (server->options[IRC_SERVER_OPTION_COMMAND]));
+            weechat_printf (NULL, "  command. . . . . . . : %s'%s'",
+                            IRC_COLOR_CHAT_VALUE,
+                            (cmd_pwd_hidden) ? cmd_pwd_hidden : weechat_config_string (server->options[IRC_SERVER_OPTION_COMMAND]));
+            free (cmd_pwd_hidden);
+        }
+        /* autojoin_delay */
+        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_AUTOJOIN_DELAY]))
+            weechat_printf (NULL, "  autojoin_delay . . . :   (%d %s)",
+                            IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_AUTOJOIN_DELAY),
+                            NG_("second", "seconds", IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_AUTOJOIN_DELAY)));
+        else
+            weechat_printf (NULL, "  autojoin_delay . . . : %s%d %s",
+                            IRC_COLOR_CHAT_VALUE,
+                            weechat_config_integer (server->options[IRC_SERVER_OPTION_AUTOJOIN_DELAY]),
+                            NG_("second", "seconds", weechat_config_integer (server->options[IRC_SERVER_OPTION_AUTOJOIN_DELAY])));
         /* autojoin */
         if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_AUTOJOIN]))
             weechat_printf (NULL, "  autojoin . . . . . . :   ('%s')",
@@ -5336,26 +5639,16 @@ irc_command_display_server (struct t_irc_server *server, int with_detail)
                             IRC_COLOR_CHAT_VALUE,
                             weechat_config_integer (server->options[IRC_SERVER_OPTION_CONNECTION_TIMEOUT]),
                             NG_("second", "seconds", weechat_config_integer (server->options[IRC_SERVER_OPTION_CONNECTION_TIMEOUT])));
-        /* anti_flood_prio_high */
-        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_ANTI_FLOOD_PRIO_HIGH]))
-            weechat_printf (NULL, "  anti_flood_prio_high :   (%d %s)",
-                            IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_ANTI_FLOOD_PRIO_HIGH),
-                            NG_("second", "seconds", IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_ANTI_FLOOD_PRIO_HIGH)));
+        /* anti_flood */
+        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_ANTI_FLOOD]))
+            weechat_printf (NULL, "  anti_flood . . . . . :   (%d %s)",
+                            IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_ANTI_FLOOD),
+                            NG_("second", "seconds", IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_ANTI_FLOOD)));
         else
-            weechat_printf (NULL, "  anti_flood_prio_high : %s%d %s",
+            weechat_printf (NULL, "  anti_flood . . . . . : %s%d %s",
                             IRC_COLOR_CHAT_VALUE,
-                            weechat_config_integer (server->options[IRC_SERVER_OPTION_ANTI_FLOOD_PRIO_HIGH]),
-                            NG_("second", "seconds", weechat_config_integer (server->options[IRC_SERVER_OPTION_ANTI_FLOOD_PRIO_HIGH])));
-        /* anti_flood_prio_low */
-        if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_ANTI_FLOOD_PRIO_LOW]))
-            weechat_printf (NULL, "  anti_flood_prio_low. :   (%d %s)",
-                            IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_ANTI_FLOOD_PRIO_LOW),
-                            NG_("second", "seconds", IRC_SERVER_OPTION_INTEGER(server, IRC_SERVER_OPTION_ANTI_FLOOD_PRIO_LOW)));
-        else
-            weechat_printf (NULL, "  anti_flood_prio_low. : %s%d %s",
-                            IRC_COLOR_CHAT_VALUE,
-                            weechat_config_integer (server->options[IRC_SERVER_OPTION_ANTI_FLOOD_PRIO_LOW]),
-                            NG_("second", "seconds", weechat_config_integer (server->options[IRC_SERVER_OPTION_ANTI_FLOOD_PRIO_LOW])));
+                            weechat_config_integer (server->options[IRC_SERVER_OPTION_ANTI_FLOOD]),
+                            NG_("second", "seconds", weechat_config_integer (server->options[IRC_SERVER_OPTION_ANTI_FLOOD])));
         /* away_check */
         if (weechat_config_option_is_null (server->options[IRC_SERVER_OPTION_AWAY_CHECK]))
             weechat_printf (NULL, "  away_check . . . . . :   (%d %s)",
@@ -5479,9 +5772,9 @@ irc_command_display_server (struct t_irc_server *server, int with_detail)
 
 IRC_COMMAND_CALLBACK(server)
 {
-    int i, detailed_list, one_server_found, length, count, refresh;
+    int i, detailed_list, one_server_found, length, count, refresh, update;
     struct t_irc_server *ptr_server2, *server_found, *new_server;
-    char *server_name, *msg_no_quotes, *message;
+    char *server_name, *msg_no_quotes, *message, *description;
 
     IRC_BUFFER_GET_SERVER_CHANNEL(buffer);
 
@@ -5491,17 +5784,17 @@ IRC_COMMAND_CALLBACK(server)
     (void) buffer;
 
     if ((argc == 1)
-        || (weechat_strcasecmp (argv[1], "list") == 0)
-        || (weechat_strcasecmp (argv[1], "listfull") == 0))
+        || (weechat_strcmp (argv[1], "list") == 0)
+        || (weechat_strcmp (argv[1], "listfull") == 0))
     {
         /* list servers */
         server_name = NULL;
         detailed_list = 0;
         for (i = 1; i < argc; i++)
         {
-            if (weechat_strcasecmp (argv[i], "list") == 0)
+            if (weechat_strcmp (argv[i], "list") == 0)
                 continue;
-            if (weechat_strcasecmp (argv[i], "listfull") == 0)
+            if (weechat_strcmp (argv[i], "listfull") == 0)
             {
                 detailed_list = 1;
                 continue;
@@ -5530,7 +5823,7 @@ IRC_COMMAND_CALLBACK(server)
             for (ptr_server2 = irc_servers; ptr_server2;
                  ptr_server2 = ptr_server2->next_server)
             {
-                if (weechat_strcasestr (ptr_server2->name, server_name))
+                if (strstr (ptr_server2->name, server_name))
                 {
                     if (!one_server_found)
                     {
@@ -5551,18 +5844,28 @@ IRC_COMMAND_CALLBACK(server)
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "add") == 0)
+    if ((weechat_strcmp (argv[1], "add") == 0)
+        || (weechat_strcmp (argv[1], "addreplace") == 0))
     {
-        WEECHAT_COMMAND_MIN_ARGS(4, "add");
+        WEECHAT_COMMAND_MIN_ARGS(4, argv[1]);
 
-        ptr_server2 = irc_server_casesearch (argv[2]);
+        update = 0;
+        ptr_server2 = irc_server_search (argv[2]);
         if (ptr_server2)
         {
-            weechat_printf (
-                NULL,
-                _("%s%s: server \"%s\" already exists, can't add it!"),
-                weechat_prefix ("error"), IRC_PLUGIN_NAME, ptr_server2->name);
-            return WEECHAT_RC_OK;
+            if (weechat_strcmp (argv[1], "addreplace") == 0)
+            {
+                update = 1;
+                irc_server_free (ptr_server2);
+            }
+            else
+            {
+                weechat_printf (
+                    NULL,
+                    _("%s%s: server \"%s\" already exists"),
+                    weechat_prefix ("error"), IRC_PLUGIN_NAME, ptr_server2->name);
+                return WEECHAT_RC_ERROR;
+            }
         }
 
         new_server = irc_server_alloc (argv[2]);
@@ -5572,24 +5875,27 @@ IRC_COMMAND_CALLBACK(server)
                 NULL,
                 _("%s%s: unable to add server"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME);
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         weechat_config_option_set (
             new_server->options[IRC_SERVER_OPTION_ADDRESSES], argv[3], 1);
         irc_server_apply_command_line_options (new_server, argc, argv);
 
+        description = irc_server_get_short_description (new_server);
+
         weechat_printf (
             NULL,
-            _("%s: server added: %s%s%s%s%s"),
+            (update) ?
+            _("%s: server updated: %s%s%s -> %s") :
+            _("%s: server added: %s%s%s -> %s"),
             IRC_PLUGIN_NAME,
             IRC_COLOR_CHAT_SERVER,
             new_server->name,
             IRC_COLOR_RESET,
-            /* TRANSLATORS: "temporary IRC server" */
-            (new_server->temp_server) ? _(" (temporary)") : "",
-            /* TRANSLATORS: "fake IRC server" */
-            (new_server->fake_server) ? _(" (fake)") : "");
+            description);
+
+        free (description);
 
         /* do not connect to server after adding it */
         /*
@@ -5600,9 +5906,9 @@ IRC_COMMAND_CALLBACK(server)
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "copy") == 0)
+    if (weechat_strcmp (argv[1], "copy") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(4, "copy");
+        WEECHAT_COMMAND_MIN_ARGS(4, argv[1]);
 
         /* look for server by name */
         server_found = irc_server_search (argv[2]);
@@ -5613,11 +5919,11 @@ IRC_COMMAND_CALLBACK(server)
                 _("%s%s: server \"%s\" not found for \"%s\" command"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME,
                 argv[2], "server copy");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         /* check if target name already exists */
-        ptr_server2 = irc_server_casesearch (argv[3]);
+        ptr_server2 = irc_server_search (argv[3]);
         if (ptr_server2)
         {
             weechat_printf (
@@ -5625,7 +5931,7 @@ IRC_COMMAND_CALLBACK(server)
                 _("%s%s: server \"%s\" already exists for \"%s\" command"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME,
                 ptr_server2->name, "server copy");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         /* copy server */
@@ -5648,9 +5954,9 @@ IRC_COMMAND_CALLBACK(server)
         WEECHAT_COMMAND_ERROR;
     }
 
-    if (weechat_strcasecmp (argv[1], "rename") == 0)
+    if (weechat_strcmp (argv[1], "rename") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(4, "rename");
+        WEECHAT_COMMAND_MIN_ARGS(4, argv[1]);
 
         /* look for server by name */
         server_found = irc_server_search (argv[2]);
@@ -5661,11 +5967,11 @@ IRC_COMMAND_CALLBACK(server)
                 _("%s%s: server \"%s\" not found for \"%s\" command"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME,
                 argv[2], "server rename");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         /* check if target name already exists */
-        ptr_server2 = irc_server_casesearch (argv[3]);
+        ptr_server2 = irc_server_search (argv[3]);
         if (ptr_server2)
         {
             weechat_printf (
@@ -5673,7 +5979,7 @@ IRC_COMMAND_CALLBACK(server)
                 _("%s%s: server \"%s\" already exists for \"%s\" command"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME,
                 ptr_server2->name, "server rename");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         /* rename server */
@@ -5695,9 +6001,9 @@ IRC_COMMAND_CALLBACK(server)
         WEECHAT_COMMAND_ERROR;
     }
 
-    if (weechat_strcasecmp (argv[1], "reorder") == 0)
+    if (weechat_strcmp (argv[1], "reorder") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "reorder");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
 
         count = irc_server_reorder (((const char **)argv) + 2, argc - 2);
         weechat_printf (NULL,
@@ -5707,11 +6013,11 @@ IRC_COMMAND_CALLBACK(server)
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "open") == 0)
+    if (weechat_strcmp (argv[1], "open") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "open");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
 
-        if (weechat_strcasecmp (argv[2], "-all") == 0)
+        if (weechat_strcmp (argv[2], "-all") == 0)
         {
             for (ptr_server2 = irc_servers; ptr_server2;
                  ptr_server2 = ptr_server2->next_server)
@@ -5749,6 +6055,7 @@ IRC_COMMAND_CALLBACK(server)
                         _("%s%s: server \"%s\" not found for \"%s\" command"),
                         weechat_prefix ("error"), IRC_PLUGIN_NAME,
                         argv[i], "server open");
+                    return WEECHAT_RC_ERROR;
                 }
             }
         }
@@ -5756,9 +6063,9 @@ IRC_COMMAND_CALLBACK(server)
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "keep") == 0)
+    if (weechat_strcmp (argv[1], "keep") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "keep");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
 
         /* look for server by name */
         server_found = irc_server_search (argv[2]);
@@ -5769,7 +6076,7 @@ IRC_COMMAND_CALLBACK(server)
                 _("%s%s: server \"%s\" not found for \"%s\" command"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME,
                 argv[2], "server keep");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         /* check that is it temporary server */
@@ -5780,7 +6087,7 @@ IRC_COMMAND_CALLBACK(server)
                 _("%s%s: server \"%s\" is not a temporary server"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME,
                 argv[2], "server keep");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         /* remove temporary flag on server */
@@ -5788,7 +6095,7 @@ IRC_COMMAND_CALLBACK(server)
 
         weechat_printf (
             NULL,
-            _("%s: server %s%s%s is not temporary any more"),
+            _("%s: server %s%s%s is not temporary anymore"),
             IRC_PLUGIN_NAME,
             IRC_COLOR_CHAT_SERVER,
             argv[2],
@@ -5797,9 +6104,9 @@ IRC_COMMAND_CALLBACK(server)
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "del") == 0)
+    if (weechat_strcmp (argv[1], "del") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "del");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
 
         /* look for server by name */
         server_found = irc_server_search (argv[2]);
@@ -5810,16 +6117,16 @@ IRC_COMMAND_CALLBACK(server)
                 _("%s%s: server \"%s\" not found for \"%s\" command"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME,
                 argv[2], "server del");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
         if (server_found->is_connected)
         {
             weechat_printf (
                 NULL,
-                _("%s%s: you can not delete server \"%s\" because you are "
+                _("%s%s: you cannot delete server \"%s\" because you are "
                   "connected to. Try \"/disconnect %s\" before."),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, argv[2], argv[2]);
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
 
         server_name = strdup (server_found->name);
@@ -5831,13 +6138,12 @@ IRC_COMMAND_CALLBACK(server)
             IRC_COLOR_CHAT_SERVER,
             (server_name) ? server_name : "???",
             IRC_COLOR_RESET);
-        if (server_name)
-            free (server_name);
+        free (server_name);
 
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "deloutq") == 0)
+    if (weechat_strcmp (argv[1], "deloutq") == 0)
     {
         for (ptr_server2 = irc_servers; ptr_server2;
              ptr_server2 = ptr_server2->next_server)
@@ -5855,7 +6161,7 @@ IRC_COMMAND_CALLBACK(server)
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "raw") == 0)
+    if (weechat_strcmp (argv[1], "raw") == 0)
     {
         refresh = irc_raw_buffer && (argc > 2);
         if (argc > 2)
@@ -5866,16 +6172,16 @@ IRC_COMMAND_CALLBACK(server)
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "jump") == 0)
+    if (weechat_strcmp (argv[1], "jump") == 0)
     {
         if (ptr_server && ptr_server->buffer)
             weechat_buffer_set (ptr_server->buffer, "display", "1");
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "fakerecv") == 0)
+    if (weechat_strcmp (argv[1], "fakerecv") == 0)
     {
-        WEECHAT_COMMAND_MIN_ARGS(3, "fakerecv");
+        WEECHAT_COMMAND_MIN_ARGS(3, argv[1]);
         IRC_COMMAND_CHECK_SERVER("server fakerecv", 0, 1);
         msg_no_quotes = weechat_string_remove_quotes (argv_eol[2], "\"");
         length = strlen (msg_no_quotes);
@@ -6015,7 +6321,8 @@ IRC_COMMAND_CALLBACK(squit)
 
     WEECHAT_COMMAND_MIN_ARGS(2, "");
 
-    irc_server_sendf (ptr_server, 0, NULL, "SQUIT %s", argv_eol[1]);
+    irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_IMMEDIATE, NULL,
+                      "SQUIT %s", argv_eol[1]);
 
     return WEECHAT_RC_OK;
 }
@@ -6143,13 +6450,13 @@ IRC_COMMAND_CALLBACK(topic)
                 _("%s%s: \"%s\" command can only be executed in a channel "
                   "buffer"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "topic");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
     }
 
     if (new_topic)
     {
-        if (weechat_strcasecmp (new_topic, "-delete") == 0)
+        if (weechat_strcmp (new_topic, "-delete") == 0)
         {
             irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
                               "TOPIC %s :", channel_name);
@@ -6163,8 +6470,7 @@ IRC_COMMAND_CALLBACK(topic)
                               "TOPIC %s :%s",
                               channel_name,
                               (new_topic_color) ? new_topic_color : new_topic);
-            if (new_topic_color)
-                free (new_topic_color);
+            free (new_topic_color);
         }
     }
     else
@@ -6210,7 +6516,7 @@ IRC_COMMAND_CALLBACK(trace)
 
 IRC_COMMAND_CALLBACK(unban)
 {
-    char *pos_channel;
+    char *pos_channel, **masks;
     int pos_args;
 
     IRC_BUFFER_GET_SERVER_CHANNEL(buffer);
@@ -6246,13 +6552,18 @@ IRC_COMMAND_CALLBACK(unban)
                 _("%s%s: \"%s\" command can only be executed in a channel "
                   "buffer"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "unban");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
     }
 
-    irc_command_mode_masks (ptr_server, pos_channel,
-                            "unban", "-", "b",
-                            argv, pos_args);
+    masks = irc_command_mode_masks_convert_ranges (argv, pos_args);
+    if (masks)
+    {
+        irc_command_mode_masks (ptr_server, pos_channel,
+                                "unban", "-", "b",
+                                masks, 0);
+        weechat_string_free_split (masks);
+    }
 
     return WEECHAT_RC_OK;
 }
@@ -6263,7 +6574,7 @@ IRC_COMMAND_CALLBACK(unban)
 
 IRC_COMMAND_CALLBACK(unquiet)
 {
-    char *pos_channel;
+    char *pos_channel, **masks;
     int pos_args;
 
     IRC_BUFFER_GET_SERVER_CHANNEL(buffer);
@@ -6299,15 +6610,20 @@ IRC_COMMAND_CALLBACK(unquiet)
                 _("%s%s: \"%s\" command can only be executed in a channel "
                   "buffer"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "unquiet");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
     }
 
     if (argv[pos_args])
     {
-        irc_command_mode_masks (ptr_server, pos_channel,
-                                "unquiet", "-", "q",
-                                argv, pos_args);
+        masks = irc_command_mode_masks_convert_ranges (argv, pos_args);
+        if (masks)
+        {
+            irc_command_mode_masks (ptr_server, pos_channel,
+                                    "unquiet", "-", "q",
+                                    masks, 0);
+            weechat_string_free_split (masks);
+        }
     }
     else
     {
@@ -6391,7 +6707,7 @@ IRC_COMMAND_CALLBACK(version)
             && irc_nick_search (ptr_server, ptr_channel, argv[1]))
         {
             irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
-                              "PRIVMSG %s :\01VERSION\01", argv[1]);
+                              "PRIVMSG %s :\001VERSION\001", argv[1]);
         }
         else
         {
@@ -6428,7 +6744,7 @@ IRC_COMMAND_CALLBACK(voice)
             ptr_server->buffer,
             _("%s%s: \"%s\" command can only be executed in a channel buffer"),
             weechat_prefix ("error"), IRC_PLUGIN_NAME, "voice");
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     if (argc < 2)
@@ -6490,7 +6806,7 @@ IRC_COMMAND_CALLBACK(wallchops)
                 _("%s%s: \"%s\" command can only be executed in a channel "
                   "buffer"),
                 weechat_prefix ("error"), IRC_PLUGIN_NAME, "wallchops");
-            return WEECHAT_RC_OK;
+            return WEECHAT_RC_ERROR;
         }
     }
 
@@ -6501,7 +6817,7 @@ IRC_COMMAND_CALLBACK(wallchops)
             ptr_server->buffer,
             _("%s%s: you are not on channel \"%s\""),
             weechat_prefix ("error"), IRC_PLUGIN_NAME, pos_channel);
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     weechat_printf (
@@ -6528,7 +6844,10 @@ IRC_COMMAND_CALLBACK(wallchops)
          * if WALLCHOPS is supported, or if STATUSMSG includes '@',
          * then send a notice to @#channel
          */
-        irc_server_sendf (ptr_server, IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
+        irc_server_sendf (ptr_server,
+                          IRC_SERVER_SEND_OUTQ_PRIO_HIGH
+                          | IRC_SERVER_SEND_MULTILINE,
+                          NULL,
                           "NOTICE @%s :%s",
                           ptr_channel->name, argv_eol[pos_args]);
     }
@@ -6541,13 +6860,15 @@ IRC_COMMAND_CALLBACK(wallchops)
         for (ptr_nick = ptr_channel->nicks; ptr_nick;
              ptr_nick = ptr_nick->next_nick)
         {
-            if (irc_nick_is_op (ptr_server, ptr_nick)
+            if (irc_nick_is_op_or_higher (ptr_server, ptr_nick)
                 && (irc_server_strcasecmp (ptr_server,
                                            ptr_nick->name,
                                            ptr_server->nick) != 0))
             {
                 irc_server_sendf (ptr_server,
-                                  IRC_SERVER_SEND_OUTQ_PRIO_HIGH, NULL,
+                                  IRC_SERVER_SEND_OUTQ_PRIO_HIGH
+                                  | IRC_SERVER_SEND_MULTILINE,
+                                  NULL,
                                   "NOTICE %s :%s",
                                   ptr_nick->name, argv_eol[pos_args]);
             }
@@ -6690,264 +7011,303 @@ void
 irc_command_init ()
 {
     weechat_hook_command (
+        "action",
+        N_("send a CTCP action to a nick or channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("[-server <server>] <target>[,<target>...] <text>"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("server: send to this server (internal name)"),
+            N_("target: nick or channel (may be mask, \"*\" = current channel)"),
+            N_("text: text to send")),
+        "-server %(irc_servers) %(nicks)|*"
+        " || %(nicks)|*",
+        &irc_command_action, NULL, NULL);
+    weechat_hook_command (
         "admin",
         N_("find information about the administrator of the server"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<target>]"),
-        N_("target: server name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: server name")),
         NULL, &irc_command_admin, NULL, NULL);
     weechat_hook_command (
         "allchan",
         N_("execute a command on all channels of all connected servers"),
-        N_("[-current] [-parted] [-exclude=<channel>[,<channel>...]] <command>"
-           " || [-current] [-parted] -include=<channel>[,<channel>...] <command>"),
-        N_(" -current: execute command for channels of current server only\n"
-           "  -parted: execute on parted channels only\n"
-           " -exclude: exclude some channels (wildcard \"*\" is allowed)\n"
-           " -include: include only some channels (wildcard \"*\" is allowed)\n"
-           "  command: command to execute (or text to send to buffer if "
-           "command does not start with '/')\n"
-           "\n"
-           "Command and arguments are evaluated (see /help eval), the following "
-           "variables are replaced:\n"
-           "  $server             server name\n"
-           "  $channel            channel name\n"
-           "  $nick               nick on server\n"
-           "  ${irc_server.xxx}   variable xxx in server\n"
-           "  ${irc_channel.xxx}  variable xxx in channel\n"
-           "\n"
-           "Examples:\n"
-           "  execute '/me is testing' on all channels:\n"
-           "    /allchan /me is testing\n"
-           "  say 'hello' everywhere but not on #weechat:\n"
-           "    /allchan -exclude=#weechat hello\n"
-           "  say 'hello' everywhere but not on #weechat and channels beginning "
-           "with #linux:\n"
-           "    /allchan -exclude=#weechat,#linux* hello\n"
-           "  say 'hello' on all channels beginning with #linux:\n"
-           "    /allchan -include=#linux* hello\n"
-           "  close all buffers with parted channels:\n"
-           "    /allchan -parted /close"),
-        "-current|-parted", &irc_command_allchan, NULL, NULL);
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("[-current] [-parted|-all] [-exclude=<channel>[,<channel>...]] <command>"
+           " || [-current] [-parted|-all] -include=<channel>[,<channel>...] <command>"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[-current]: execute command for channels of current server only"),
+            N_("raw[-parted]: execute command on parted channels "
+               "(by default: execute command on active channels only)"),
+            N_("raw[-all]: execute command on all channels (active and parted)"),
+            N_("raw[-exclude]: exclude some channels (wildcard \"*\" is allowed)"),
+            N_("raw[-include]: include only some channels (wildcard \"*\" is allowed)"),
+            N_("command: command to execute (or text to send to buffer if "
+               "command does not start with \"/\")"),
+            "",
+            N_("Command and arguments are evaluated (see /help eval), the following "
+               "variables are replaced:"),
+            N_("  $server: server name"),
+            N_("  $channel: channel name"),
+            N_("  $nick: nick on server"),
+            N_("  ${irc_server.xxx}: variable xxx in server"),
+            N_("  ${irc_channel.xxx}: variable xxx in channel"),
+            "",
+            N_("Examples:"),
+            N_("  execute \"/me is testing\" on all channels:"),
+            N_("    /allchan /me is testing"),
+            N_("  say \"hello\" everywhere but not on #weechat:"),
+            N_("    /allchan -exclude=#weechat hello"),
+            N_("  say \"hello\" everywhere but not on #weechat and channels "
+               "beginning with #linux:"),
+            N_("    /allchan -exclude=#weechat,#linux* hello"),
+            N_("  say \"hello\" on all channels beginning with #linux:"),
+            N_("    /allchan -include=#linux* hello"),
+            N_("  close all buffers with parted channels:"),
+            AI("    /allchan -parted /close")),
+        "-current|-parted|-all", &irc_command_allchan, NULL, NULL);
     weechat_hook_command (
         "allpv",
         N_("execute a command on all private buffers of all connected servers"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[-current] [-exclude=<nick>[,<nick>...]] <command>"
            " || [-current] -include=<nick>[,<nick>...] <command>"),
-        N_(" -current: execute command for private buffers of current server "
-           "only\n"
-           " -exclude: exclude some nicks (wildcard \"*\" is allowed)\n"
-           " -include: include only some nicks (wildcard \"*\" is allowed)\n"
-           "  command: command to execute (or text to send to buffer if "
-           "command does not start with '/')\n"
-           "\n"
-           "Command and arguments are evaluated (see /help eval), the following "
-           "variables are replaced:\n"
-           "  $server             server name\n"
-           "  $channel            channel name\n"
-           "  $nick               nick on server\n"
-           "  ${irc_server.xxx}   variable xxx in server\n"
-           "  ${irc_channel.xxx}  variable xxx in channel\n"
-           "\n"
-           "Examples:\n"
-           "  execute '/me is testing' on all private buffers:\n"
-           "    /allpv /me is testing\n"
-           "  say 'hello' everywhere but not for nick foo:\n"
-           "    /allpv -exclude=foo hello\n"
-           "  say 'hello' everywhere but not for nick foo and nicks beginning "
-           "with bar:\n"
-           "    /allpv -exclude=foo,bar* hello\n"
-           "  say 'hello' for all nicks beginning with bar:\n"
-           "    /allpv -include=bar* hello\n"
-           "  close all private buffers:\n"
-           "    /allpv /close"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[-current]: execute command for private buffers of current server "
+               "only"),
+            N_("raw[-exclude]: exclude some nicks (wildcard \"*\" is allowed)"),
+            N_("raw[-include]: include only some nicks (wildcard \"*\" is allowed)"),
+            N_("command: command to execute (or text to send to buffer if "
+               "command does not start with \"/\")"),
+            "",
+            N_("Command and arguments are evaluated (see /help eval), the following "
+               "variables are replaced:"),
+            N_("  $server: server name"),
+            N_("  $channel: channel name"),
+            N_("  $nick: nick on server"),
+            N_("  ${irc_server.xxx}: variable xxx in server"),
+            N_("  ${irc_channel.xxx}: variable xxx in channel"),
+            "",
+            N_("Examples:"),
+            N_("  execute \"/me is testing\" on all private buffers:"),
+            N_("    /allpv /me is testing"),
+            N_("  say \"hello\" everywhere but not for nick foo:"),
+            N_("    /allpv -exclude=foo hello"),
+            N_("  say \"hello\" everywhere but not for nick foo and nicks "
+               "beginning with bar:"),
+            N_("    /allpv -exclude=foo,bar* hello"),
+            N_("  say \"hello\" for all nicks beginning with bar:"),
+            N_("    /allpv -include=bar* hello"),
+            N_("  close all private buffers:"),
+            AI("    /allpv /close")),
         "-current", &irc_command_allpv, NULL, NULL);
     weechat_hook_command (
         "allserv",
         N_("execute a command on all connected servers"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[-exclude=<server>[,<server>...]] <command>"
            " || -include=<server>[,<server>...] "
            "<command>"),
-        N_(" -exclude: exclude some servers (wildcard \"*\" is allowed)\n"
-           " -include: include only some servers (wildcard \"*\" is allowed)\n"
-           "  command: command to execute (or text to send to buffer if "
-           "command does not start with '/')\n"
-           "\n"
-           "Command and arguments are evaluated (see /help eval), the following "
-           "variables are replaced:\n"
-           "  $server             server name\n"
-           "  $nick               nick on server\n"
-           "  ${irc_server.xxx}   variable xxx in server\n"
-           "\n"
-           "Examples:\n"
-           "  change nick on all servers:\n"
-           "    /allserv /nick newnick\n"
-           "  set away on all servers:\n"
-           "    /allserv /away I'm away\n"
-           "  do a whois on my nick on all servers:\n"
-           "    /allserv /whois $nick"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[-exclude]: exclude some servers (wildcard \"*\" is allowed)"),
+            N_("raw[-include]: include only some servers (wildcard \"*\" is allowed)"),
+            N_("command: command to execute (or text to send to buffer if "
+               "command does not start with \"/\")"),
+            "",
+            N_("Command and arguments are evaluated (see /help eval), the following "
+               "variables are replaced:"),
+            N_("  $server: server name"),
+            N_("  $nick: nick on server"),
+            N_("  ${irc_server.xxx}: variable xxx in server"),
+            "",
+            N_("Examples:"),
+            N_("  change nick on all servers:"),
+            AI("    /allserv /nick newnick"),
+            N_("  do a whois on my nick on all servers:"),
+            AI("    /allserv /whois $nick")),
         NULL, &irc_command_allserv, NULL, NULL);
     weechat_hook_command (
         "auth",
         N_("authenticate with SASL"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<username> <password>]"),
-        N_("username: SASL username (content is evaluated, see /help eval; "
-           "server options are evaluated with ${irc_server.xxx} and ${server} "
-           "is replaced by the server name)\n"
-           "password: SASL password or path to file with private key "
-           "(content is evaluated, see /help eval; server options are "
-           "evaluated with ${irc_server.xxx} and ${server} is replaced by the "
-           "server name)\n"
-           "\n"
-           "If username and password are not provided, the values from server "
-           "options \"sasl_username\" and \"sasl_password\" (or \"sasl_key\") "
-           "are used.\n"
-           "\n"
-           "Examples:\n"
-           "  authenticate with username/password defined in the server:\n"
-           "    /auth\n"
-           "  authenticate as a different user:\n"
-           "    /auth user2 password2\n"
-           "  authenticate as a different user with mechanism "
-           "ecdsa-nist256p-challenge:\n"
-           "    /auth user2 ${weechat_config_dir}/ecdsa2.pem"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("username: SASL username (content is evaluated, see /help eval; "
+               "server options are evaluated with ${irc_server.xxx} and ${server} "
+               "is replaced by the server name)"),
+            N_("password: SASL password or path to file with private key "
+               "(content is evaluated, see /help eval; server options are "
+               "evaluated with ${irc_server.xxx} and ${server} is replaced by the "
+               "server name)"),
+            "",
+            N_("If username and password are not provided, the values from server "
+               "options \"sasl_username\" and \"sasl_password\" (or \"sasl_key\") "
+               "are used."),
+            "",
+            N_("Examples:"),
+            N_("  authenticate with username/password defined in the server:"),
+            AI("    /auth"),
+            N_("  authenticate as a different user:"),
+            AI("    /auth user2 password2"),
+            N_("  authenticate as a different user with mechanism ecdsa-nist256p-challenge:"),
+            AI("    /auth user2 ${weechat_config_dir}/ecdsa2.pem")),
         NULL, &irc_command_auth, NULL, NULL);
     weechat_hook_command (
         "autojoin",
         N_("configure the \"autojoin\" server option"),
-        N_("add [<channel1> [<channel2>...]]"
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("add [<channel>...]"
            " || addraw <channel1>[,<channel2>...] [<key1>[,<key2>...]]"
-           " || del [<channel1> [<channel2>...]]"
+           " || del [<channel>...]"
            " || apply"
-           " || sort"),
-        N_("    add: add current channel or a list of channels (with optional "
-           "keys) to the autojoin option; if you are on the channel and the "
-           "key is not provided, the key is read in the channel\n"
-           " addraw: use the IRC raw format (same as /join command): all "
-           "channels separated by commas, optional keys separated by commas\n"
-           "    del: delete current channel or a list of channels from the "
-           "autojoin option\n"
-           "channel: channel name\n"
-           "    key: key for the channel\n"
-           "  apply: set currently joined channels in the autojoin option\n"
-           "   sort: sort alphabetically channels in the autojoin option\n"
-           "\n"
-           "Examples:\n"
-           "  /autojoin add\n"
-           "  /autojoin add #test\n"
-           "  /autojoin add #chan1 #chan2\n"
-           "  /allchan /autojoin add\n"
-           "  /autojoin addraw #chan1,#chan2,#chan3 key1,key2\n"
-           "  /autojoin del\n"
-           "  /autojoin del #chan1\n"
-           "  /autojoin apply\n"
-           "  /autojoin sort"),
+           " || join"
+           " || sort [buffer]"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[add]: add current channel or a list of channels (with optional "
+               "keys) to the autojoin option; if you are on the channel and the "
+               "key is not provided, the key is read in the channel"),
+            N_("raw[addraw]: use the IRC raw format (same as /join command): all "
+               "channels separated by commas, optional keys separated by commas"),
+            N_("raw[del]: delete current channel or a list of channels from the "
+               "autojoin option"),
+            N_("channel: channel name"),
+            N_("key: key for the channel"),
+            N_("raw[apply]: set currently joined channels in the autojoin option"),
+            N_("raw[join]: join the channels in the autojoin option"),
+            N_("raw[sort]: sort alphabetically channels in the autojoin option; "
+               "with \"buffer\": first sort by buffer number, then alphabetically"),
+            "",
+            N_("Examples:"),
+            AI("  /autojoin add"),
+            AI("  /autojoin add #test"),
+            AI("  /autojoin add #chan1 #chan2"),
+            AI("  /allchan /autojoin add"),
+            AI("  /autojoin addraw #chan1,#chan2,#chan3 key1,key2"),
+            AI("  /autojoin del"),
+            AI("  /autojoin del #chan1"),
+            AI("  /autojoin apply"),
+            AI("  /autojoin join"),
+            AI("  /autojoin sort"),
+            AI("  /autojoin sort buffer")),
         "add %(irc_channels)|%*"
         " || addraw %(irc_channels) %-"
         " || del %(irc_channels_autojoin)|%*"
         " || apply"
-        " || sort",
+        " || join"
+        " || sort buffer",
         &irc_command_autojoin, NULL, NULL);
     weechat_hook_command_run ("/away", &irc_command_run_away, NULL, NULL);
     weechat_hook_command (
         "ban",
         N_("ban nicks or hosts"),
-        N_("[<channel>] [<nick> [<nick>...]]"),
-        N_("channel: channel name\n"
-           "   nick: nick or host\n"
-           "\n"
-           "Without argument, this command displays the ban list for current "
-           "channel."),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("[<channel>] [<nick>...]"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("nick: nick or host"),
+            "",
+            N_("Without argument, this command displays the ban list for current "
+               "channel.")),
         "%(irc_channel_nicks_hosts)", &irc_command_ban, NULL, NULL);
     weechat_hook_command (
         "cap",
         N_("client capability negotiation"),
-        N_("ls || list || req|ack [<capability> [<capability>...]]"
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("ls"
+           " || list"
+           " || req|ack [<capability>...]"
            " || end"),
-        N_("   ls: list the capabilities supported by the server\n"
-           " list: list the capabilities currently enabled\n"
-           "  req: request a new capability or remove a capability "
-           "(if starting with \"-\", for example: \"-multi-prefix\")\n"
-           "  ack: acknowledge capabilities which require client-side "
-           "acknowledgement\n"
-           "  end: end the capability negotiation\n"
-           "\n"
-           "Without argument, \"ls\" and \"list\" are sent.\n"
-           "\n"
-           "Capabilities supported by WeeChat are: "
-           "account-notify, away-notify, cap-notify, chghost, extended-join, "
-           "invite-notify, message-tags, multi-prefix, server-time, setname, "
-           "userhost-in-names.\n"
-           "\n"
-           "The capabilities to automatically enable on servers can be set "
-           "in option irc.server_default.capabilities (or by server in "
-           "option irc.server.xxx.capabilities).\n"
-           "\n"
-           "Examples:\n"
-           "  display supported and enabled capabilities:\n"
-           "    /cap\n"
-           "  request capabilities multi-prefix and away-notify:\n"
-           "    /cap req multi-prefix away-notify\n"
-           "  request capability extended-join, remove capability multi-prefix:\n"
-           "    /cap req extended-join -multi-prefix\n"
-           "  remove capability away-notify:\n"
-           "    /cap req -away-notify"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[ls]: list the capabilities supported by the server"),
+            N_("raw[list]: list the capabilities currently enabled"),
+            N_("raw[req]: request a new capability or remove a capability "
+               "(if starting with \"-\", for example: \"-multi-prefix\")"),
+            N_("raw[ack]: acknowledge capabilities which require client-side "
+               "acknowledgement"),
+            N_("raw[end]: end the capability negotiation"),
+            "",
+            N_("Without argument, \"ls\" and \"list\" are sent."),
+            "",
+            N_("Capabilities supported by WeeChat are: "
+               "account-notify, account-tag, away-notify, batch, cap-notify, "
+               "chghost, draft/multiline, echo-message, extended-join, "
+               "invite-notify, message-tags, multi-prefix, server-time, setname, "
+               "userhost-in-names."),
+            "",
+            N_("The capabilities to automatically enable on servers can be set "
+               "in option irc.server_default.capabilities (or by server in "
+               "option irc.server.xxx.capabilities)."),
+            "",
+            N_("Examples:"),
+            N_("  display supported and enabled capabilities:"),
+            AI("    /cap"),
+            N_("  request capabilities multi-prefix and away-notify:"),
+            AI("    /cap req multi-prefix away-notify"),
+            N_("  request capability extended-join, remove capability multi-prefix:"),
+            AI("    /cap req extended-join -multi-prefix"),
+            N_("  remove capability away-notify:"),
+            AI("    /cap req -away-notify")),
         "ls"
         " || list"
-        " || req " IRC_COMMAND_CAP_SUPPORTED_COMPLETION "|%*"
-        " || ack " IRC_COMMAND_CAP_SUPPORTED_COMPLETION "|%*"
+        " || req " IRC_COMMAND_CAP_SUPPORTED "|%*"
+        " || ack " IRC_COMMAND_CAP_SUPPORTED "|%*"
         " || end",
         &irc_command_cap, NULL, NULL);
     weechat_hook_command (
         "connect",
         N_("connect to IRC server(s)"),
-        N_("[<server> [<server>...]] [-<option>[=<value>]] [-no<option>] "
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("[<server>...] [-<option>[=<value>]] [-no<option>] "
            "[-nojoin] [-switch]"
            " || -all|-auto|-open [-nojoin] [-switch]"),
-        N_("    server: server name, which can be:\n"
-           "            - internal server name (added by /server add, "
-           "recommended usage)\n"
-           "            - hostname/port or IP/port, port is 6667 by default\n"
-           "            - URL with format: irc[6][s]://[nickname[:password]@]"
-           "irc.example.org[:port][/#channel1][,#channel2[...]]\n"
-           "            Note: for an address/IP/URL, a temporary server is "
-           "added (NOT SAVED), see /help irc.look.temporary_servers\n"
-           "    option: set option for server (for boolean option, value can be "
-           "omitted)\n"
-           "  nooption: set boolean option to 'off' (for example: -nossl)\n"
-           "      -all: connect to all servers defined in configuration\n"
-           "     -auto: connect to servers with autoconnect enabled\n"
-           "     -open: connect to all opened servers that are not currently "
-           "connected\n"
-           "   -nojoin: do not join any channel (even if autojoin is enabled on "
-           "server)\n"
-           "   -switch: switch to next server address\n"
-           "\n"
-           "To disconnect from a server or stop any connection attempt, use "
-           "command /disconnect.\n"
-           "\n"
-           "Examples:\n"
-           "  /connect libera\n"
-           "  /connect irc.oftc.net/6667\n"
-           "  /connect irc6.oftc.net/6667 -ipv6\n"
-           "  /connect irc6.oftc.net/6697 -ipv6 -ssl\n"
-           "  /connect my.server.org/6697 -ssl -password=test\n"
-           "  /connect irc://nick@irc.oftc.net/#channel\n"
-           "  /connect -switch"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("server: server name, which can be:"),
+            N_("> - internal server name (added by /server add, "
+               "recommended usage)"),
+            N_("> - hostname/port or IP/port, port is 6697 by default "
+               "for TLS, 6667 otherwise"),
+            N_("> - URL with format: irc[6][s]://[nickname[:password]@]"
+               "irc.example.org[:port][/#channel1][,#channel2[...]]"),
+            N_("> Note: for an address/IP/URL, a temporary server is "
+               "added (NOT SAVED), see /help irc.look.temporary_servers"),
+            N_("option: set option for server (for boolean option, value can be "
+               "omitted)"),
+            N_("raw[nooption]: set boolean option to \"off\" (for example: -notls)"),
+            N_("raw[-all]: connect to all servers defined in configuration"),
+            N_("raw[-auto]: connect to servers with autoconnect enabled"),
+            N_("raw[-open]: connect to all opened servers that are not currently connected"),
+            N_("raw[-nojoin]: do not join any channel (even if autojoin is enabled on server)"),
+            N_("raw[-switch]: switch to next server address"),
+            "",
+            N_("To disconnect from a server or stop any connection attempt, use "
+               "command /disconnect."),
+            "",
+            N_("Examples:"),
+            AI("  /connect libera"),
+            AI("  /connect irc.oftc.net"),
+            AI("  /connect irc.oftc.net/6667 -notls"),
+            AI("  /connect irc6.oftc.net/9999 -ipv6=force"),
+            AI("  /connect my.server.org -password=test"),
+            AI("  /connect irc://nick@irc.oftc.net/#channel"),
+            AI("  /connect -switch")),
         "%(irc_servers)|-all|-auto|-open|-nojoin|-switch|%*",
         &irc_command_connect, NULL, NULL);
     weechat_hook_command (
         "ctcp",
         N_("send a CTCP message (Client-To-Client Protocol)"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[-server <server>] <target>[,<target>...] <type> [<arguments>]"),
-        N_("   server: send to this server (internal name)\n"
-           "   target: nick or channel ('*' = current channel)\n"
-           "     type: CTCP type (examples: \"version\", \"ping\", etc.)\n"
-           "arguments: arguments for CTCP\n"
-           "\n"
-           "Examples:\n"
-           "  /ctcp toto time\n"
-           "  /ctcp toto version\n"
-           "  /ctcp * version"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("server: send to this server (internal name)"),
+            N_("target: nick or channel (\"*\" = current channel)"),
+            N_("type: CTCP type (examples: \"version\", \"ping\", etc.)"),
+            N_("arguments: arguments for CTCP"),
+            "",
+            N_("Examples:"),
+            AI("  /ctcp toto time"),
+            AI("  /ctcp toto version"),
+            AI("  /ctcp * version")),
         "-server %(irc_servers) %(irc_channel)|%(nicks)|* "
         IRC_COMMAND_CTCP_SUPPORTED_COMPLETION
         " || %(irc_channel)|%(nicks)|* "
@@ -6956,22 +7316,24 @@ irc_command_init ()
     weechat_hook_command (
         "cycle",
         N_("leave and rejoin a channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<channel>[,<channel>...]] [<message>]"),
-        N_("channel: channel name\n"
-           "message: part message (displayed to other users)"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("message: part message (displayed to other users)")),
         "%(irc_msg_part)", &irc_command_cycle, NULL, NULL);
     weechat_hook_command (
         "dcc",
-        N_("start a DCC (file transfer or direct chat)"),
+        N_("start a DCC (passive file transfer or direct chat)"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("chat <nick> || send <nick> <file>"),
-        N_("nick: nick\n"
-           "file: filename (on local host)\n"
-           "\n"
-           "Examples:\n"
-           "  chat with nick \"toto\":\n"
-           "    /dcc chat toto\n"
-           "  send file \"/home/foo/bar.txt\" to nick \"toto\":\n"
-           "    /dcc send toto /home/foo/bar.txt"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick"),
+            N_("file: filename (on local host)"),
+            "",
+            N_("Examples:"),
+            AI("  /dcc chat toto"),
+            AI("  /dcc send toto /home/foo/bar.txt")),
         "chat %(nicks)"
         " || send %(nicks) "
         "%(filename:${modifier:eval_path_home,directory=data,"
@@ -6980,190 +7342,276 @@ irc_command_init ()
     weechat_hook_command (
         "dehalfop",
         N_("remove channel half-operator status from nick(s)"),
-        N_("<nick> [<nick>...] || * -yes"),
-        N_("nick: nick or mask (wildcard \"*\" is allowed)\n"
-           "   *: remove channel half-operator status from everybody on channel "
-           "except yourself"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<nick>... || * -yes"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick or mask (wildcard \"*\" is allowed)"),
+            N_("*: remove channel half-operator status from everybody on channel "
+               "except yourself")),
         "%(nicks)|%*", &irc_command_dehalfop, NULL, NULL);
     weechat_hook_command (
         "deop",
         N_("remove channel operator status from nick(s)"),
-        N_("<nick> [<nick>...] || * -yes"),
-        N_("nick: nick or mask (wildcard \"*\" is allowed)\n"
-           "   *: remove channel operator status from everybody on channel "
-           "except yourself"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<nick>... || * -yes"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick or mask (wildcard \"*\" is allowed)"),
+            N_("*: remove channel operator status from everybody on channel except yourself")),
         "%(nicks)|%*", &irc_command_deop, NULL, NULL);
     weechat_hook_command (
         "devoice",
         N_("remove voice from nick(s)"),
-        N_("<nick> [<nick>...] || * -yes"),
-        N_("nick: nick or mask (wildcard \"*\" is allowed)\n"
-           "   *: remove voice from everybody on channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<nick>... || * -yes"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick or mask (wildcard \"*\" is allowed)"),
+            N_("*: remove voice from everybody on channel")),
         "%(nicks)|%*", &irc_command_devoice, NULL, NULL);
     weechat_hook_command (
         "die",
         N_("shutdown the server"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<target>]"),
-        N_("target: server name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: server name")),
         NULL, &irc_command_die, NULL, NULL);
     weechat_hook_command (
         "disconnect",
         N_("disconnect from one or all IRC servers"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<server>|-all|-pending [<reason>]]"),
-        N_("  server: internal server name\n"
-           "    -all: disconnect from all servers\n"
-           "-pending: cancel auto-reconnection on servers currently "
-           "reconnecting\n"
-           "  reason: reason for the \"quit\""),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("server: internal server name"),
+            N_("raw[-all]: disconnect from all servers"),
+            N_("raw[-pending]: cancel auto-reconnection on servers currently reconnecting"),
+            N_("reason: reason for the \"quit\"")),
         "%(irc_servers)|-all|-pending",
         &irc_command_disconnect, NULL, NULL);
     weechat_hook_command (
         "halfop",
         N_("give channel half-operator status to nick(s)"),
-        N_("<nick> [<nick>...] || * -yes"),
-        N_("nick: nick or mask (wildcard \"*\" is allowed)\n"
-           "   *: give channel half-operator status to everybody on channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<nick>... || * -yes"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick or mask (wildcard \"*\" is allowed)"),
+            N_("*: give channel half-operator status to everybody on channel")),
         "%(nicks)|%*", &irc_command_halfop, NULL, NULL);
     weechat_hook_command (
         "ignore",
         N_("ignore nicks/hosts from servers or channels"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("list"
-           " || add [re:]<nick> [<server> [<channel>]]"
+           " || add|addreplace [re:]<nick> [<server> [<channel>]]"
            " || del <number>|-all"),
-        N_("     list: list all ignores\n"
-           "      add: add an ignore\n"
-           "     nick: nick or hostname (can be a POSIX extended regular "
-           "expression if \"re:\" is given or a mask using \"*\" to replace "
-           "zero or more chars)\n"
-           "      del: delete an ignore\n"
-           "   number: number of ignore to delete (look at list to find it)\n"
-           "     -all: delete all ignores\n"
-           "   server: internal server name where ignore is working\n"
-           "  channel: channel name where ignore is working\n"
-           "\n"
-           "Note: the regular expression can start with \"(?-i)\" to become "
-            "case sensitive.\n"
-           "\n"
-           "Examples:\n"
-           "  ignore nick \"toto\" everywhere:\n"
-           "    /ignore add toto\n"
-           "  ignore host \"toto@domain.com\" on libera server:\n"
-           "    /ignore add toto@domain.com libera\n"
-           "  ignore host \"toto*@*.domain.com\" on libera/#weechat:\n"
-           "    /ignore add toto*@*.domain.com libera #weechat"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[list]: list all ignores"),
+            N_("raw[add]: add an ignore"),
+            N_("raw[addreplace]: add or replace an existing ignore"),
+            N_("nick: nick or hostname; can be a POSIX extended regular expression "
+               "if \"re:\" is given or a mask using \"*\" to replace zero or more "
+               "chars (the regular expression can start with \"(?-i)\" to become "
+               "case-sensitive)"),
+            N_("raw[del]: delete an ignore"),
+            N_("number: number of ignore to delete (look at list to find it)"),
+            N_("raw[-all]: delete all ignores"),
+            N_("server: internal server name where ignore is working"),
+            N_("channel: channel name where ignore is working"),
+            "",
+            N_("Note: if option irc.look.ignore_tag_messages is enabled, the "
+               "ignored messages are just tagged with \"irc_ignored\" instead "
+               "of being completely removed."),
+            "",
+            N_("Examples:"),
+            AI("  /ignore add toto"),
+            AI("  /ignore add toto@domain.com libera"),
+            AI("  /ignore add toto*@*.domain.com libera #weechat")),
         "list"
-        " || add %(irc_channel_nicks_hosts) %(irc_servers) %(irc_channels) %-"
-        " || del -all|%(irc_ignores_numbers) %-",
+        " || add|addreplace %(irc_channel_nicks_hosts) %(irc_servers) "
+        "%(irc_channels) %-"
+        " || del %(irc_ignores_numbers)|-all %-",
         &irc_command_ignore, NULL, NULL);
     weechat_hook_command (
         "info",
         N_("get information describing the server"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<target>]"),
-        N_("target: server name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: server name")),
         NULL, &irc_command_info, NULL, NULL);
     weechat_hook_command (
         "invite",
         N_("invite a nick on a channel"),
-        N_("<nick> [<nick>...] [<channel>]"),
-        N_("   nick: nick\n"
-           "channel: channel name"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<nick>... [<channel>]"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick"),
+            N_("channel: channel name")),
         "%(nicks) %(irc_server_channels)", &irc_command_invite, NULL, NULL);
     weechat_hook_command (
         "ison",
         N_("check if a nick is currently on IRC"),
-        N_("<nick> [<nick>...]"),
-        N_("nick: nick"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<nick>..."),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick")),
         "%(nicks)|%*", &irc_command_ison, NULL, NULL);
     weechat_hook_command (
         "join",
         N_("join a channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[-noswitch] [-server <server>] "
            "[<channel1>[,<channel2>...]] [<key1>[,<key2>...]]"),
-        N_("-noswitch: do not switch to new buffer\n"
-           "   server: send to this server (internal name)\n"
-           "  channel: channel name to join\n"
-           "      key: key to join the channel (channels with a key must be the "
-           "first in list)\n"
-           "\n"
-           "Examples:\n"
-           "  /join #weechat\n"
-           "  /join #protectedchan,#weechat key\n"
-           "  /join -server libera #weechat\n"
-           "  /join -noswitch #weechat"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[-noswitch]: do not switch to new buffer"),
+            N_("server: send to this server (internal name)"),
+            N_("channel: channel name"),
+            N_("key: key to join the channel (channels with a key must be the "
+               "first in list)"),
+            "",
+            N_("Examples:"),
+            AI("  /join #weechat"),
+            AI("  /join #protectedchan,#weechat key"),
+            AI("  /join -server libera #weechat"),
+            AI("  /join -noswitch #weechat")),
         "%(irc_channels)|-noswitch|-server|%(irc_servers)|%*",
         &irc_command_join, NULL, NULL);
     weechat_hook_command (
         "kick",
         N_("kick a user out of a channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<channel>] <nick> [<reason>]"),
-        N_("channel: channel name\n"
-           "   nick: nick\n"
-           " reason: reason (evaluated, see /help eval; special variables "
-           "${nick} (self nick), ${target} (target nick), ${channel} and "
-           "${server} are replaced by their values)"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("nick: nick"),
+            N_("reason: reason (evaluated, see /help eval; special variables "
+               "${nick} (self nick), ${target} (target nick), ${channel} and "
+               "${server} are replaced by their values)")),
         "%(nicks) %(irc_msg_kick) %-", &irc_command_kick, NULL, NULL);
     weechat_hook_command (
         "kickban",
         N_("kick a user out of a channel and ban the host"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<channel>] <nick> [<reason>]"),
-        N_("channel: channel name\n"
-           "   nick: nick\n"
-           " reason: reason (evaluated, see /help eval; special variables "
-           "${nick} (self nick), ${target} (target nick), ${channel} and "
-           "${server} are replaced by their values)\n"
-           "\n"
-           "It is possible to kick/ban with a mask, nick will be extracted from "
-           "mask and replaced by \"*\".\n"
-           "\n"
-           "Example:\n"
-           "  ban \"*!*@host.com\" and then kick \"toto\":\n"
-           "    /kickban toto!*@host.com"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("nick: nick"),
+            N_("reason: reason (evaluated, see /help eval; special variables "
+               "${nick} (self nick), ${target} (target nick), ${channel} and "
+               "${server} are replaced by their values)"),
+            "",
+            N_("It is possible to kick/ban with a mask, nick will be extracted from "
+               "mask and replaced by \"*\"."),
+            "",
+            N_("Example:"),
+            AI("  /kickban toto!*@host.com")),
         "%(irc_channel_nicks_hosts) %(irc_msg_kick) %-",
         &irc_command_kickban, NULL, NULL);
     weechat_hook_command (
         "kill",
         N_("close client-server connection"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<nick> [<reason>]"),
-        N_("  nick: nick\n"
-           "reason: reason"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick"),
+            N_("reason: reason")),
         "%(nicks) %-", &irc_command_kill, NULL, NULL);
+    weechat_hook_command (
+        "knock",
+        N_("send a notice to an invitation-only channel, requesting an invite"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<channel> [<message>]"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("message: message to send")),
+        "%(irc_channels)",
+        &irc_command_knock, NULL, NULL);
     weechat_hook_command (
         "links",
         N_("list all server names which are known by the server answering the "
            "query"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[[<target>] <server_mask>]"),
-        N_("     target: this remote server should answer the query\n"
-           "server_mask: list of servers must match this mask"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: this remote server should answer the query"),
+            N_("server_mask: list of servers must match this mask")),
         NULL, &irc_command_links, NULL, NULL);
     weechat_hook_command (
         "list",
         N_("list channels and their topics"),
-        N_("[-server <server>] [-re <regex>] [<channel>[,<channel>...]] "
-           "[<target>]"),
-        N_(" server: send to this server (internal name)\n"
-           "  regex: POSIX extended regular expression used to filter results "
-           "(case insensitive, can start by \"(?-i)\" to become case "
-           "sensitive)\n"
-           "channel: channel to list\n"
-           " target: server name\n"
-           "\n"
-           "Examples:\n"
-           "  list all channels on server (can be very slow on large networks):\n"
-           "    /list\n"
-           "  list channel #weechat:\n"
-           "    /list #weechat\n"
-           "  list all channels beginning with \"#weechat\" (can be very slow "
-           "on large networks):\n"
-           "    /list -re #weechat.*"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("[-server <server>] [<channel>[,<channel>...]] [<target>]"
+           " || [-server <server>] [-raw *|<regex>]"
+           " || -up|-down [<number>]"
+           " || -left|-right [<percent>]"
+           " || -go <line>|end"
+           " || -join "
+           " || -export <filename>"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("server: send to this server (internal name)"),
+            N_("channel: channel name"),
+            N_("target: server name"),
+            N_("raw[-raw]: display result on server buffer instead of a "
+               "dedicated buffer"),
+            N_("regex: POSIX extended regular expression used to filter results "
+               "(case-insensitive, can start by \"(?-i)\" to become "
+               "case-sensitive); the special value \"*\" doesn't filter results"),
+            N_("raw[-up]: move the selected line up by \"number\" lines"),
+            N_("raw[-down]: move the selected line down by \"number\" lines"),
+            N_("raw[-left]: scroll the buffer by \"percent\" of width on the left"),
+            N_("raw[-right]: scroll the buffer by \"percent\" of width on the right"),
+            N_("raw[-go]: select a line by number, first line number is 0 "
+               "(\"end\" to select the last line)"),
+            N_("raw[-join]: join the channel on the selected line"),
+            N_("raw[-export]: export list of channels to a file"),
+            "",
+            N_("For keys, input and mouse actions on the buffer, "
+               "see key bindings in User's guide."),
+            "",
+            N_("Sort keys on /list buffer:"),
+            N_("  raw[name]: channel name (eg: \"##test\")"),
+            N_("  raw[name2]: channel name without prefix (eg: \"test\")"),
+            N_("  raw[users]: number of users on channel"),
+            N_("  raw[topic]: channel topic"),
+            "",
+            N_("Examples:"),
+            N_("  list all channels on server buffer "
+               "(no dedicated buffer and can be slow on large networks):"),
+            AI("    /list -raw *"),
+            N_("  list all channels beginning with \"#weechat\" on server buffer "
+               "(no dedicated buffer and can be slow on large networks):"),
+            AI("    /list -raw #weechat.*"),
+            N_("  list all channels on a dedicated buffer "
+               "(can be slow on large networks):"),
+            AI("    /list"),
+            N_("  list channel #weechat on a dedicated buffer:"),
+            AI("    /list #weechat"),
+            N_("  on /list buffer:"),
+            N_("    channels with \"weechat\" in name:"),
+            AI("      n:weechat"),
+            N_("    channels with at least 100 users:"),
+            AI("      u:100"),
+            N_("    channels with \"freebsd\" (case-insensitive) in topic and more than 10 users:"),
+            AI("      c:${topic} =- freebsd && ${users} > 10"),
+            N_("    sort channels by users (big channels first), then name2 (name without prefix):"),
+            AI("      s:-users,name2")),
         "-server %(irc_servers)"
-        " || -re",
+        " || -raw *|.*"
+        " || -up 1|2|3|4|5"
+        " || -down 1|2|3|4|5"
+        " || -left 10|20|30|40|50|60|70|80|90|100"
+        " || -right 10|20|30|40|50|60|70|80|90|100"
+        " || -go 0|end"
+        " || -join"
+        " || -export %(filename)",
         &irc_command_list, NULL, NULL);
     weechat_hook_command (
         "lusers",
         N_("get statistics about the size of the IRC network"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<mask> [<target>]]"),
-        N_("  mask: servers matching the mask only\n"
-           "target: server for forwarding request"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("mask: servers matching the mask only"),
+            N_("target: server for forwarding request")),
         NULL, &irc_command_lusers, NULL, NULL);
     weechat_hook_command (
         "map",
@@ -7174,317 +7622,379 @@ irc_command_init ()
     weechat_hook_command (
         "me",
         N_("send a CTCP action to the current channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<message>"),
-        N_("message: message to send"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("message: message to send")),
         NULL, &irc_command_me, NULL, NULL);
     weechat_hook_command (
         "mode",
         N_("change channel or user mode"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<channel>] [+|-]o|p|s|i|t|n|m|l|b|e|v|k [<arguments>]"
            " || <nick> [+|-]i|s|w|o"),
-        N_("channel modes:\n"
-           "  channel: channel name to modify (default is current one)\n"
-           "  o: give/take channel operator privileges\n"
-           "  p: private channel flag\n"
-           "  s: secret channel flag\n"
-           "  i: invite-only channel flag\n"
-           "  t: topic settable by channel operator only flag\n"
-           "  n: no messages to channel from clients on the outside\n"
-           "  m: moderated channel\n"
-           "  l: set the user limit to channel\n"
-           "  b: set a ban mask to keep users out\n"
-           "  e: set exception mask\n"
-           "  v: give/take the ability to speak on a moderated channel\n"
-           "  k: set a channel key (password)\n"
-           "user modes:\n"
-           "  nick: nick to modify\n"
-           "  i: mark a user as invisible\n"
-           "  s: mark a user for receive server notices\n"
-           "  w: user receives wallops\n"
-           "  o: operator flag\n"
-           "\n"
-           "List of modes is not comprehensive, you should read documentation "
-           "about your server to see all possible modes.\n"
-           "\n"
-           "Examples:\n"
-           "  protect topic on channel #weechat:\n"
-           "    /mode #weechat +t\n"
-           "  become invisible on server:\n"
-           "    /mode nick +i"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name to modify (default is current one)"),
+            "",
+            N_("Channel modes:"),
+            N_("  o: give/take channel operator privileges"),
+            N_("  p: private channel"),
+            N_("  s: secret channel"),
+            N_("  i: invite-only channel"),
+            N_("  t: topic settable by channel operator only"),
+            N_("  n: no messages to channel from clients on the outside"),
+            N_("  m: moderated channel"),
+            N_("  l: set the user limit to channel"),
+            N_("  b: set a ban mask to keep users out"),
+            N_("  e: set exception mask"),
+            N_("  v: give/take the ability to speak on a moderated channel"),
+            N_("  k: set a channel key (password)"),
+            "",
+            N_("User modes:"),
+            N_("  nick: nick to modify"),
+            N_("  i: invisible"),
+            N_("  s: user receives server notices"),
+            N_("  w: user receives wallops"),
+            N_("  o: operator"),
+            "",
+            N_("List of modes is not comprehensive, you should read documentation "
+               "about your server to see all possible modes."),
+            "",
+            N_("Examples:"),
+            AI("  /mode #weechat +t"),
+            AI("  /mode nick +i")),
         "%(irc_channel)|%(irc_server_nick)", &irc_command_mode, NULL, NULL);
     weechat_hook_command (
         "motd",
         N_("get the \"Message Of The Day\""),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<target>]"),
-        N_("target: server name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: server name")),
         NULL, &irc_command_motd, NULL, NULL);
     weechat_hook_command (
         "msg",
         N_("send message to a nick or channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[-server <server>] <target>[,<target>...] <text>"),
-        N_("server: send to this server (internal name)\n"
-           "target: nick or channel (may be mask, '*' = current channel)\n"
-           "  text: text to send"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("server: send to this server (internal name)"),
+            N_("target: nick or channel (may be mask, \"*\" = current channel)"),
+            N_("text: text to send")),
         "-server %(irc_servers) %(nicks)|*"
         " || %(nicks)|*",
         &irc_command_msg, NULL, NULL);
     weechat_hook_command (
         "names",
         N_("list nicks on channels"),
-        N_("[<channel>[,<channel>...]]"),
-        N_("channel: channel name"),
-        "%(irc_channels)", &irc_command_names, NULL, NULL);
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("[-count | -x] [<channel>[,<channel>...]]"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[-count]: display only number of users"),
+            N_("raw[-x]: display only users with this mode: -o for ops, "
+               "-h for halfops, -v for voiced, etc. and -* for regular users"),
+            N_("channel: channel name")),
+        "-count|%(irc_server_prefix_modes_filter) %(irc_channels)"
+        " || %(irc_channels)", &irc_command_names, NULL, NULL);
     weechat_hook_command (
         "nick",
         N_("change current nick"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[-all] <nick>"),
-        N_("-all: set new nick for all connected servers\n"
-           "nick: new nick"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[-all]: set new nick for all connected servers"),
+            N_("nick: new nick")),
         "-all %(irc_server_nick)"
         " || %(irc_server_nick)",
         &irc_command_nick, NULL, NULL);
     weechat_hook_command (
         "notice",
         N_("send notice message to user"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[-server <server>] <target> <text>"),
-        N_("server: send to this server (internal name)\n"
-           "target: nick or channel name\n"
-           "  text: text to send"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("server: send to this server (internal name)"),
+            N_("target: nick or channel name"),
+            N_("text: text to send")),
         "-server %(irc_servers) %(nicks)"
         " || %(nicks)",
         &irc_command_notice, NULL, NULL);
     weechat_hook_command (
         "notify",
         N_("add a notification for presence or away status of nicks on servers"),
-        N_("add <nick> [<server> [-away]]"
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("add|addreplace <nick> [<server> [-away]]"
            " || del <nick>|-all [<server>]"),
-        N_("   add: add a notification\n"
-           "  nick: nick\n"
-           "server: internal server name (by default current server)\n"
-           " -away: notify when away message is changed (by doing whois on "
-           "nick)\n"
-           "   del: delete a notification\n"
-           "  -all: delete all notifications\n"
-           "\n"
-           "Without argument, this command displays notifications for current "
-           "server (or all servers if command is issued on core buffer).\n"
-           "\n"
-           "Examples:\n"
-           "  notify when \"toto\" joins/quits current server:\n"
-           "    /notify add toto\n"
-           "  notify when \"toto\" joins/quits libera server:\n"
-           "    /notify add toto libera\n"
-           "  notify when \"toto\" is away or back on libera server:\n"
-           "    /notify add toto libera -away"),
-        "add %(irc_channel_nicks) %(irc_servers) -away %-"
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[add]: add a notification"),
+            N_("raw[addreplace]: add or replace a notification"),
+            N_("nick: nick"),
+            N_("server: internal server name (by default current server)"),
+            N_("raw[-away]: notify when away message is changed (by doing whois on nick)"),
+            N_("raw[del]: delete a notification"),
+            N_("raw[-all]: delete all notifications"),
+            "",
+            N_("Without argument, this command displays notifications for current "
+               "server (or all servers if command is issued on core buffer)."),
+            "",
+            N_("Examples:"),
+            AI("  /notify add toto"),
+            AI("  /notify add toto libera"),
+            AI("  /notify add toto libera -away")),
+        "add|addreplace %(irc_channel_nicks) %(irc_servers) -away %-"
         " || del -all|%(irc_notify_nicks) %(irc_servers) %-",
         &irc_command_notify, NULL, NULL);
     weechat_hook_command (
         "op",
         N_("give channel operator status to nick(s)"),
-        N_("<nick> [<nick>...] || * -yes"),
-        N_("nick: nick or mask (wildcard \"*\" is allowed)\n"
-           "   *: give channel operator status to everybody on channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<nick>... || * -yes"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick or mask (wildcard \"*\" is allowed)"),
+            N_("*: give channel operator status to everybody on channel")),
         "%(nicks)|%*", &irc_command_op, NULL, NULL);
     weechat_hook_command (
         "oper",
         N_("get operator privileges"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<user> <password>"),
-        N_("    user: user\n"
-           "password: password"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("user: user"),
+            N_("password: password")),
         NULL, &irc_command_oper, NULL, NULL);
     weechat_hook_command (
         "part",
         N_("leave a channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<channel>[,<channel>...]] [<message>]"),
-        N_("channel: channel name to leave\n"
-           "message: part message (displayed to other users)"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("message: part message (displayed to other users)")),
         "%(irc_msg_part)", &irc_command_part, NULL, NULL);
     weechat_hook_command (
         "ping",
         N_("send a ping to server"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<target1> [<target2>]"),
-        N_("target1: server\n"
-           "target2: forward ping to this server"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target1: server"),
+            N_("target2: forward ping to this server")),
         NULL, &irc_command_ping, NULL, NULL);
     weechat_hook_command (
         "pong",
         N_("answer to a ping message"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<daemon> [<daemon2>]"),
-        N_(" daemon: daemon who has responded to Ping message\n"
-           "daemon2: forward message to this daemon"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("daemon: daemon who has responded to Ping message"),
+            N_("daemon2: forward message to this daemon")),
         NULL, &irc_command_pong, NULL, NULL);
     weechat_hook_command (
         "query",
         N_("send a private message to a nick"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[-noswitch] [-server <server>] <nick>[,<nick>...] [<text>]"),
-        N_("-noswitch: do not switch to new buffer\n"
-           "   server: send to this server (internal name)\n"
-           "     nick: nick\n"
-           "     text: text to send"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[-noswitch]: do not switch to new buffer"),
+            N_("server: send to this server (internal name)"),
+            N_("nick: nick"),
+            N_("text: text to send")),
         "-noswitch|-server %(irc_servers) %(nicks)"
         " || %(nicks)",
         &irc_command_query, NULL, NULL);
     weechat_hook_command (
         "quiet",
         N_("quiet nicks or hosts"),
-        N_("[<channel>] [<nick> [<nick>...]]"),
-        N_("channel: channel name\n"
-           "   nick: nick or host\n"
-           "\n"
-           "Without argument, this command displays the quiet list for "
-           "current channel."),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("[<channel>] [<nick>...]"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("nick: nick or host"),
+            "",
+            N_("Without argument, this command displays the quiet list for "
+               "current channel.")),
         "%(irc_channel_nicks_hosts)", &irc_command_quiet, NULL, NULL);
     weechat_hook_command (
         "quote",
         N_("send raw data to server without parsing"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[-server <server>] <data>"),
-        N_("server: send to this server (internal name)\n"
-           "  data: raw data to send"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("server: send to this server (internal name)"),
+            N_("data: raw data to send")),
         "-server %(irc_servers)", &irc_command_quote, NULL, NULL);
     weechat_hook_command (
         "reconnect",
         N_("reconnect to server(s)"),
-        N_("<server> [<server>...] [-nojoin] [-switch]"
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<server>... [-nojoin] [-switch]"
            " || -all [-nojoin] [-switch]"),
-        N_(" server: server to reconnect (internal name)\n"
-           "   -all: reconnect to all servers\n"
-           "-nojoin: do not join any channel (even if autojoin is enabled on "
-           "server)\n"
-           "-switch: switch to next server address"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("server: internal server name"),
+            N_("raw[-all]: reconnect to all servers"),
+            N_("raw[-nojoin]: do not join any channel (even if autojoin is enabled on server)"),
+            N_("raw[-switch]: switch to next server address")),
         "%(irc_servers)|-all|-nojoin|-switch|%*",
         &irc_command_reconnect, NULL, NULL);
     weechat_hook_command (
         "rehash",
         N_("tell the server to reload its config file"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<option>]"),
-        N_("option: extra option, for some servers"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("option: extra option, for some servers")),
         NULL, &irc_command_rehash, NULL, NULL);
     weechat_hook_command (
         "remove",
         N_("force a user to leave a channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<channel>] <nick> [<reason>]"),
-        N_("channel: channel name\n"
-           "   nick: nick\n"
-           " reason: reason (special variables $nick, $channel and $server are "
-           "replaced by their values)"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("nick: nick"),
+            N_("reason: reason (special variables $nick, $channel and $server are "
+               "replaced by their values)")),
         "%(irc_channel)|%(nicks) %(nicks)", &irc_command_remove, NULL, NULL);
     weechat_hook_command (
         "restart",
         N_("tell the server to restart itself"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<target>]"),
-        N_("target: server name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: server name")),
         NULL, &irc_command_restart, NULL, NULL);
+    weechat_hook_command (
+        "rules",
+        N_("request the server rules"),
+        "",
+        "",
+        NULL, &irc_command_rules, NULL, NULL);
     weechat_hook_command (
         "sajoin",
         N_("force a user to join channel(s)"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<nick> <channel>[,<channel>...]"),
-        N_("   nick: nick\n"
-           "channel: channel name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick"),
+            N_("channel: channel name")),
         "%(nicks) %(irc_server_channels)", &irc_command_sajoin, NULL, NULL);
     weechat_hook_command (
         "samode",
         N_("change mode on channel, without having operator status"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<channel>] <mode>"),
-        N_("channel: channel name\n"
-           "   mode: mode for channel"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("mode: mode for channel")),
         "%(irc_server_channels)", &irc_command_samode, NULL, NULL);
     weechat_hook_command (
         "sanick",
         N_("force a user to use another nick"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<nick> <new_nick>"),
-        N_("    nick: nick\n"
-           "new_nick: new nick"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick"),
+            N_("new_nick: new nick")),
         "%(nicks) %(nicks)", &irc_command_sanick, NULL, NULL);
     weechat_hook_command (
         "sapart",
         N_("force a user to leave channel(s)"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<nick> <channel>[,<channel>...]"),
-        N_("   nick: nick\n"
-           "channel: channel name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick"),
+            N_("channel: channel name")),
         "%(nicks) %(irc_server_channels)", &irc_command_sapart, NULL, NULL);
     weechat_hook_command (
         "saquit",
         N_("force a user to quit server with a reason"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<nick> <reason>"),
-        N_("  nick: nick\n"
-           "reason: reason"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick"),
+            N_("reason: reason")),
         "%(nicks)", &irc_command_saquit, NULL, NULL);
     weechat_hook_command (
         "service",
         N_("register a new service"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<nick> <reserved> <distribution> <type> <reserved> <info>"),
-        N_("distribution: visibility of service\n"
-           "        type: reserved for future usage"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("distribution: visibility of service"),
+            N_("type: reserved for future usage")),
         NULL, &irc_command_service, NULL, NULL);
     weechat_hook_command (
         "server",
         N_("list, add or remove IRC servers"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("list|listfull [<name>]"
-           " || add <name> <hostname>[/<port>] [-temp] [-<option>[=<value>]] "
+           " || add|addreplace <name> <hostname>[/<port>] [-temp] [-<option>[=<value>]] "
            "[-no<option>]"
            " || copy|rename <name> <new_name>"
-           " || reorder <name> [<name>...]"
+           " || reorder <name>..."
            " || open <name>|-all [<name>...]"
            " || del|keep <name>"
            " || deloutq|jump"
            " || raw [<filter>]"),
-        N_("    list: list servers (without argument, this list is displayed)\n"
-           "listfull: list servers with detailed info for each server\n"
-           "     add: add a new server\n"
-           "    name: server name, for internal and display use; this name "
-           "is used to connect to the server (/connect name) and to set server "
-           "options: irc.server.name.xxx\n"
-           "hostname: name or IP address of server, with optional port "
-           "(default: 6667), many addresses can be separated by a comma\n"
-           "   -temp: add a temporary server (not saved)\n"
-           "  option: set option for server (for boolean option, value can be "
-           "omitted)\n"
-           "nooption: set boolean option to 'off' (for example: -nossl)\n"
-           "    copy: duplicate a server\n"
-           "  rename: rename a server\n"
-           " reorder: reorder list of servers\n"
-           "    open: open the server buffer without connecting\n"
-           "    keep: keep server in config file (for temporary servers only)\n"
-           "     del: delete a server\n"
-           " deloutq: delete messages out queue for all servers (all messages "
-           "WeeChat is currently sending)\n"
-           "    jump: jump to server buffer\n"
-           "     raw: open buffer with raw IRC data\n"
-           "  filter: set a new filter to see only matching messages (this "
-           "filter can be used as input in raw IRC data buffer as well); "
-           "allowed formats are:\n"
-           "            *       show all messages (no filter)\n"
-           "            xxx     show only messages containing \"xxx\"\n"
-           "            s:xxx   show only messages for server \"xxx\"\n"
-           "            f:xxx   show only messages with a flag: recv (message "
-           "received), sent (message sent), modified (message modified by "
-           "a modifier), redirected (message redirected)\n"
-           "            m:xxx   show only IRC command \"xxx\"\n"
-           "            c:xxx   show only messages matching the evaluated "
-           "condition \"xxx\", using following variables: output of function "
-           "irc_message_parse (like nick, command, channel, text, etc., see "
-           "function info_get_hashtable in plugin API reference for the list "
-           "of all variables), date (format: \"yyyy-mm-dd hh:mm:ss\"), server, "
-           "recv, sent, modified, redirected\n"
-           "\n"
-           "Examples:\n"
-           "  /server listfull\n"
-           "  /server add libera irc.libera.chat\n"
-           "  /server add libera irc.libera.chat/6697 -ssl -autoconnect\n"
-           "  /server add chatspike irc.chatspike.net/6667,"
-           "irc.duckspike.net/6667\n"
-           "  /server copy libera libera-test\n"
-           "  /server rename libera-test libera2\n"
-           "  /server reorder libera2 libera\n"
-           "  /server del libera\n"
-           "  /server deloutq\n"
-           "  /server raw\n"
-           "  /server raw s:libera\n"
-           "  /server raw c:${recv} && ${command}==PRIVMSG && ${nick}==foo"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[list]: list servers (without argument, this list is displayed)"),
+            N_("raw[listfull]: list servers with detailed info for each server"),
+            N_("raw[add]: add a new server"),
+            N_("raw[addreplace]: add or replace an existing server"),
+            N_("name: server name, for internal and display use; this name "
+               "is used to connect to the server (/connect name) and to set server "
+               "options: irc.server.name.xxx"),
+            N_("hostname: name or IP address of server, with optional port "
+               "(default: 6697 for TLS, 6667 otherwise), many addresses can be "
+               "separated by a comma"),
+            N_("raw[-temp]: add a temporary server (not saved)"),
+            N_("option: set option for server (for boolean option, value can be omitted)"),
+            N_("raw[nooption]: set boolean option to \"off\" (for example: -notls)"),
+            N_("raw[copy]: duplicate a server"),
+            N_("raw[rename]: rename a server"),
+            N_("raw[reorder]: reorder list of servers"),
+            N_("raw[open]: open the server buffer without connecting"),
+            N_("raw[keep]: keep server in config file (for temporary servers only)"),
+            N_("raw[del]: delete a server"),
+            N_("raw[deloutq]: delete messages out queue for all servers (all messages "
+               "WeeChat is currently sending)"),
+            N_("raw[jump]: jump to server buffer"),
+            N_("raw[raw]: open buffer with raw IRC data"),
+            N_("filter: set a new filter to see only matching messages (this "
+               "filter can be used as input in raw IRC data buffer as well); "
+               "allowed formats are:"),
+            N_("> `*`: show all messages (no filter)"),
+            N_("> `xxx`: show only messages containing \"xxx\""),
+            N_("> `s:xxx`: show only messages for server \"xxx\""),
+            N_("> `f:xxx`: show only messages with a flag: recv (message "
+               "received), sent (message sent), modified (message modified by "
+               "a modifier), redirected (message redirected)"),
+            N_("> `m:xxx`: show only IRC command \"xxx\""),
+            N_("> `c:xxx`: show only messages matching the evaluated "
+               "condition \"xxx\", using following variables: output of function "
+               "irc_message_parse (like nick, command, channel, text, etc., see "
+               "function info_get_hashtable in plugin API reference for the list "
+               "of all variables), date (format: \"%FT%T.%f\", see function "
+               "util_strftimeval in Plugin API reference), server, recv, sent, "
+               "modified, redirected"),
+            "",
+            N_("Examples:"),
+            AI("  /server listfull"),
+            AI("  /server add libera irc.libera.chat"),
+            AI("  /server add libera irc.libera.chat/6667 -notls -autoconnect"),
+            AI("  /server add chatspike irc.chatspike.net/6667,"
+               "irc.duckspike.net/6667 -notls"),
+            AI("  /server copy libera libera-test"),
+            AI("  /server rename libera-test libera2"),
+            AI("  /server reorder libera2 libera"),
+            AI("  /server del libera"),
+            AI("  /server deloutq"),
+            AI("  /server raw"),
+            AI("  /server raw s:libera"),
+            AI("  /server raw c:${recv} && ${command}==PRIVMSG && ${nick}==foo")),
         "list %(irc_servers)"
         " || listfull %(irc_servers)"
-        " || add %(irc_servers)"
+        " || add|addreplace %(irc_servers)"
         " || copy %(irc_servers) %(irc_servers)"
         " || rename %(irc_servers) %(irc_servers)"
         " || keep %(irc_servers)"
@@ -7498,153 +8008,196 @@ irc_command_init ()
     weechat_hook_command (
         "servlist",
         N_("list services currently connected to the network"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<mask> [<type>]]"),
-        N_("mask: list only services matching this mask\n"
-           "type: list only services of this type"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("mask: list only services matching this mask"),
+            N_("type: list only services of this type")),
         NULL, &irc_command_servlist, NULL, NULL);
     weechat_hook_command (
         "squery",
         N_("deliver a message to a service"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<service> <text>"),
-        N_("service: name of service\n"
-           "   text: text to send"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("service: name of service"),
+            N_("text: text to send")),
         NULL, &irc_command_squery, NULL, NULL);
     weechat_hook_command (
         "setname",
         N_("set real name"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<realname>"),
-        N_("realname: new real name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("realname: new real name")),
         NULL, &irc_command_setname, NULL, NULL);
     weechat_hook_command (
         "squit",
         N_("disconnect server links"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<target> <comment>"),
-        N_( " target: server name\n"
-            "comment: comment"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: server name"),
+            N_("comment: comment")),
         NULL, &irc_command_squit, NULL, NULL);
     weechat_hook_command (
         "stats",
         N_("query statistics about server"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<query> [<target>]]"),
-        N_(" query: c/h/i/k/l/m/o/y/u (see RFC1459)\n"
-           "target: server name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("query: c/h/i/k/l/m/o/y/u (see RFC1459)"),
+            N_("target: server name")),
         NULL, &irc_command_stats, NULL, NULL);
     weechat_hook_command (
         "summon",
         N_("give users who are on a host running an IRC "
            "server a message asking them to please join "
            "IRC"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<user> [<target> [<channel>]]"),
-        N_("   user: username\n"
-           " target: server name\n"
-           "channel: channel name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("user: username"),
+            N_("target: server name"),
+            N_("channel: channel name")),
         NULL, &irc_command_summon, NULL, NULL);
     weechat_hook_command (
         "time",
         N_("query local time from server"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<target>]"),
-        N_("target: query time from specified server"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: query time from specified server")),
         NULL, &irc_command_time, NULL, NULL);
     weechat_hook_command (
         "topic",
         N_("get/set channel topic"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<channel>] [<topic>|-delete]"),
-        N_("channel: channel name\n"
-           "  topic: new topic\n"
-           "-delete: delete channel topic"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("topic: new topic"),
+            N_("raw[-delete]: delete channel topic")),
         "%(irc_channel_topic)|-delete", &irc_command_topic, NULL, NULL);
     weechat_hook_command (
         "trace",
         N_("find the route to specific server"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<target>]"),
-        N_("target: server name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: server name")),
         NULL, &irc_command_trace, NULL, NULL);
     weechat_hook_command (
         "unban",
         N_("unban nicks or hosts"),
-        N_("[<channel>] <nick>|<number> [<nick>|<number>...]"),
-        N_("channel: channel name\n"
-           "   nick: nick or host\n"
-           " number: ban number (as displayed by command /ban)"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("[<channel>] <nick>|<number>|<n1>-<n2>..."),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("nick: nick or host"),
+            N_("number: ban number (as displayed by command /ban)"),
+            N_("n1: interval start number"),
+            N_("n2: interval end number")),
         "%(irc_modelist_masks:b)|%(irc_modelist_numbers:b)",
         &irc_command_unban, NULL, NULL);
     weechat_hook_command (
         "unquiet",
         N_("unquiet nicks or hosts"),
-        N_("[<channel>] <nick>|<number> [<nick>|<number>...]"),
-        N_("channel: channel name\n"
-           "   nick: nick or host\n"
-           " number: quiet number (as displayed by command /quiet)"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("[<channel>] <nick>|<number>|<n1>-<n2>..."),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("nick: nick or host"),
+            N_("number: quiet number (as displayed by command /quiet)"),
+            N_("n1: interval start number"),
+            N_("n2: interval end number")),
         "%(irc_modelist_masks:q)|%(irc_modelist_numbers:q)",
         &irc_command_unquiet, NULL, NULL);
     weechat_hook_command (
         "userhost",
         N_("return a list of information about nicks"),
-        N_("<nick> [<nick>...]"),
-        N_("nick: nick"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<nick>..."),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick")),
         "%(nicks)", &irc_command_userhost, NULL, NULL);
     weechat_hook_command (
         "users",
         N_("list of users logged into the server"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<target>]"),
-        N_("target: server name"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: server name")),
         NULL, &irc_command_users, NULL, NULL);
     weechat_hook_command (
         "version",
         N_("give the version info of nick or server (current or specified)"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<target>|<nick>]"),
-        N_("target: server name\n"
-           "  nick: nick"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: server name"),
+            N_("nick: nick")),
         "%(nicks)", &irc_command_version, NULL, NULL);
     weechat_hook_command (
         "voice",
         N_("give voice to nick(s)"),
-        N_("<nick> [<nick>...] || * -yes"),
-        N_("nick: nick or mask (wildcard \"*\" is allowed)\n"
-           "   *: give voice to everybody on channel"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
+        N_("<nick>... || * -yes"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick or mask (wildcard \"*\" is allowed)"),
+            N_("*: give voice to everybody on channel")),
         "%(nicks)|%*", &irc_command_voice, NULL, NULL);
     weechat_hook_command (
         "wallchops",
         N_("send a notice to channel ops"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<channel>] <text>"),
-        N_("channel: channel name\n"
-           "   text: text to send"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("channel: channel name"),
+            N_("text: text to send")),
         NULL, &irc_command_wallchops, NULL, NULL);
     weechat_hook_command (
         "wallops",
         N_("send a message to all currently connected users who have set the "
-           "'w' user mode for themselves"),
+           "\"w\" user mode for themselves"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<text>"),
-        N_("text: text to send"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("text: text to send")),
         NULL, &irc_command_wallops, NULL, NULL);
     weechat_hook_command (
         "who",
         N_("generate a query which returns a list of information"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<mask> [o]]"),
-        N_("mask: only information which match this mask\n"
-           "   o: only operators are returned according to the mask supplied"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("mask: only information which match this mask"),
+            N_("o: only operators are returned according to the mask supplied")),
         "%(irc_channels)", &irc_command_who, NULL, NULL);
     weechat_hook_command (
         "whois",
         N_("query information about user(s)"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("[<target>] [<nick>[,<nick>...]]"),
-        N_("target: server name\n"
-           "  nick: nick (may be a mask)\n"
-           "\n"
-           "Without argument, this command will do a whois on:\n"
-           "- your own nick if buffer is a server/channel\n"
-           "- remote nick if buffer is a private.\n"
-           "\n"
-           "If option irc.network.whois_double_nick is enabled, two nicks are "
-           "sent (if only one nick is given), to get idle time in answer."),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("target: server name"),
+            N_("nick: nick (may be a mask)"),
+            "",
+            N_("Without argument, this command will do a whois on:"),
+            N_("  - your own nick if buffer is a server/channel"),
+            N_("  - remote nick if buffer is a private."),
+            "",
+            N_("If option irc.network.whois_double_nick is enabled, two nicks are "
+               "sent (if only one nick is given), to get idle time in answer.")),
         "%(nicks)", &irc_command_whois, NULL, NULL);
     weechat_hook_command (
         "whowas",
         N_("ask for information about a nick which no longer exists"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<nick>[,<nick>...] [<count> [<target>]]"),
-        N_("  nick: nick\n"
-           " count: number of replies to return (full search if negative "
-           "number)\n"
-           "target: reply should match this mask"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("nick: nick"),
+            N_("count: number of replies to return (full search if negative number)"),
+            N_("target: reply should match this mask")),
         "%(nicks)", &irc_command_whowas, NULL, NULL);
 }

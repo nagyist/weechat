@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -18,5 +18,5 @@
 #
 
 foreach(size 16 32 64 128 256 512)
-  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/${size}x${size}/weechat.png DESTINATION ${DATAROOTDIR}/icons/hicolor/${size}x${size}/apps)
+  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/${size}x${size}/weechat.png" DESTINATION "${DATAROOTDIR}/icons/hicolor/${size}x${size}/apps")
 endforeach()

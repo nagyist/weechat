@@ -1,7 +1,7 @@
 /*
  * script-completion.c - completions for script command
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -227,8 +227,7 @@ script_completion_scripts_files_cb (const void *pointer, void *data,
         free (directory);
     }
 
-    if (weechat_data_dir)
-        free (weechat_data_dir);
+    free (weechat_data_dir);
 
     return WEECHAT_RC_OK;
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2017-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2017-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -42,8 +42,8 @@ class UnparsePython(object):
     """
     Unparse AST to generate Python script code.
 
-    This class is inspired from unparse.py in cpython:
-    https://github.com/python/cpython/blob/master/Tools/parser/unparse.py
+    This class is inspired from _Unparser class in cpython:
+    https://github.com/python/cpython/blob/main/Lib/ast.py
 
     Note: only part of AST types are supported (just the types used by
     the script to test WeeChat scripting API).
@@ -139,11 +139,13 @@ class UnparsePython(object):
             result.append(value)
         return result
 
-    def is_bool(self, node):  # pylint: disable=no-self-use
+    @staticmethod
+    def is_bool(node):
         """Check if the node is a boolean."""
         return isinstance(node, ast.Name) and node.id in ('False', 'True')
 
-    def is_number(self, node):  # pylint: disable=no-self-use
+    @staticmethod
+    def is_number(node):
         """Check if the node is a number."""
         return (isinstance(node, ast.Num) or
                 (isinstance(node, ast.UnaryOp) and
@@ -404,6 +406,8 @@ class UnparsePerl(UnparsePython):
         """Add an AST Constant in output."""
         if isinstance(node.value, str):
             self.add('"%s"' % node.s.replace('$', '\\$').replace('@', '\\@'))
+        elif node.value is None:
+            self.add('undef')
         else:
             self.add(repr(node.s))
 
@@ -545,6 +549,8 @@ class UnparseRuby(UnparsePython):
         """Add an AST Constant in output."""
         if isinstance(node.value, str):
             self.add('"%s"' % node.s.replace('#{', '\\#{'))
+        elif node.value is None:
+            self.add('nil')
         else:
             self.add(repr(node.s))
 
@@ -651,6 +657,13 @@ class UnparseLua(UnparsePython):
             ' %s ' % str_op,
             node.right,
         )
+
+    def _ast_constant(self, node):
+        """Add an AST Constant in output."""
+        if node.value is None:
+            self.add('nil')
+        else:
+            self.add(repr(node.s))
 
     def _ast_dict(self, node):
         """Add an AST Dict in output."""
@@ -809,6 +822,8 @@ class UnparseTcl(UnparsePython):
         """Add an AST Constant in output."""
         if isinstance(node.value, str):
             self.add('"%s"' % node.s.replace('$', '\\$'))
+        elif node.value is None:
+            self.add('$::weechat::WEECHAT_NULL')
         else:
             self.add(repr(node.s))
 
@@ -1001,6 +1016,8 @@ class UnparseGuile(UnparsePython):
         """Add an AST Constant in output."""
         if isinstance(node.s, str):
             self.add('"%s"' % node.s)
+        elif node.value is None:
+            self.add('#nil')
         else:
             self.add(repr(node.s))
 
@@ -1108,9 +1125,9 @@ class UnparseGuile(UnparsePython):
         )
 
 
-class UnparseJavascript(UnparsePython):
+class UnparseJavaScript(UnparsePython):
     """
-    Unparse AST to generate Javascript script code.
+    Unparse AST to generate JavaScript script code.
 
     Note: only part of AST types are supported (just the types used by
     the script to test WeeChat scripting API).
@@ -1126,6 +1143,13 @@ class UnparseJavascript(UnparsePython):
                             for key, value in zip(node.keys, node.values)]),
             '}',
         )
+
+    def _ast_constant(self, node):
+        """Add an AST Constant in output."""
+        if node.value is None:
+            self.add('null')
+        else:
+            self.add(repr(node.s))
 
     def _ast_functiondef(self, node):
         """Add an AST FunctionDef in output."""
@@ -1231,6 +1255,8 @@ class UnparsePhp(UnparsePython):
         """Add an AST Constant in output."""
         if isinstance(node.s, str):
             self.add('"%s"' % node.s.replace('$', '\\$'))
+        elif node.value is None:
+            self.add('NULL')
         else:
             self.add(repr(node.s))
 
@@ -1384,13 +1410,13 @@ def get_stdin():
     """
     Return data from standard input.
 
-    If there is nothing in stdin, wait for data until ctrl-D (EOF)
+    If there is nothing in stdin, wait for data until ctrl-d (EOF)
     is received.
     """
     data = ''
     inr = select.select([sys.stdin], [], [], 0)[0]
     if not inr:
-        print('Enter the code to convert (Enter + ctrl+D to end)')
+        print('Enter the code to convert (Enter + ctrl-d to end)')
     while True:
         inr = select.select([sys.stdin], [], [], 0.1)[0]
         if not inr:

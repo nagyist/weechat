@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -52,8 +52,8 @@ extern int irc_nick_is_nick (struct t_irc_server *server, const char *string);
 extern char *irc_nick_find_color (const char *nickname);
 extern char *irc_nick_find_color_name (const char *nickname);
 extern void irc_nick_set_host (struct t_irc_nick *nick, const char *host);
-extern int irc_nick_is_op (struct t_irc_server *server,
-                           struct t_irc_nick *nick);
+extern int irc_nick_is_op_or_higher (struct t_irc_server *server,
+                                     struct t_irc_nick *nick);
 extern int irc_nick_has_prefix_mode (struct t_irc_server *server,
                                      struct t_irc_nick *nick,
                                      char prefix_mode);
@@ -61,6 +61,14 @@ extern const char *irc_nick_get_prefix_color_name (struct t_irc_server *server,
                                                    char prefix);
 extern void irc_nick_nicklist_set_prefix_color_all ();
 extern void irc_nick_nicklist_set_color_all ();
+extern struct t_irc_nick *irc_nick_new_in_channel (struct t_irc_server *server,
+                                                   struct t_irc_channel *channel,
+                                                   const char *nickname,
+                                                   const char *host,
+                                                   const char *prefixes,
+                                                   int away,
+                                                   const char *account,
+                                                   const char *realname);
 extern struct t_irc_nick *irc_nick_new (struct t_irc_server *server,
                                         struct t_irc_channel *channel,
                                         const char *nickname,
@@ -85,10 +93,8 @@ extern void irc_nick_free_all (struct t_irc_server *server,
 extern struct t_irc_nick *irc_nick_search (struct t_irc_server *server,
                                            struct t_irc_channel *channel,
                                            const char *nickname);
-extern void irc_nick_count (struct t_irc_server *server,
-                            struct t_irc_channel *channel, int *total,
-                            int *count_op, int *count_halfop, int *count_voice,
-                            int *count_normal);
+extern int *irc_nick_count (struct t_irc_server *server,
+                            struct t_irc_channel *channel, int *size);
 extern void irc_nick_set_away (struct t_irc_server *server,
                                struct t_irc_channel *channel,
                                struct t_irc_nick *nick, int is_away);

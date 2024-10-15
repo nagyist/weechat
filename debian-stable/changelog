@@ -1,3 +1,51 @@
+weechat (4.3.1-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #1067608)
+    - fix FTBFS against libgcrypt 1.11 (Closes: #1071960)
+  * Add build dependency on libcjson-dev
+  * Replace pkg-config build dependency by pkgconf
+  * Minor updates in debian/copyright
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 01 Jun 2024 14:21:02 +0000
+
+weechat (4.1.1-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #1055278)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Fri, 03 Nov 2023 20:23:37 +0000
+
+weechat (4.0.5-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 24 Sep 2023 07:49:41 +0000
+
+weechat (4.0.2-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #1040248)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sat, 22 Jul 2023 05:48:35 +0000
+
+weechat (4.0.1-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove NEWS file, no longer required
+  * Update build dependency from libncursesw5-dev to libncurses-dev
+  * Bump Standards-Version to 4.6.2
+  * Remove all patches (no longer required)
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Tue, 04 Jul 2023 19:02:41 +0000
+
+weechat (3.8-1) unstable; urgency=medium
+
+  * New upstream release
+  * Add a patch remove some autotools leftovers
+  * Update debian/copyright (new year)
+  * Update debian/rules to remove workarounds which avoid issues with
+  autotools build system
+
+ -- Emmanuel Bouthenot <kolter@debian.org>  Sun, 15 Jan 2023 08:34:04 +0000
+
 weechat (3.7.1-1) unstable; urgency=medium
 
   * New upstream release
@@ -480,7 +528,7 @@ weechat (0.3.6-1) unstable; urgency=low
   documentation when weechat-doc is installed (Closes: #632621)
   * Add a Suggest on weechat-doc for weechat and weechat-curses. Thanks to
   Jonathan Nieder for the proposal.
-  * Fix the cmake invokation from debian/rules (cflags and ldflags)
+  * Fix the cmake invocation from debian/rules (cflags and ldflags)
 
  -- Emmanuel Bouthenot <kolter@debian.org>  Wed, 26 Oct 2011 20:10:09 +0000
 
@@ -702,7 +750,7 @@ weechat (0.2.3-1) unstable; urgency=low
   * New upstream release
   * Bump lua build-dependency to liblua5.1-0-dev
   * Add pkg-config to Build-Depends
-  * Remove some duplited changelog entries.
+  * Remove some duplicated changelog entries.
   * Improve weechat-plugins description
 
  -- Julien Louis <ptitlouis@sysif.net>  Fri, 12 Jan 2007 09:01:46 +0100
@@ -710,7 +758,7 @@ weechat (0.2.3-1) unstable; urgency=low
 weechat (0.2.1-1) unstable; urgency=low
 
   * New upstream release
-  * Overrive lintian menu-icon-missing warning
+  * Override lintian menu-icon-missing warning
     since the icon is in the weechat-common package.
 
  -- Julien Louis <ptitlouis@sysif.net>  Mon,  2 Oct 2006 15:30:06 +0200
@@ -855,7 +903,7 @@ weechat (0.1.1-2) unstable; urgency=low
 
   * debian/control:
     - Add myself to uploaders.
-    - Remove unecessary dependency on weechat-gtk (Closes: #308287).
+    - Remove unnecessary dependency on weechat-gtk (Closes: #308287).
 
  -- Julien Louis <ptitlouis@sysif.net>  Tue, 10 May 2005 22:38:52 +0200
 

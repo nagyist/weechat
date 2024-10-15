@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -19,17 +19,6 @@
 
 #ifndef WEECHAT_PLUGIN_PLUGIN_SCRIPT_H
 #define WEECHAT_PLUGIN_PLUGIN_SCRIPT_H
-
-/* constants which defines return types for weechat_<lang>_exec functions */
-
-enum t_weechat_script_exec_type
-{
-    WEECHAT_SCRIPT_EXEC_INT = 0,
-    WEECHAT_SCRIPT_EXEC_STRING,
-    WEECHAT_SCRIPT_EXEC_POINTER,
-    WEECHAT_SCRIPT_EXEC_HASHTABLE,
-    WEECHAT_SCRIPT_EXEC_IGNORE,
-};
 
 #define WEECHAT_SCRIPT_HASHTABLE_DEFAULT_SIZE 16
 
@@ -52,6 +41,29 @@ enum t_weechat_script_exec_type
                     weechat_prefix ("error"), weechat_plugin->name,     \
                     __function,                                         \
                     (__current_script) ? __current_script : "-");
+
+#define WEECHAT_SCRIPT_CONST_INT(__name)                                \
+    { #__name, __name, NULL }
+#define WEECHAT_SCRIPT_CONST_STR(__name)                                \
+    { #__name, 0, __name }
+                                    \
+/* constants which defines return types for weechat_<lang>_exec functions */
+
+enum t_weechat_script_exec_type
+{
+    WEECHAT_SCRIPT_EXEC_INT = 0,
+    WEECHAT_SCRIPT_EXEC_STRING,
+    WEECHAT_SCRIPT_EXEC_POINTER,
+    WEECHAT_SCRIPT_EXEC_HASHTABLE,
+    WEECHAT_SCRIPT_EXEC_IGNORE,
+};
+
+struct t_weechat_script_constant
+{
+    char *name;                     /* constant name                        */
+    int value_integer;              /* value as integer                     */
+    char *value_string;             /* value as string                      */
+};
 
 struct t_plugin_script
 {
@@ -110,13 +122,15 @@ struct t_plugin_script_data
     void (*callback_load_file) (void *data, const char *filename);
 
     /* functions */
+    void (*init_before_autoload) ();
     void (*unload_all) ();
 };
+
+extern struct t_weechat_script_constant weechat_script_constants[];
 
 extern void plugin_script_display_interpreter (struct t_weechat_plugin *plugin,
                                                int indent);
 extern void plugin_script_init (struct t_weechat_plugin *weechat_plugin,
-                                int argc, char *argv[],
                                 struct t_plugin_script_data *plugin_data);
 extern int plugin_script_valid (struct t_plugin_script *scripts,
                                 struct t_plugin_script *script);
@@ -133,11 +147,11 @@ extern void plugin_script_get_function_and_data (void *callback_data,
 extern void plugin_script_auto_load (struct t_weechat_plugin *weechat_plugin,
                                      void (*callback)(void *data,
                                                       const char *filename));
-extern struct t_plugin_script *plugin_script_search (struct t_weechat_plugin *weechat_plugin,
-                                                     struct t_plugin_script *scripts,
+extern struct t_plugin_script *plugin_script_search (struct t_plugin_script *scripts,
                                                      const char *name);
 extern char *plugin_script_search_path (struct t_weechat_plugin *weechat_plugin,
-                                        const char *filename);
+                                        const char *filename,
+                                        int search_system_dir);
 extern struct t_plugin_script *plugin_script_alloc (const char *filename,
                                                     const char *name,
                                                     const char *author,

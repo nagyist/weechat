@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -22,6 +22,7 @@
 
 #define weechat_plugin weechat_script_plugin
 #define SCRIPT_PLUGIN_NAME "script"
+#define SCRIPT_PLUGIN_PRIORITY 3000
 
 #define SCRIPT_NUM_LANGUAGES 8
 
@@ -35,7 +36,6 @@ extern struct t_hashtable *script_loaded;
 extern int script_language_search (const char *language);
 extern int script_language_search_by_extension (const char *extension);
 extern int script_download_enabled (int display_error);
-extern char *script_build_download_url (const char *url);
 extern void script_get_loaded_plugins ();
 extern void script_get_scripts ();
 

@@ -1,7 +1,7 @@
 /*
  * gui-cursor.c - functions for free movement of cursor (used by all GUI)
  *
- * Copyright (C) 2011-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2011-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -28,7 +28,7 @@
 #include <string.h>
 
 #include "../core/weechat.h"
-#include "../core/wee-hook.h"
+#include "../core/core-hook.h"
 #include "../plugins/plugin.h"
 #include "gui-cursor.h"
 #include "gui-bar.h"
@@ -127,15 +127,15 @@ gui_cursor_display_debug_info ()
     if (focus_info)
     {
         snprintf (str_info, sizeof (str_info),
-                  "%s(%d,%d) window:0x%lx, buffer:0x%lx (%s), "
-                  "bar_window:0x%lx (bar: %s, item: %s, line: %d, col: %d), "
+                  "%s(%d,%d) window:%p, buffer:%p (%s), "
+                  "bar_window:%p (bar: %s, item: %s, line: %d, col: %d), "
                   "chat: %d, word: \"%s\"",
                   gui_color_get_custom ("yellow,red"),
                   focus_info->x, focus_info->y,
-                  (unsigned long)focus_info->window,
-                  (unsigned long)focus_info->buffer,
+                  focus_info->window,
+                  focus_info->buffer,
                   (focus_info->buffer) ? (focus_info->buffer)->full_name : "-",
-                  (unsigned long)focus_info->bar_window,
+                  focus_info->bar_window,
                   (focus_info->bar_window) ? ((focus_info->bar_window)->bar)->name : "-",
                   (focus_info->bar_item) ? focus_info->bar_item : "-",
                   focus_info->bar_item_line,
@@ -200,6 +200,104 @@ gui_cursor_move_add_xy (int add_x, int add_y)
 
     gui_cursor_display_debug_info ();
     gui_window_move_cursor ();
+}
+
+/*
+ * Moves cursor to the given position: top_left, top_right, bottom_left or
+ * bottom_right.
+ */
+
+void
+gui_cursor_move_position (const char *position)
+{
+    struct t_gui_focus_info *focus_info;
+    int x1, y1, x2, y2, x, y;
+
+    if (!position)
+        return;
+
+    if (!gui_cursor_mode)
+        gui_cursor_mode_toggle ();
+
+    x = gui_cursor_x;
+    y = gui_cursor_y;
+
+    focus_info = gui_focus_get_info (x, y);
+    if (!focus_info)
+        return;
+
+    x1 = -1;
+    y1 = -1;
+    x2 = -1;
+    y2 = -1;
+
+    if (focus_info->bar_window)
+    {
+        x1 = focus_info->bar_window->x;
+        y1 = focus_info->bar_window->y;
+        x2 = x1 + focus_info->bar_window->width - 1;
+        y2 = y1 + focus_info->bar_window->height - 1;
+    }
+    else if (focus_info->chat && focus_info->window)
+    {
+        x1 = focus_info->window->win_chat_x;
+        y1 = focus_info->window->win_chat_y;
+        x2 = x1 + focus_info->window->win_chat_width - 1;
+        y2 = y1 + focus_info->window->win_chat_height - 1;
+    }
+
+    if ((x1 < 0) || (y1 < 0) || (x2 < 0) || (y2 < 0))
+        goto end;
+
+    if (strcmp (position, "top_left") == 0)
+    {
+        x = x1;
+        y = y1;
+    }
+    else if (strcmp (position, "top_right") == 0)
+    {
+        x = x2;
+        y = y1;
+    }
+    else if (strcmp (position, "bottom_left") == 0)
+    {
+        x = x1;
+        y = y2;
+    }
+    else if (strcmp (position, "bottom_right") == 0)
+    {
+        x = x2;
+        y = y2;
+    }
+    else if (strcmp (position, "edge_top") == 0)
+    {
+        y = y1;
+    }
+    else if (strcmp (position, "edge_bottom") == 0)
+    {
+        y = y2;
+    }
+    else if (strcmp (position, "edge_left") == 0)
+    {
+        x = x1;
+    }
+    else if (strcmp (position, "edge_right") == 0)
+    {
+        x = x2;
+    }
+    else
+    {
+        goto end;
+    }
+
+    gui_cursor_x = x;
+    gui_cursor_y = y;
+
+    gui_cursor_display_debug_info ();
+    gui_window_move_cursor ();
+
+end:
+    gui_focus_free_info (focus_info);
 }
 
 /*
@@ -280,30 +378,36 @@ gui_cursor_move_area_add_xy (int add_x, int add_y)
     }
 
     gui_focus_free_info (focus_info_old);
-    if (focus_info_new)
-        gui_focus_free_info (focus_info_new);
+    gui_focus_free_info (focus_info_new);
 }
 
 /*
  * Moves cursor to another area by name.
+ *
+ * Parameter "position" can be "top_left", "top_right", "bottom_left" or
+ * "bottom_right" (if NULL, top left is the default position).
  */
 
 void
-gui_cursor_move_area (const char *area)
+gui_cursor_move_area (const char *area, const char *position)
 {
-    int area_found, x, y;
+    int area_found, x1, y1, x2, y2, x, y;
     struct t_gui_bar_window *ptr_bar_win;
     struct t_gui_bar *ptr_bar;
 
     area_found = 0;
-    x = 0;
-    y = 0;
+    x1 = 0;
+    y1 = 0;
+    x2 = 0;
+    y2 = 0;
 
     if (strcmp (area, "chat") == 0)
     {
         area_found = 1;
-        x = gui_current_window->win_chat_x;
-        y = gui_current_window->win_chat_y;
+        x1 = gui_current_window->win_chat_x;
+        y1 = gui_current_window->win_chat_y;
+        x2 = x1 + gui_current_window->win_chat_width - 1;
+        y2 = y1 + gui_current_window->win_chat_height - 1;
     }
     else
     {
@@ -313,8 +417,10 @@ gui_cursor_move_area (const char *area)
             if (strcmp (ptr_bar_win->bar->name, area) == 0)
             {
                 area_found = 1;
-                x = ptr_bar_win->x;
-                y = ptr_bar_win->y;
+                x1 = ptr_bar_win->x;
+                y1 = ptr_bar_win->y;
+                x2 = x1 + ptr_bar_win->width - 1;
+                y2 = y1 + ptr_bar_win->height - 1;
                 break;
             }
         }
@@ -325,20 +431,48 @@ gui_cursor_move_area (const char *area)
                 if (ptr_bar->bar_window && (strcmp (ptr_bar->name, area) == 0))
                 {
                     area_found = 1;
-                    x = ptr_bar->bar_window->x;
-                    y = ptr_bar->bar_window->y;
+                    x1 = ptr_bar->bar_window->x;
+                    y1 = ptr_bar->bar_window->y;
+                    x2 = x1 + ptr_bar->bar_window->width - 1;
+                    y2 = y1 + ptr_bar->bar_window->height - 1;
                 }
             }
         }
     }
 
-    if (area_found)
+    if (!area_found)
+        return;
+
+    if (!position || (strcmp (position, "top_left") == 0))
     {
-        if (!gui_cursor_mode)
-            gui_cursor_mode_toggle ();
-        gui_cursor_x = x;
-        gui_cursor_y = y;
-        gui_cursor_display_debug_info ();
-        gui_window_move_cursor ();
+        x = x1;
+        y = y1;
     }
+    else if (strcmp (position, "top_right") == 0)
+    {
+        x = x2;
+        y = y1;
+    }
+    else if (strcmp (position, "bottom_left") == 0)
+    {
+        x = x1;
+        y = y2;
+    }
+    else if (strcmp (position, "bottom_right") == 0)
+    {
+        x = x2;
+        y = y2;
+    }
+    else
+    {
+        x = x1;
+        y = y1;
+    }
+
+    if (!gui_cursor_mode)
+        gui_cursor_mode_toggle ();
+    gui_cursor_x = x;
+    gui_cursor_y = y;
+    gui_cursor_display_debug_info ();
+    gui_window_move_cursor ();
 }

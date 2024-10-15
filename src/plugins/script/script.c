@@ -1,7 +1,7 @@
 /*
  * script.c - script manager for WeeChat
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -42,7 +42,7 @@ WEECHAT_PLUGIN_DESCRIPTION(N_("Script manager"));
 WEECHAT_PLUGIN_AUTHOR("Sébastien Helleu <flashcode@flashtux.org>");
 WEECHAT_PLUGIN_VERSION(WEECHAT_VERSION);
 WEECHAT_PLUGIN_LICENSE(WEECHAT_LICENSE);
-WEECHAT_PLUGIN_PRIORITY(3000);
+WEECHAT_PLUGIN_PRIORITY(SCRIPT_PLUGIN_PRIORITY);
 
 struct t_weechat_plugin *weechat_script_plugin = NULL;
 
@@ -67,6 +67,9 @@ script_language_search (const char *language)
 {
     int i;
 
+    if (!language)
+        return -1;
+
     for (i = 0; i < SCRIPT_NUM_LANGUAGES; i++)
     {
         if (strcmp (script_language[i], language) == 0)
@@ -87,6 +90,9 @@ int
 script_language_search_by_extension (const char *extension)
 {
     int i;
+
+    if (!extension)
+        return -1;
 
     for (i = 0; i < SCRIPT_NUM_LANGUAGES; i++)
     {
@@ -117,37 +123,11 @@ script_download_enabled (int display_error)
         /* download not enabled: display an error */
         weechat_printf (NULL,
                         _("%s%s: download of scripts is disabled by default; "
-                          "see /help script.scripts.download_enabled"),
+                          "to enable it, type /script enable"),
                         weechat_prefix ("error"),
                         SCRIPT_PLUGIN_NAME);
     }
     return 0;
-}
-
-/*
- * Builds download URL (to use with hook_process or hook_process_hashtable).
- *
- * Note: result must be freed after use.
- */
-
-char *
-script_build_download_url (const char *url)
-{
-    char *result;
-    int length;
-
-    if (!url || !url[0])
-        return NULL;
-
-    /* length of url + "url:" */
-    length = 4 + strlen (url) + 1;
-    result = malloc (length);
-    if (!result)
-        return NULL;
-
-    snprintf (result, length, "url:%s", url);
-
-    return result;
 }
 
 /*
@@ -243,8 +223,7 @@ script_debug_dump_cb (const void *pointer, void *data,
     (void) signal;
     (void) type_data;
 
-    if (!signal_data
-        || (weechat_strcasecmp ((char *)signal_data, SCRIPT_PLUGIN_NAME) == 0))
+    if (!signal_data || (strcmp ((char *)signal_data, SCRIPT_PLUGIN_NAME) == 0))
     {
         weechat_log_printf ("");
         weechat_log_printf ("***** \"%s\" plugin dump *****",
@@ -407,6 +386,27 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
     /* make C compiler happy */
     (void) plugin;
 
+    if (script_loaded)
+    {
+        weechat_hashtable_free (script_loaded);
+        script_loaded = NULL;
+    }
+    if (script_timer_refresh)
+    {
+        weechat_unhook (script_timer_refresh);
+        script_timer_refresh = NULL;
+    }
+
+    if (script_buffer)
+    {
+        weechat_buffer_close (script_buffer);
+        script_buffer = NULL;
+    }
+    script_buffer_selected_line = 0;
+    script_buffer_detail_script = NULL;
+    script_buffer_detail_script_last_line = 0;
+    script_buffer_detail_script_line_diff = -1;
+
     script_mouse_end ();
 
     script_config_write ();
@@ -414,10 +414,16 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
     script_repo_remove_all ();
 
     if (script_repo_filter)
+    {
         free (script_repo_filter);
+        script_repo_filter = NULL;
+    }
 
     if (script_loaded)
+    {
         weechat_hashtable_free (script_loaded);
+        script_loaded = NULL;
+    }
 
     script_config_free ();
 

@@ -1,7 +1,7 @@
 /*
  * main.c - entry point for headless mode (no GUI)
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -34,6 +34,7 @@
 #include "../../../core/weechat.h"
 #include "../../gui-main.h"
 #include "../gui-curses.h"
+#include "../gui-curses-main.h"
 
 
 /*
@@ -49,7 +50,7 @@ daemonize ()
     printf (_("Running WeeChat in background..."));
     printf (" ");
 
-    pid = fork();
+    pid = fork ();
 
     if (pid < 0)
     {
@@ -72,7 +73,7 @@ daemonize ()
     setsid ();
 
     /* close all file descriptors */
-    for (i = sysconf(_SC_OPEN_MAX); i >= 0; --i)
+    for (i = sysconf (_SC_OPEN_MAX); i >= 0; --i)
     {
         close (i);
     }

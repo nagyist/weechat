@@ -1,7 +1,7 @@
 /*
  * plugin-api.c - extra functions for plugin API
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -28,14 +28,14 @@
 #include <gcrypt.h>
 
 #include "../core/weechat.h"
-#include "../core/wee-config.h"
-#include "../core/wee-crypto.h"
-#include "../core/wee-hashtable.h"
-#include "../core/wee-hook.h"
-#include "../core/wee-infolist.h"
-#include "../core/wee-input.h"
-#include "../core/wee-proxy.h"
-#include "../core/wee-string.h"
+#include "../core/core-config.h"
+#include "../core/core-crypto.h"
+#include "../core/core-hashtable.h"
+#include "../core/core-hook.h"
+#include "../core/core-infolist.h"
+#include "../core/core-input.h"
+#include "../core/core-proxy.h"
+#include "../core/core-string.h"
 #include "../gui/gui-bar.h"
 #include "../gui/gui-bar-item.h"
 #include "../gui/gui-bar-window.h"
@@ -67,9 +67,7 @@ plugin_api_charset_set (struct t_weechat_plugin *plugin, const char *charset)
     if (!plugin || !charset)
         return;
 
-    if (plugin->charset)
-        free (plugin->charset);
-
+    free (plugin->charset);
     plugin->charset = (charset) ? strdup (charset) : NULL;
 }
 
@@ -351,15 +349,15 @@ plugin_api_prefix (const char *prefix)
     if (!prefix)
         return gui_chat_prefix_empty;
 
-    if (string_strcasecmp (prefix, "error") == 0)
+    if (strcmp (prefix, "error") == 0)
         return gui_chat_prefix[GUI_CHAT_PREFIX_ERROR];
-    if (string_strcasecmp (prefix, "network") == 0)
+    if (strcmp (prefix, "network") == 0)
         return gui_chat_prefix[GUI_CHAT_PREFIX_NETWORK];
-    if (string_strcasecmp (prefix, "action") == 0)
+    if (strcmp (prefix, "action") == 0)
         return gui_chat_prefix[GUI_CHAT_PREFIX_ACTION];
-    if (string_strcasecmp (prefix, "join") == 0)
+    if (strcmp (prefix, "join") == 0)
         return gui_chat_prefix[GUI_CHAT_PREFIX_JOIN];
-    if (string_strcasecmp (prefix, "quit") == 0)
+    if (strcmp (prefix, "quit") == 0)
         return gui_chat_prefix[GUI_CHAT_PREFIX_QUIT];
 
     return gui_chat_prefix_empty;
@@ -395,15 +393,16 @@ plugin_api_command_options (struct t_weechat_plugin *plugin,
                             struct t_hashtable *options)
 {
     char *command2, *error;
-    const char *ptr_commands_allowed, *ptr_delay;
+    const char *ptr_commands_allowed, *ptr_delay, *ptr_split_newline;
     long delay;
-    int rc;
+    int rc, split_newline;
 
     if (!plugin || !command)
         return WEECHAT_RC_ERROR;
 
     ptr_commands_allowed = NULL;
     delay = 0;
+    split_newline = 0;
 
     if (options)
     {
@@ -416,6 +415,12 @@ plugin_api_command_options (struct t_weechat_plugin *plugin,
             if (!error || error[0])
                 delay = 0;
         }
+        ptr_split_newline = hashtable_get (options, "split_newline");
+        if (ptr_split_newline)
+        {
+            split_newline = (string_strcmp (ptr_split_newline, "1") == 0) ?
+                1 : 0;
+        }
     }
 
     command2 = string_iconv_to_internal (plugin->charset, command);
@@ -423,10 +428,10 @@ plugin_api_command_options (struct t_weechat_plugin *plugin,
     rc = input_data_delayed ((buffer) ? buffer : gui_current_window->buffer,
                              (command2) ? command2 : command,
                              ptr_commands_allowed,
+                             split_newline,
                              delay);
 
-    if (command2)
-        free (command2);
+    free (command2);
 
     return rc;
 }
@@ -440,6 +445,25 @@ plugin_api_command (struct t_weechat_plugin *plugin,
                     struct t_gui_buffer *buffer, const char *command)
 {
     return plugin_api_command_options (plugin, buffer, command, NULL);
+}
+
+/*
+ * Modifier callback: decodes WeeChat colors: converts WeeChat color codes to
+ * WeeChat a replacement string.
+ */
+
+char *
+plugin_api_modifier_color_decode_cb (const void *pointer, void *data,
+                                     const char *modifier,
+                                     const char *modifier_data,
+                                     const char *string)
+{
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) modifier;
+
+    return gui_color_decode (string, modifier_data);
 }
 
 /*
@@ -520,8 +544,7 @@ plugin_api_modifier_eval_path_home_cb (const void *pointer, void *data,
 
     result = string_eval_path_home (string, NULL, NULL, options);
 
-    if (options)
-        hashtable_free (options);
+    hashtable_free (options);
 
     return result;
 }
@@ -673,6 +696,8 @@ void
 plugin_api_init ()
 {
     /* WeeChat core modifiers */
+    hook_modifier (NULL, "color_decode",
+                   &plugin_api_modifier_color_decode_cb, NULL, NULL);
     hook_modifier (NULL, "color_decode_ansi",
                    &plugin_api_modifier_color_decode_ansi_cb, NULL, NULL);
     hook_modifier (NULL, "color_encode_ansi",

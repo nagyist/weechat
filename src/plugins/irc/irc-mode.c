@@ -1,7 +1,7 @@
 /*
  * irc-mode.c - IRC channel/user modes management
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -300,28 +300,22 @@ irc_mode_channel_update (struct t_irc_server *server,
             if (str_temp)
             {
                 snprintf (str_temp, length, "%s %s", new_modes, new_args);
-                if (channel->modes)
-                    free (channel->modes);
+                free (channel->modes);
                 channel->modes = str_temp;
             }
         }
         else
         {
-            if (channel->modes)
-                free (channel->modes);
+            free (channel->modes);
             channel->modes = strdup (new_modes);
         }
     }
 
 end:
-    if (new_modes)
-        free (new_modes);
-    if (new_args)
-        free (new_args);
-    if (str_modes)
-        free (str_modes);
-    if (argv)
-        weechat_string_free_split (argv);
+    free (new_modes);
+    free (new_args);
+    free (str_modes);
+    weechat_string_free_split (argv);
     if (channel->modes && (strcmp (channel->modes, "+") == 0))
     {
         free (channel->modes);
@@ -484,8 +478,7 @@ irc_mode_channel_set (struct t_irc_server *server,
                              && ptr_arg && (strcmp (ptr_arg, "*") != 0))
                     {
                         /* replace key for +k, but ignore "*" as new key */
-                        if (channel->key)
-                            free (channel->key);
+                        free (channel->key);
                         channel->key = strdup (ptr_arg);
                     }
                 }
@@ -568,11 +561,10 @@ irc_mode_channel_set (struct t_irc_server *server,
         pos++;
     }
 
-    if (argv)
-        weechat_string_free_split (argv);
+    weechat_string_free_split (argv);
 
     if (channel_modes_updated)
-        weechat_bar_item_update ("buffer_modes");
+        irc_channel_set_buffer_modes (server, channel);
 
     return smart_filter;
 }
@@ -585,6 +577,7 @@ void
 irc_mode_user_add (struct t_irc_server *server, char mode)
 {
     char str_mode[2], *nick_modes2;
+    const char *registered_mode;
 
     str_mode[0] = mode;
     str_mode[1] = '\0';
@@ -606,7 +599,7 @@ irc_mode_user_add (struct t_irc_server *server, char mode)
             }
             server->nick_modes = nick_modes2;
             strcat (server->nick_modes, str_mode);
-            weechat_bar_item_update ("input_prompt");
+            irc_server_set_buffer_input_prompt (server);
             weechat_bar_item_update ("irc_nick_modes");
         }
     }
@@ -614,8 +607,17 @@ irc_mode_user_add (struct t_irc_server *server, char mode)
     {
         server->nick_modes = malloc (2);
         strcpy (server->nick_modes, str_mode);
-        weechat_bar_item_update ("input_prompt");
+        irc_server_set_buffer_input_prompt (server);
         weechat_bar_item_update ("irc_nick_modes");
+    }
+
+    registered_mode = IRC_SERVER_OPTION_STRING(
+        server, IRC_SERVER_OPTION_REGISTERED_MODE);
+    if (registered_mode
+        && (registered_mode[0] == mode)
+        && (server->authentication_method == IRC_SERVER_AUTH_METHOD_NONE))
+    {
+        server->authentication_method = IRC_SERVER_AUTH_METHOD_OTHER;
     }
 }
 
@@ -627,6 +629,7 @@ void
 irc_mode_user_remove (struct t_irc_server *server, char mode)
 {
     char *pos, *nick_modes2;
+    const char *registered_mode;
     int new_size;
 
     if (server->nick_modes)
@@ -639,10 +642,15 @@ irc_mode_user_remove (struct t_irc_server *server, char mode)
             nick_modes2 = realloc (server->nick_modes, new_size);
             if (nick_modes2)
                 server->nick_modes = nick_modes2;
-            weechat_bar_item_update ("input_prompt");
+            irc_server_set_buffer_input_prompt (server);
             weechat_bar_item_update ("irc_nick_modes");
         }
     }
+
+    registered_mode = IRC_SERVER_OPTION_STRING(
+        server, IRC_SERVER_OPTION_REGISTERED_MODE);
+    if (registered_mode && (registered_mode[0] == mode))
+        server->authentication_method = IRC_SERVER_AUTH_METHOD_NONE;
 }
 
 /*
@@ -663,6 +671,10 @@ irc_mode_user_set (struct t_irc_server *server, const char *modes,
             free (server->nick_modes);
             server->nick_modes = NULL;
         }
+    }
+    while (modes && (modes[0] == ' '))
+    {
+        modes++;
     }
     set_flag = '+';
     end = 0;
@@ -692,6 +704,34 @@ irc_mode_user_set (struct t_irc_server *server, const char *modes,
             break;
         modes++;
     }
-    weechat_bar_item_update ("input_prompt");
+    irc_server_set_buffer_input_prompt (server);
     weechat_bar_item_update ("irc_nick_modes");
+}
+
+/*
+ * Updates authentication_method when IRC_SERVER_OPTION_REGISTERED_MODE
+ * changes.
+ */
+
+void
+irc_mode_registered_mode_change (struct t_irc_server *server)
+{
+    const char *ptr_mode, *registered_mode;
+
+    registered_mode = IRC_SERVER_OPTION_STRING(
+        server, IRC_SERVER_OPTION_REGISTERED_MODE);
+
+    ptr_mode = (server->nick_modes && registered_mode[0]) ?
+        strchr (server->nick_modes, registered_mode[0]) : NULL;
+
+    if (ptr_mode)
+    {
+        if (server->authentication_method == IRC_SERVER_AUTH_METHOD_NONE)
+            server->authentication_method = IRC_SERVER_AUTH_METHOD_OTHER;
+    }
+    else
+    {
+        if (server->authentication_method == IRC_SERVER_AUTH_METHOD_OTHER)
+            server->authentication_method = IRC_SERVER_AUTH_METHOD_NONE;
+    }
 }

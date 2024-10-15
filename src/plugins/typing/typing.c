@@ -1,7 +1,7 @@
 /*
  * typing.c - manage typing status of users
  *
- * Copyright (C) 2021-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2021-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -36,7 +36,7 @@ WEECHAT_PLUGIN_DESCRIPTION(N_("Typing status of users"));
 WEECHAT_PLUGIN_AUTHOR("Sébastien Helleu <flashcode@flashtux.org>");
 WEECHAT_PLUGIN_VERSION(WEECHAT_VERSION);
 WEECHAT_PLUGIN_LICENSE(WEECHAT_LICENSE);
-WEECHAT_PLUGIN_PRIORITY(8000);
+WEECHAT_PLUGIN_PRIORITY(TYPING_PLUGIN_PRIORITY);
 
 struct t_weechat_plugin *weechat_typing_plugin = NULL;
 
@@ -94,7 +94,7 @@ typing_buffer_closing_signal_cb (const void *pointer, void *data,
 }
 
 /*
- * Callback for signal "buffer_closing".
+ * Callback for signal "input_text_changed".
  */
 
 int
@@ -113,7 +113,12 @@ typing_input_text_changed_signal_cb (const void *pointer, void *data,
     (void) signal;
     (void) type_data;
 
+    if (strcmp (type_data, WEECHAT_HOOK_SIGNAL_POINTER) != 0)
+        return WEECHAT_RC_OK;
+
     ptr_buffer = (struct t_gui_buffer *)signal_data;
+    if (!ptr_buffer)
+        return WEECHAT_RC_OK;
 
     /* ignore any change in input if the user is searching text in the buffer */
     text_search = weechat_buffer_get_integer (ptr_buffer, "text_search");
@@ -176,7 +181,6 @@ typing_input_text_for_buffer_modifier_cb (const void *pointer,
                                           const char *string)
 {
     int rc, text_search;
-    unsigned long value;
     const char *ptr_input_for_buffer;
     struct t_gui_buffer *ptr_buffer;
     struct t_typing_status *ptr_typing_status;
@@ -187,10 +191,9 @@ typing_input_text_for_buffer_modifier_cb (const void *pointer,
     (void) modifier;
     (void) string;
 
-    rc = sscanf (modifier_data, "%lx", &value);
+    rc = sscanf (modifier_data, "%p", &ptr_buffer);
     if ((rc == EOF) || (rc == 0))
         return NULL;
-    ptr_buffer = (struct t_gui_buffer *)value;
 
     /* ignore any change in input if the user is searching text in the buffer */
     text_search = weechat_buffer_get_integer (ptr_buffer, "text_search");
@@ -284,17 +287,17 @@ typing_status_nicks_status_map_cb (void *data,
                                    struct t_hashtable *hashtable,
                                    const void *key, const void *value)
 {
-    const char *ptr_nick;
+    struct t_gui_buffer *ptr_buffer;
     struct t_typing_status *ptr_typing_status;
     time_t current_time;
     int delay_purge_pause, delay_purge_typing;
 
     current_time = *((time_t *)data);
 
-    ptr_nick = (const char *)key;
+    ptr_buffer = (struct t_gui_buffer *)key;
     ptr_typing_status = (struct t_typing_status *)value;
 
-    if (!ptr_nick || !ptr_typing_status)
+    if (!ptr_buffer || !ptr_typing_status)
         return;
 
     delay_purge_pause = weechat_config_integer (
@@ -377,7 +380,6 @@ typing_typing_set_nick_signal_cb (const void *pointer, void *data,
 {
     char **items;
     int num_items, rc, state, updated;
-    unsigned long value;
     struct t_gui_buffer *ptr_buffer;
     struct t_typing_status *ptr_typing_status;
 
@@ -392,10 +394,9 @@ typing_typing_set_nick_signal_cb (const void *pointer, void *data,
     if (!items || (num_items != 3))
         goto end;
 
-    rc = sscanf (items[0], "%lx", &value);
+    rc = sscanf (items[0], "%p", &ptr_buffer);
     if ((rc == EOF) || (rc == 0))
         goto end;
-    ptr_buffer = (struct t_gui_buffer *)value;
     if (!ptr_buffer)
         goto end;
 
@@ -435,8 +436,7 @@ typing_typing_set_nick_signal_cb (const void *pointer, void *data,
         weechat_bar_item_update (TYPING_BAR_ITEM_NAME);
 
 end:
-    if (items)
-        weechat_string_free_split (items);
+    weechat_string_free_split (items);
 
     return WEECHAT_RC_OK;
 }
@@ -544,6 +544,12 @@ typing_setup_hooks ()
                 "typing_reset_buffer",
                 &typing_typing_reset_buffer_signal_cb, NULL, NULL);
         }
+        if (!typing_timer)
+        {
+            typing_timer = weechat_hook_timer (
+                1000, 0, 0,
+                &typing_timer_cb, NULL, NULL);
+        }
     }
     else
     {
@@ -564,6 +570,47 @@ typing_setup_hooks ()
                 typing_status_nicks = NULL;
             }
         }
+        weechat_unhook (typing_timer);
+        typing_timer = NULL;
+    }
+}
+
+/*
+ * Removes all hooks.
+ */
+
+void
+typing_remove_hooks ()
+{
+    if (typing_signal_buffer_closing)
+    {
+        weechat_unhook (typing_signal_buffer_closing);
+        typing_signal_buffer_closing = NULL;
+    }
+    if (typing_signal_input_text_changed)
+    {
+        weechat_unhook (typing_signal_input_text_changed);
+        typing_signal_input_text_changed = NULL;
+    }
+    if (typing_modifier_input_text_for_buffer)
+    {
+        weechat_unhook (typing_modifier_input_text_for_buffer);
+        typing_modifier_input_text_for_buffer = NULL;
+    }
+    if (typing_timer)
+    {
+        weechat_unhook (typing_timer);
+        typing_timer = NULL;
+    }
+    if (typing_signal_typing_set_nick)
+    {
+        weechat_unhook (typing_signal_typing_set_nick);
+        typing_signal_typing_set_nick = NULL;
+    }
+    if (typing_signal_typing_reset_buffer)
+    {
+        weechat_unhook (typing_signal_typing_reset_buffer);
+        typing_signal_typing_reset_buffer = NULL;
     }
 }
 
@@ -601,6 +648,8 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
 {
     /* make C compiler happy */
     (void) plugin;
+
+    typing_remove_hooks ();
 
     typing_config_write ();
     typing_config_free ();

@@ -1,7 +1,7 @@
 /*
  * xfer-buffer.c - display xfer list on xfer buffer
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -240,14 +240,10 @@ xfer_buffer_refresh (const char *hotlist)
                                   (str_total) ? str_total : "?",
                                   eta,
                                   str_bytes_per_sec);
-                if (progress_bar)
-                    free (progress_bar);
-                if (str_pos)
-                    free (str_pos);
-                if (str_total)
-                    free (str_total);
-                if (str_bytes_per_sec)
-                    free (str_bytes_per_sec);
+                free (progress_bar);
+                free (str_pos);
+                free (str_total);
+                free (str_bytes_per_sec);
             }
             line++;
         }
@@ -273,7 +269,7 @@ xfer_buffer_input_cb (const void *pointer, void *data,
     xfer = xfer_search_by_number (xfer_buffer_selected_line);
 
     /* accept xfer */
-    if (weechat_strcasecmp (input_data, "a") == 0)
+    if (weechat_strcmp (input_data, "a") == 0)
     {
         if (xfer && XFER_IS_RECV(xfer->type)
             && (xfer->status == XFER_STATUS_WAITING))
@@ -282,7 +278,7 @@ xfer_buffer_input_cb (const void *pointer, void *data,
         }
     }
     /* cancel xfer */
-    else if (weechat_strcasecmp (input_data, "c") == 0)
+    else if (weechat_strcmp (input_data, "c") == 0)
     {
         if (xfer && !XFER_HAS_ENDED(xfer->status))
         {
@@ -291,7 +287,7 @@ xfer_buffer_input_cb (const void *pointer, void *data,
         }
     }
     /* purge old xfer */
-    else if (weechat_strcasecmp (input_data, "p") == 0)
+    else if (weechat_strcmp (input_data, "p") == 0)
     {
         ptr_xfer = xfer_list;
         while (ptr_xfer)
@@ -304,12 +300,12 @@ xfer_buffer_input_cb (const void *pointer, void *data,
         xfer_buffer_refresh (WEECHAT_HOTLIST_MESSAGE);
     }
     /* quit xfer buffer (close it) */
-    else if (weechat_strcasecmp (input_data, "q") == 0)
+    else if (weechat_strcmp (input_data, "q") == 0)
     {
         weechat_buffer_close (buffer);
     }
     /* remove xfer */
-    else if (weechat_strcasecmp (input_data, "r") == 0)
+    else if (weechat_strcmp (input_data, "r") == 0)
     {
         if (xfer && XFER_HAS_ENDED(xfer->status))
         {
@@ -346,20 +342,30 @@ xfer_buffer_close_cb (const void *pointer, void *data,
 void
 xfer_buffer_open ()
 {
-    if (!xfer_buffer)
+    struct t_hashtable *buffer_props;
+
+    if (xfer_buffer)
+        return;
+
+    buffer_props = weechat_hashtable_new (
+        32,
+        WEECHAT_HASHTABLE_STRING,
+        WEECHAT_HASHTABLE_STRING,
+        NULL, NULL);
+    if (buffer_props)
     {
-        xfer_buffer = weechat_buffer_new (XFER_BUFFER_NAME,
-                                          &xfer_buffer_input_cb, NULL, NULL,
-                                          &xfer_buffer_close_cb, NULL, NULL);
-
-        /* failed to create buffer ? then exit */
-        if (!xfer_buffer)
-            return;
-
-        weechat_buffer_set (xfer_buffer, "type", "free");
-        weechat_buffer_set (xfer_buffer, "title", _("Xfer list"));
-        weechat_buffer_set (xfer_buffer, "key_bind_meta2-A", "/xfer up");
-        weechat_buffer_set (xfer_buffer, "key_bind_meta2-B", "/xfer down");
-        weechat_buffer_set (xfer_buffer, "localvar_set_type", "xfer");
+        weechat_hashtable_set (buffer_props, "type", "free");
+        weechat_hashtable_set (buffer_props, "title", _("Xfer list"));
+        weechat_hashtable_set (buffer_props, "key_bind_up", "/xfer up");
+        weechat_hashtable_set (buffer_props, "key_bind_down", "/xfer down");
+        weechat_hashtable_set (buffer_props, "localvar_set_type", "xfer");
     }
+
+    xfer_buffer = weechat_buffer_new_props (
+        XFER_BUFFER_NAME,
+        buffer_props,
+        &xfer_buffer_input_cb, NULL, NULL,
+        &xfer_buffer_close_cb, NULL, NULL);
+
+    weechat_hashtable_free (buffer_props);
 }

@@ -1,7 +1,7 @@
 /*
  * gui-curses-chat.c - chat display functions for Curses GUI
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -29,12 +29,13 @@
 #include <time.h>
 
 #include "../../core/weechat.h"
-#include "../../core/wee-config.h"
-#include "../../core/wee-eval.h"
-#include "../../core/wee-hashtable.h"
-#include "../../core/wee-hook.h"
-#include "../../core/wee-string.h"
-#include "../../core/wee-utf8.h"
+#include "../../core/core-config.h"
+#include "../../core/core-eval.h"
+#include "../../core/core-hashtable.h"
+#include "../../core/core-hook.h"
+#include "../../core/core-string.h"
+#include "../../core/core-utf8.h"
+#include "../../core/core-util.h"
 #include "../../plugins/plugin.h"
 #include "../gui-buffer.h"
 #include "../gui-chat.h"
@@ -44,6 +45,8 @@
 #include "../gui-main.h"
 #include "../gui-window.h"
 #include "gui-curses.h"
+#include "gui-curses-main.h"
+#include "gui-curses-window.h"
 
 
 /*
@@ -56,11 +59,16 @@
 int
 gui_chat_get_real_width (struct t_gui_window *window)
 {
-    if ((window->win_chat_width > 1)
+    if (CONFIG_BOOLEAN(config_look_chat_space_right)
+        && (window->win_chat_width > 1)
         && (window->win_chat_x + window->win_chat_width < gui_window_get_width ()))
+    {
         return window->win_chat_width - 1;
+    }
     else
+    {
         return window->win_chat_width;
+    }
 }
 
 /*
@@ -77,7 +85,7 @@ gui_chat_marker_for_line (struct t_gui_buffer *buffer, struct t_gui_line *line)
     struct t_gui_line *last_read_line;
 
     /* marker is disabled in config? */
-    if (CONFIG_INTEGER(config_look_read_marker) != CONFIG_LOOK_READ_MARKER_LINE)
+    if (CONFIG_ENUM(config_look_read_marker) != CONFIG_LOOK_READ_MARKER_LINE)
         return 0;
 
     /* marker is not set for buffer? */
@@ -197,7 +205,7 @@ gui_chat_display_horizontal_line (struct t_gui_window *window, int simulate)
         return;
 
     gui_window_coords_init_line (window, window->win_chat_cursor_y);
-    if (CONFIG_INTEGER(config_look_read_marker) == CONFIG_LOOK_READ_MARKER_LINE)
+    if (CONFIG_ENUM(config_look_read_marker) == CONFIG_LOOK_READ_MARKER_LINE)
     {
         read_marker_string = CONFIG_STRING(config_look_read_marker_string);
         if (!read_marker_string || !read_marker_string[0])
@@ -351,7 +359,6 @@ gui_chat_string_next_char (struct t_gui_window *window, struct t_gui_line *line,
                 break;
             default:
                 return (char *)string;
-                break;
         }
     }
 
@@ -451,8 +458,7 @@ gui_chat_display_word_raw (struct t_gui_window *window, struct t_gui_line *line,
                                 wattroff (GUI_WINDOW_OBJECTS(window)->win_chat,
                                           A_REVERSE);
                             }
-                            if (output)
-                                free (output);
+                            free (output);
 
                             if (gui_window_current_emphasis)
                             {
@@ -481,6 +487,84 @@ gui_chat_display_word_raw (struct t_gui_window *window, struct t_gui_line *line,
 }
 
 /*
+ * Displays the prefix_suffix in the beginning of a line.
+ *
+ * Returns number of chars displayed on screen.
+ */
+
+int
+gui_chat_display_prefix_suffix (struct t_gui_window *window,
+                                struct t_gui_line *line,
+                                const char *word,
+                                int pre_lines_displayed, int *lines_displayed,
+                                int pre_chars_displayed,
+                                int simulate,
+                                int apply_style_inactive,
+                                int nick_offline)
+{
+    char str_space[] = " ";
+    int chars_displayed, length_align;
+
+    chars_displayed = 0;
+
+    if ((!simulate) && (window->win_chat_cursor_y >= window->win_chat_height))
+        return chars_displayed;
+
+    /* insert spaces for aligning text under time/nick */
+    length_align = gui_line_get_align (window->buffer, line, 0, 0);
+
+    /* in the beginning of a line */
+    if ((window->win_chat_cursor_x == 0)
+        && (*lines_displayed > pre_lines_displayed)
+        /* FIXME: modify arbitrary value for non aligning messages on time/nick? */
+        && (length_align < (window->win_chat_width - 5)))
+    {
+        /* in the beginning of a word or in the middle of a word with multiline word align */
+        if ((pre_chars_displayed + chars_displayed == 0)
+            || CONFIG_BOOLEAN(config_look_align_multiline_words))
+        {
+            window->win_chat_cursor_x += length_align;
+
+            if ((CONFIG_ENUM(config_look_align_end_of_lines) == CONFIG_LOOK_ALIGN_END_OF_LINES_MESSAGE)
+                && (CONFIG_ENUM(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)
+                && CONFIG_STRING(config_look_prefix_suffix)
+                && CONFIG_STRING(config_look_prefix_suffix)[0]
+                && line->data->date > 0)
+            {
+                if (!simulate)
+                {
+                    gui_window_save_style (GUI_WINDOW_OBJECTS(window)->win_chat);
+                    gui_window_set_weechat_color (GUI_WINDOW_OBJECTS(window)->win_chat,
+                                                  GUI_COLOR_CHAT_PREFIX_SUFFIX);
+                    gui_window_current_emphasis = 0;
+                }
+                chars_displayed += gui_chat_display_word_raw (window, line,
+                                                              CONFIG_STRING(config_look_prefix_suffix),
+                                                              0, simulate,
+                                                              apply_style_inactive,
+                                                              nick_offline);
+                window->win_chat_cursor_x += gui_chat_strlen_screen (CONFIG_STRING(config_look_prefix_suffix));
+                chars_displayed += gui_chat_display_word_raw (window, line,
+                                                              str_space,
+                                                              0, simulate,
+                                                              apply_style_inactive,
+                                                              nick_offline);
+                window->win_chat_cursor_x += gui_chat_strlen_screen (str_space);
+                if (!simulate)
+                    gui_window_restore_style (GUI_WINDOW_OBJECTS(window)->win_chat);
+            }
+        }
+        if (!simulate && (window->win_chat_cursor_y < window->coords_size))
+        {
+            window->coords[window->win_chat_cursor_y].line = line;
+            window->coords[window->win_chat_cursor_y].data = (char *)word;
+        }
+    }
+
+    return chars_displayed;
+}
+
+/*
  * Displays a word on chat buffer.
  *
  * Returns number of chars displayed on screen.
@@ -496,9 +580,8 @@ gui_chat_display_word (struct t_gui_window *window,
                        int apply_style_inactive,
                        int nick_offline)
 {
-    char *data, *ptr_data, *end_line, saved_char, str_space[] = " ";
+    char *data, *ptr_data, *end_line, saved_char;
     int chars_displayed, pos_saved_char, chars_to_display, num_displayed;
-    int length_align;
 
     chars_displayed = 0;
 
@@ -523,56 +606,16 @@ gui_chat_display_word (struct t_gui_window *window,
     ptr_data = data;
     while (ptr_data && ptr_data[0])
     {
-        /* insert spaces for aligning text under time/nick */
-        length_align = gui_line_get_align (window->buffer, line, 0, 0);
-
-        /* in the beginning of a line */
-        if ((window->win_chat_cursor_x == 0)
-            && (*lines_displayed > pre_lines_displayed)
-            /* FIXME: modify arbitrary value for non aligning messages on time/nick? */
-            && (length_align < (window->win_chat_width - 5)))
-        {
-            /* in the beginning of a word or in the middle of a word with multiline word align */
-            if ((chars_displayed == 0)
-                || CONFIG_BOOLEAN(config_look_align_multiline_words))
-            {
-                window->win_chat_cursor_x += length_align;
-
-                if ((CONFIG_INTEGER(config_look_align_end_of_lines) == CONFIG_LOOK_ALIGN_END_OF_LINES_MESSAGE)
-                    && (CONFIG_INTEGER(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)
-                    && CONFIG_STRING(config_look_prefix_suffix)
-                    && CONFIG_STRING(config_look_prefix_suffix)[0]
-                    && line->data->date > 0)
-                {
-                    if (!simulate)
-                    {
-                        gui_window_save_style (GUI_WINDOW_OBJECTS(window)->win_chat);
-                        gui_window_set_weechat_color (GUI_WINDOW_OBJECTS(window)->win_chat,
-                                                      GUI_COLOR_CHAT_PREFIX_SUFFIX);
-                        gui_window_current_emphasis = 0;
-                    }
-                    chars_displayed += gui_chat_display_word_raw (window, line,
-                                                                  CONFIG_STRING(config_look_prefix_suffix),
-                                                                  0, simulate,
-                                                                  apply_style_inactive,
-                                                                  nick_offline);
-                    window->win_chat_cursor_x += gui_chat_strlen_screen (CONFIG_STRING(config_look_prefix_suffix));
-                    chars_displayed += gui_chat_display_word_raw (window, line,
-                                                                  str_space,
-                                                                  0, simulate,
-                                                                  apply_style_inactive,
-                                                                  nick_offline);
-                    window->win_chat_cursor_x += gui_chat_strlen_screen (str_space);
-                    if (!simulate)
-                        gui_window_restore_style (GUI_WINDOW_OBJECTS(window)->win_chat);
-                }
-            }
-            if (!simulate && (window->win_chat_cursor_y < window->coords_size))
-            {
-                window->coords[window->win_chat_cursor_y].line = line;
-                window->coords[window->win_chat_cursor_y].data = (char *)word + (ptr_data - data);
-            }
-        }
+        chars_displayed += gui_chat_display_prefix_suffix (
+            window,
+            line,
+            word + (ptr_data - data),
+            pre_lines_displayed,
+            lines_displayed,
+            chars_displayed,
+            simulate,
+            apply_style_inactive,
+            nick_offline);
 
         chars_to_display = gui_chat_strlen_screen (ptr_data);
 
@@ -601,6 +644,8 @@ gui_chat_display_word (struct t_gui_window *window,
                                                               nick_offline);
             }
             ptr_data[pos_saved_char] = saved_char;
+            if (pos_saved_char == 0)
+                break;
             ptr_data += pos_saved_char;
         }
         else
@@ -622,6 +667,8 @@ gui_chat_display_word (struct t_gui_window *window,
                                                               apply_style_inactive,
                                                               nick_offline);
             }
+            if (!ptr_data[0])
+                break;
             ptr_data += strlen (ptr_data);
         }
 
@@ -715,8 +762,7 @@ gui_chat_display_day_changed (struct t_gui_window *window,
                                0, simulate, 0, 0);
     window->win_chat_cursor_x = window->win_chat_width;
 
-    if (message_with_color)
-        free (message_with_color);
+    free (message_with_color);
 }
 
 /*
@@ -756,14 +802,15 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
                                  int num_lines, int count,
                                  int pre_lines_displayed,
                                  int *lines_displayed,
-                                 int simulate)
+                                 int simulate,
+                                 int nick_offline)
 {
     char str_space[] = " ";
     char *prefix_no_color, *prefix_highlighted, *ptr_prefix, *ptr_prefix2;
     char *ptr_prefix_color;
     const char *short_name, *str_color, *ptr_nick_prefix, *ptr_nick_suffix;
     int i, length, length_allowed, num_spaces, prefix_length, extra_spaces;
-    int chars_displayed, nick_offline, prefix_is_nick, length_nick_prefix_suffix;
+    int chars_displayed, prefix_is_nick, length_nick_prefix_suffix;
     int chars_to_display;
     struct t_gui_lines *mixed_lines;
 
@@ -850,7 +897,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
     if (mixed_lines && (line->data->buffer->active != 2))
     {
         if ((CONFIG_INTEGER(config_look_prefix_buffer_align_max) > 0)
-            && (CONFIG_INTEGER(config_look_prefix_buffer_align) != CONFIG_LOOK_PREFIX_BUFFER_ALIGN_NONE))
+            && (CONFIG_ENUM(config_look_prefix_buffer_align) != CONFIG_LOOK_PREFIX_BUFFER_ALIGN_NONE))
         {
             length_allowed =
                 (mixed_lines->buffer_max_length <= CONFIG_INTEGER(config_look_prefix_buffer_align_max)) ?
@@ -859,11 +906,11 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
         else
             length_allowed = mixed_lines->buffer_max_length;
 
-        short_name = gui_buffer_get_short_name (line->data->buffer);
+        short_name = line->data->buffer->short_name;
         length = gui_chat_strlen_screen (short_name);
         num_spaces = length_allowed - length;
 
-        if (CONFIG_INTEGER(config_look_prefix_buffer_align) == CONFIG_LOOK_PREFIX_BUFFER_ALIGN_RIGHT)
+        if (CONFIG_ENUM(config_look_prefix_buffer_align) == CONFIG_LOOK_PREFIX_BUFFER_ALIGN_RIGHT)
         {
             if (!simulate)
             {
@@ -899,7 +946,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
             window->coords[window->win_chat_cursor_y].buffer_x1 = window->win_chat_cursor_x;
 
         /* not enough space to display full buffer name? => truncate it! */
-        if ((CONFIG_INTEGER(config_look_prefix_buffer_align) != CONFIG_LOOK_PREFIX_BUFFER_ALIGN_NONE)
+        if ((CONFIG_ENUM(config_look_prefix_buffer_align) != CONFIG_LOOK_PREFIX_BUFFER_ALIGN_NONE)
             && (num_spaces < 0))
         {
             chars_to_display = length_allowed;
@@ -934,7 +981,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
         if (window->win_chat_cursor_y < window->coords_size)
             window->coords[window->win_chat_cursor_y].buffer_x2 = window->win_chat_cursor_x - 1;
 
-        if ((CONFIG_INTEGER(config_look_prefix_buffer_align) != CONFIG_LOOK_PREFIX_BUFFER_ALIGN_NONE)
+        if ((CONFIG_ENUM(config_look_prefix_buffer_align) != CONFIG_LOOK_PREFIX_BUFFER_ALIGN_NONE)
             && (num_spaces < 0))
         {
             if (!simulate)
@@ -975,9 +1022,9 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
                                       GUI_COLOR_CHAT_INACTIVE_BUFFER,
                                       GUI_COLOR_CHAT);
             }
-            if ((CONFIG_INTEGER(config_look_prefix_buffer_align) == CONFIG_LOOK_PREFIX_BUFFER_ALIGN_LEFT)
-                || ((CONFIG_INTEGER(config_look_prefix_buffer_align) == CONFIG_LOOK_PREFIX_BUFFER_ALIGN_NONE)
-                && (CONFIG_INTEGER(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)))
+            if ((CONFIG_ENUM(config_look_prefix_buffer_align) == CONFIG_LOOK_PREFIX_BUFFER_ALIGN_LEFT)
+                || ((CONFIG_ENUM(config_look_prefix_buffer_align) == CONFIG_LOOK_PREFIX_BUFFER_ALIGN_NONE)
+                    && (CONFIG_ENUM(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)))
             {
                 for (i = 0; i < num_spaces; i++)
                 {
@@ -1041,7 +1088,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
     /* display prefix */
     if (ptr_prefix
         && (ptr_prefix[0]
-            || (CONFIG_INTEGER(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)))
+            || (CONFIG_ENUM(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)))
     {
         if (!simulate)
         {
@@ -1074,7 +1121,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
 
         num_spaces = length_allowed - prefix_length - length_nick_prefix_suffix;
 
-        if (CONFIG_INTEGER(config_look_prefix_align) == CONFIG_LOOK_PREFIX_ALIGN_RIGHT)
+        if (CONFIG_ENUM(config_look_prefix_align) == CONFIG_LOOK_PREFIX_ALIGN_RIGHT)
         {
             for (i = 0; i < num_spaces; i++)
             {
@@ -1102,11 +1149,9 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
                                    simulate, 0, 0);
         }
 
-        nick_offline = CONFIG_BOOLEAN(config_look_color_nick_offline)
-            && gui_line_has_offline_nick (line);
-
         prefix_highlighted = NULL;
-        if (line->data->highlight)
+        if (line->data->highlight
+            && CONFIG_BOOLEAN(config_look_highlight_prefix))
         {
             prefix_no_color = gui_color_decode (ptr_prefix, NULL);
             if (prefix_no_color)
@@ -1153,7 +1198,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
 
         /* not enough space to display full prefix? => truncate it! */
         extra_spaces = 0;
-        if ((CONFIG_INTEGER(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)
+        if ((CONFIG_ENUM(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)
             && (num_spaces < 0))
         {
             chars_to_display = length_allowed - length_nick_prefix_suffix;
@@ -1192,8 +1237,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
         if (window->win_chat_cursor_y < window->coords_size)
             window->coords[window->win_chat_cursor_y].prefix_x2 = window->win_chat_cursor_x - 1;
 
-        if (prefix_highlighted)
-            free (prefix_highlighted);
+        free (prefix_highlighted);
 
         if (!simulate)
         {
@@ -1214,7 +1258,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
         }
 
         if (!CONFIG_BOOLEAN(config_look_prefix_align_more_after)
-            && (CONFIG_INTEGER(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)
+            && (CONFIG_ENUM(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)
             && (num_spaces < 0))
         {
             if (!simulate)
@@ -1246,7 +1290,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
                                    simulate, 0, 0);
         }
 
-        if (CONFIG_INTEGER(config_look_prefix_align) == CONFIG_LOOK_PREFIX_ALIGN_LEFT)
+        if (CONFIG_ENUM(config_look_prefix_align) == CONFIG_LOOK_PREFIX_ALIGN_LEFT)
         {
             if (!simulate)
             {
@@ -1267,7 +1311,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
         }
 
         if (CONFIG_BOOLEAN(config_look_prefix_align_more_after)
-            && (CONFIG_INTEGER(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)
+            && (CONFIG_ENUM(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)
             && (num_spaces < 0))
         {
             if (!simulate)
@@ -1303,7 +1347,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
             }
         }
 
-        if ((CONFIG_INTEGER(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)
+        if ((CONFIG_ENUM(config_look_prefix_align) != CONFIG_LOOK_PREFIX_ALIGN_NONE)
             && CONFIG_STRING(config_look_prefix_suffix)
             && CONFIG_STRING(config_look_prefix_suffix)[0])
         {
@@ -1323,8 +1367,7 @@ gui_chat_display_time_to_prefix (struct t_gui_window *window,
                                    simulate, 0, 0);
         }
     }
-    if (ptr_prefix)
-        free (ptr_prefix);
+    free (ptr_prefix);
 }
 
 /*
@@ -1346,7 +1389,8 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
     int read_marker_x, read_marker_y;
     int word_start_offset, word_end_offset;
     int word_length_with_spaces, word_length;
-    char *message_with_tags, *message_with_search;
+    int nick_offline, nick_offline_action, nick_offline_prefix;
+    char *message_nick_offline, *message_with_tags, *message_with_search;
     const char *ptr_data, *ptr_end_offset, *ptr_style, *next_char;
     struct t_gui_line *ptr_prev_line, *ptr_next_line;
     struct tm local_time, local_time2;
@@ -1375,6 +1419,12 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
         window->win_chat_cursor_y = y;
         gui_window_current_emphasis = 0;
     }
+
+    nick_offline = CONFIG_BOOLEAN(config_look_color_nick_offline)
+        && gui_line_has_offline_nick (line);
+    nick_offline_action = nick_offline && gui_line_is_action (line);
+    nick_offline_prefix = nick_offline
+        && (nick_offline_action || gui_line_search_tag_starting_with (line, "prefix_nick"));
 
     pre_lines_displayed = 0;
     lines_displayed = 0;
@@ -1422,7 +1472,7 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
     /* display time and prefix */
     gui_chat_display_time_to_prefix (window, line, num_lines, count,
                                      pre_lines_displayed, &lines_displayed,
-                                     simulate);
+                                     simulate, nick_offline_prefix);
     if (!simulate && !gui_chat_display_tags)
     {
         if (window->win_chat_cursor_y < window->coords_size)
@@ -1450,21 +1500,25 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
 
     /* display message */
     ptr_data = NULL;
+    message_nick_offline = NULL;
     message_with_tags = NULL;
     message_with_search = NULL;
 
     if (line->data->message && line->data->message[0])
     {
+        message_nick_offline = (nick_offline_action) ?
+            gui_line_build_string_message_nick_offline (line->data->message) : NULL;
+        ptr_data = (message_nick_offline) ?
+            message_nick_offline : line->data->message;
         message_with_tags = (gui_chat_display_tags) ?
-            gui_line_build_string_message_tags (line->data->message,
+            gui_line_build_string_message_tags (ptr_data,
                                                 line->data->tags_count,
                                                 line->data->tags_array,
                                                 1) : NULL;
-        ptr_data = (message_with_tags) ?
-            message_with_tags : line->data->message;
-        message_with_search = NULL;
-        if ((window->buffer->text_search != GUI_TEXT_SEARCH_DISABLED)
-            && (window->buffer->text_search_where & GUI_TEXT_SEARCH_IN_MESSAGE)
+        if (message_with_tags)
+            ptr_data = message_with_tags;
+        if ((window->buffer->text_search == GUI_BUFFER_SEARCH_LINES)
+            && (window->buffer->text_search_where & GUI_BUFFER_SEARCH_IN_MESSAGE)
             && (!window->buffer->text_search_regex
                 || window->buffer->text_search_regex_compiled))
         {
@@ -1481,6 +1535,23 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
     {
         while (ptr_data && ptr_data[0])
         {
+            if (ptr_data[0] == '\n')
+            {
+                gui_chat_display_new_line (window, num_lines, count,
+                                           &lines_displayed, simulate);
+                ptr_data++;
+                gui_chat_display_prefix_suffix (
+                    window,
+                    line,
+                    ptr_data,
+                    pre_lines_displayed,
+                    &lines_displayed,
+                    0,
+                    simulate,
+                    CONFIG_BOOLEAN(config_look_color_inactive_message),
+                    0);
+            }
+
             gui_chat_get_word_info (window,
                                     ptr_data,
                                     &word_start_offset,
@@ -1491,7 +1562,7 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
 
             /* if message ends with spaces, display them */
             if ((word_length <= 0) && (word_length_with_spaces > 0)
-                && !ptr_data[word_end_offset + 1])
+                && !ptr_data[word_end_offset])
             {
                 word_length = word_length_with_spaces;
             }
@@ -1529,7 +1600,7 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
 
                 /* display word */
                 gui_chat_display_word (window, line, ptr_data,
-                                       ptr_end_offset + 1,
+                                       ptr_end_offset,
                                        0, num_lines, count,
                                        pre_lines_displayed, &lines_displayed,
                                        simulate,
@@ -1541,7 +1612,7 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
                 else
                 {
                     /* move pointer after end of word */
-                    ptr_data = ptr_end_offset + 1;
+                    ptr_data = ptr_end_offset;
                     if (*(ptr_data - 1) == '\0')
                         ptr_data = NULL;
 
@@ -1576,10 +1647,9 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
                                    &lines_displayed, simulate);
     }
 
-    if (message_with_tags)
-        free (message_with_tags);
-    if (message_with_search)
-        free (message_with_search);
+    free (message_nick_offline);
+    free (message_with_tags);
+    free (message_with_search);
 
     /* display message if day has changed after this line */
     if ((line->data->date != 0)
@@ -1639,7 +1709,7 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
     else
     {
         /* display marker if line is matching user search */
-        if (window->buffer->text_search != GUI_TEXT_SEARCH_DISABLED)
+        if (window->buffer->text_search == GUI_BUFFER_SEARCH_LINES)
         {
             if (gui_line_search_text (window->buffer, line))
             {
@@ -1653,7 +1723,7 @@ gui_chat_display_line (struct t_gui_window *window, struct t_gui_line *line,
         else
         {
             /* display read marker if needed */
-            if ((CONFIG_INTEGER(config_look_read_marker) == CONFIG_LOOK_READ_MARKER_CHAR)
+            if ((CONFIG_ENUM(config_look_read_marker) == CONFIG_LOOK_READ_MARKER_CHAR)
                 && window->buffer->lines->last_read_line
                 && (window->buffer->lines->last_read_line == gui_line_get_prev_displayed (line)))
             {
@@ -1709,8 +1779,8 @@ gui_chat_display_line_y (struct t_gui_window *window, struct t_gui_line *line,
     }
 
     /* emphasize text (if searching text) */
-    if ((window->buffer->text_search != GUI_TEXT_SEARCH_DISABLED)
-        && (window->buffer->text_search_where & GUI_TEXT_SEARCH_IN_MESSAGE)
+    if ((window->buffer->text_search == GUI_BUFFER_SEARCH_LINES)
+        && (window->buffer->text_search_where & GUI_BUFFER_SEARCH_IN_MESSAGE)
         && (!window->buffer->text_search_regex
             || window->buffer->text_search_regex_compiled))
     {
@@ -1731,10 +1801,8 @@ gui_chat_display_line_y (struct t_gui_window *window, struct t_gui_line *line,
         gui_window_clrtoeol (GUI_WINDOW_OBJECTS(window)->win_chat);
     }
 
-    if (message_with_tags)
-        free (message_with_tags);
-    if (message_with_search)
-        free (message_with_search);
+    free (message_with_tags);
+    free (message_with_search);
 }
 
 /*
@@ -2038,7 +2106,7 @@ gui_chat_get_bare_line (struct t_gui_line *line)
 {
     char *prefix, *message, str_time[256], *str_line;
     const char *tag_prefix_nick;
-    struct tm *local_time;
+    struct timeval tv;
     int length;
 
     prefix = NULL;
@@ -2060,11 +2128,11 @@ gui_chat_get_bare_line (struct t_gui_line *line)
         && CONFIG_STRING(config_look_bare_display_time_format)
         && CONFIG_STRING(config_look_bare_display_time_format)[0])
     {
-        local_time = localtime (&line->data->date);
-        if (strftime (str_time, sizeof (str_time),
-                      CONFIG_STRING(config_look_bare_display_time_format),
-                      local_time) == 0)
-            str_time[0] = '\0';
+        tv.tv_sec = line->data->date;
+        tv.tv_usec = line->data->date_usec;
+        util_strftimeval (str_time, sizeof (str_time),
+                          CONFIG_STRING(config_look_bare_display_time_format),
+                          &tv);
     }
     tag_prefix_nick = gui_line_search_tag_starting_with (line, "prefix_nick_");
 
@@ -2085,10 +2153,8 @@ gui_chat_get_bare_line (struct t_gui_line *line)
     }
 
 end:
-    if (prefix)
-        free (prefix);
-    if (message)
-        free (message);
+    free (prefix);
+    free (message);
 
     return str_line;
 }
@@ -2100,8 +2166,8 @@ end:
 void
 gui_chat_draw_bare (struct t_gui_window *window)
 {
-    struct t_gui_line *ptr_line;
-    char *line;
+    struct t_gui_line *ptr_gui_line;
+    char *line, *ptr_line_start, *ptr_line_end;
     int y, length, num_lines;
 
     /* in bare display, we display ONLY the current window/buffer */
@@ -2119,53 +2185,117 @@ gui_chat_draw_bare (struct t_gui_window *window)
         y = 0;
         if (window->scroll->start_line)
         {
-            ptr_line = window->scroll->start_line;
+            ptr_gui_line = window->scroll->start_line;
             window->scroll->first_line_displayed =
-                (ptr_line == gui_line_get_first_displayed (window->buffer));
+                (ptr_gui_line == gui_line_get_first_displayed (window->buffer));
         }
         else
         {
-            ptr_line = gui_line_get_first_displayed (window->buffer);
+            ptr_gui_line = gui_line_get_first_displayed (window->buffer);
             window->scroll->first_line_displayed = 1;
         }
-        while (ptr_line && (y < gui_term_lines))
+        while (ptr_gui_line && (y < gui_term_lines))
         {
-            line = gui_chat_get_bare_line (ptr_line);
+            line = gui_chat_get_bare_line (ptr_gui_line);
             if (!line)
                 break;
-            length = utf8_strlen_screen (line);
-            num_lines = length / gui_term_cols;
-            if (length % gui_term_cols != 0)
-                num_lines++;
-            if (y + num_lines <= gui_term_lines)
-                printf ("\033[%d;1H%s", y + 1, line);
+
+            ptr_line_start = line;
+            ptr_line_end = line;
+            while (ptr_line_start)
+            {
+                ptr_line_end = strchr (ptr_line_start, '\n');
+                if (ptr_line_end)
+                    ptr_line_end[0] = '\0';
+
+                length = utf8_strlen_screen (ptr_line_start);
+                num_lines = length == 0 ? 1 : length / gui_term_cols;
+                if (length % gui_term_cols != 0)
+                    num_lines++;
+                if (y + num_lines <= gui_term_lines)
+                    printf ("\033[%d;1H%s", y + 1, ptr_line_start);
+                y += num_lines;
+
+                if (ptr_line_end)
+                {
+                    ptr_line_end[0] = '\n';
+                    ptr_line_start = ptr_line_end + 1;
+                }
+                else
+                {
+                    ptr_line_start = NULL;
+                }
+            }
+
             free (line);
-            y += num_lines;
-            ptr_line = gui_line_get_next_displayed (ptr_line);
+            ptr_gui_line = gui_line_get_next_displayed (ptr_gui_line);
         }
     }
     else
     {
         /* display from bottom to top (starting with last line of buffer) */
         y = gui_term_lines;
-        ptr_line = gui_line_get_last_displayed (window->buffer);
-        while (ptr_line && (y >= 0))
+        ptr_gui_line = gui_line_get_last_displayed (window->buffer);
+        while (ptr_gui_line && (y >= 0))
         {
-            line = gui_chat_get_bare_line (ptr_line);
+            line = gui_chat_get_bare_line (ptr_gui_line);
             if (!line)
                 break;
-            length = utf8_strlen_screen (line);
-            num_lines = length / gui_term_cols;
-            if (length % gui_term_cols != 0)
-                num_lines++;
-            y -= num_lines;
+
+            ptr_line_start = line;
+            ptr_line_end = line;
+            while (ptr_line_start)
+            {
+                ptr_line_end = strchr (ptr_line_start, '\n');
+                if (ptr_line_end)
+                    ptr_line_end[0] = '\0';
+                length = utf8_strlen_screen (ptr_line_start);
+                num_lines = length == 0 ? 1 : length / gui_term_cols;
+                if (length % gui_term_cols != 0)
+                    num_lines++;
+                y -= num_lines;
+                if (ptr_line_end)
+                {
+                    ptr_line_end[0] = '\n';
+                    ptr_line_start = ptr_line_end + 1;
+                }
+                else
+                {
+                    ptr_line_start = NULL;
+                }
+            }
+
             if (y >= 0)
-                printf ("\033[%d;1H%s", y + 1, line);
+            {
+                printf ("\033[%d;1H", y + 1);
+                ptr_line_start = line;
+                ptr_line_end = line;
+                while (ptr_line_start)
+                {
+                    ptr_line_end = strchr (ptr_line_start, '\n');
+                    if (ptr_line_end)
+                        ptr_line_end[0] = '\0';
+
+                    printf ("%s", ptr_line_start);
+
+                    if (ptr_line_end)
+                    {
+                        printf ("\r\n");
+                        ptr_line_end[0] = '\n';
+                        ptr_line_start = ptr_line_end + 1;
+                    }
+                    else
+                    {
+                        ptr_line_start = NULL;
+                    }
+                }
+            }
+
             free (line);
-            ptr_line = gui_line_get_prev_displayed (ptr_line);
+            ptr_gui_line = gui_line_get_prev_displayed (ptr_gui_line);
         }
         window->scroll->first_line_displayed =
-            (ptr_line == gui_line_get_first_displayed (window->buffer));
+            (ptr_gui_line == gui_line_get_first_displayed (window->buffer));
     }
 
     /*

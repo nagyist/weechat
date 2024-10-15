@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -111,8 +111,15 @@ extern struct t_irc_channel *irc_channel_new (struct t_irc_server *server,
                                               const char *channel_name,
                                               int switch_to_channel,
                                               int auto_switch);
+extern void irc_channel_pv_rename (struct t_irc_server *server,
+                                   struct t_irc_channel *channel,
+                                   const char *new_name);
 extern void irc_channel_add_nicklist_groups (struct t_irc_server *server,
                                              struct t_irc_channel *channel);
+extern void irc_channel_set_buffer_modes (struct t_irc_server *server,
+                                          struct t_irc_channel *channel);
+extern void irc_channel_set_buffer_input_prompt (struct t_irc_server *server,
+                                                 struct t_irc_channel *channel);
 extern void irc_channel_set_buffer_title (struct t_irc_channel *channel);
 extern void irc_channel_set_topic (struct t_irc_channel *channel,
                                    const char *topic);
@@ -171,8 +178,9 @@ extern void irc_channel_join_smart_filtered_remove (struct t_irc_channel *channe
                                                     const char *nick);
 extern void irc_channel_join_smart_filtered_unmask (struct t_irc_channel *channel,
                                                     const char *nick);
-extern void irc_channel_rejoin (struct t_irc_server *server,
-                                struct t_irc_channel *channel);
+extern void
+irc_channel_rejoin (struct t_irc_server *server, struct t_irc_channel *channel,
+                    int manual_join, int noswitch);
 extern int irc_channel_autorejoin_cb (const void *pointer, void *data,
                                       int remaining_calls);
 extern void irc_channel_display_nick_back_in_pv (struct t_irc_server *server,

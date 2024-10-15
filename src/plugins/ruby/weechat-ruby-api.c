@@ -1,7 +1,7 @@
 /*
  * weechat-ruby-api.c - ruby API functions
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  * Copyright (C) 2005-2007 Emmanuel Bouthenot <kolter@openics.org>
  * Copyright (C) 2012 Simon Arlott
  *
@@ -77,6 +77,8 @@
     return INT2FIX (__int)
 #define API_RETURN_LONG(__long)                                         \
     return LONG2NUM (__long)
+#define API_RETURN_LONGLONG(__longlong)                                 \
+    return LL2NUM (__longlong)
 
 
 /*
@@ -125,7 +127,7 @@ weechat_ruby_api_register (VALUE class, VALUE name, VALUE author,
     c_shutdown_func = StringValuePtr (shutdown_func);
     c_charset = StringValuePtr (charset);
 
-    if (plugin_script_search (weechat_ruby_plugin, ruby_scripts, c_name))
+    if (plugin_script_search (ruby_scripts, c_name))
     {
         /* another script already exists with same name */
         weechat_printf (NULL,
@@ -454,9 +456,9 @@ weechat_ruby_api_string_parse_size (VALUE class, VALUE size)
     char *c_size;
     unsigned long long value;
 
-    API_INIT_FUNC(1, "string_parse_size", API_RETURN_LONG(0));
+    API_INIT_FUNC(1, "string_parse_size", API_RETURN_LONGLONG(0));
     if (NIL_P (size))
-        API_WRONG_ARGS(API_RETURN_LONG(0));
+        API_WRONG_ARGS(API_RETURN_LONGLONG(0));
 
     Check_Type (size, T_STRING);
 
@@ -464,7 +466,7 @@ weechat_ruby_api_string_parse_size (VALUE class, VALUE size)
 
     value = weechat_string_parse_size (c_size);
 
-    API_RETURN_LONG(value);
+    API_RETURN_LONGLONG(value);
 }
 
 static VALUE
@@ -582,12 +584,9 @@ weechat_ruby_api_string_eval_expression (VALUE class, VALUE expr,
     result = weechat_string_eval_expression (c_expr, c_pointers, c_extra_vars,
                                              c_options);
 
-    if (c_pointers)
-        weechat_hashtable_free (c_pointers);
-    if (c_extra_vars)
-        weechat_hashtable_free (c_extra_vars);
-    if (c_options)
-        weechat_hashtable_free (c_options);
+    weechat_hashtable_free (c_pointers);
+    weechat_hashtable_free (c_extra_vars);
+    weechat_hashtable_free (c_options);
 
     API_RETURN_STRING_FREE(result);
 }
@@ -631,12 +630,9 @@ weechat_ruby_api_string_eval_path_home (VALUE class, VALUE path,
     result = weechat_string_eval_path_home (c_path, c_pointers, c_extra_vars,
                                             c_options);
 
-    if (c_pointers)
-        weechat_hashtable_free (c_pointers);
-    if (c_extra_vars)
-        weechat_hashtable_free (c_extra_vars);
-    if (c_options)
-        weechat_hashtable_free (c_options);
+    weechat_hashtable_free (c_pointers);
+    weechat_hashtable_free (c_extra_vars);
+    weechat_hashtable_free (c_options);
 
     API_RETURN_STRING_FREE(result);
 }
@@ -1077,6 +1073,74 @@ weechat_ruby_api_config_new (VALUE class, VALUE name, VALUE function,
     API_RETURN_STRING(result);
 }
 
+struct t_hashtable *
+weechat_ruby_api_config_update_cb (const void *pointer, void *data,
+                                   struct t_config_file *config_file,
+                                   int version_read,
+                                   struct t_hashtable *data_read)
+{
+    struct t_plugin_script *script;
+    void *func_argv[4];
+    char empty_arg[1] = { '\0' };
+    const char *ptr_function, *ptr_data;
+    struct t_hashtable *ret_hashtable;
+
+    script = (struct t_plugin_script *)pointer;
+    plugin_script_get_function_and_data (data, &ptr_function, &ptr_data);
+
+    if (ptr_function && ptr_function[0])
+    {
+        func_argv[0] = (ptr_data) ? (char *)ptr_data : empty_arg;
+        func_argv[1] = (char *)API_PTR2STR(config_file);
+        func_argv[2] = &version_read;
+        func_argv[3] = data_read;
+
+        ret_hashtable =  weechat_ruby_exec (script,
+                                            WEECHAT_SCRIPT_EXEC_HASHTABLE,
+                                            ptr_function,
+                                            "ssih", func_argv);
+
+        return ret_hashtable;
+    }
+
+    return NULL;
+}
+
+static VALUE
+weechat_ruby_api_config_set_version (VALUE class, VALUE config_file,
+                                     VALUE version, VALUE function,
+                                     VALUE data)
+{
+    char *c_config_file, *c_function, *c_data;
+    int rc, c_version;
+
+    API_INIT_FUNC(1, "config_set_version", API_RETURN_INT(0));
+    if (NIL_P (config_file) || NIL_P (version) || NIL_P (function)
+        || NIL_P (data))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    Check_Type (config_file, T_STRING);
+    CHECK_INTEGER(version);
+    Check_Type (function, T_STRING);
+    Check_Type (data, T_STRING);
+
+    c_config_file = StringValuePtr (config_file);
+    c_version = NUM2INT (version);
+    c_function = StringValuePtr (function);
+    c_data = StringValuePtr (data);
+
+    rc = plugin_script_api_config_set_version (
+        weechat_ruby_plugin,
+        ruby_current_script,
+        API_STR2PTR(c_config_file),
+        c_version,
+        &weechat_ruby_api_config_update_cb,
+        c_function,
+        c_data);
+
+    API_RETURN_INT(rc);
+}
+
 int
 weechat_ruby_api_config_read_cb (const void *pointer, void *data,
                                  struct t_config_file *config_file,
@@ -1453,9 +1517,7 @@ weechat_ruby_api_config_option_change_cb (const void *pointer, void *data,
                                 WEECHAT_SCRIPT_EXEC_IGNORE,
                                 ptr_function,
                                 "ss", func_argv);
-
-        if (rc)
-            free (rc);
+        free (rc);
     }
 }
 
@@ -1480,9 +1542,7 @@ weechat_ruby_api_config_option_delete_cb (const void *pointer, void *data,
                                 WEECHAT_SCRIPT_EXEC_IGNORE,
                                 ptr_function,
                                 "ss", func_argv);
-
-        if (rc)
-            free (rc);
+        free (rc);
     }
 }
 
@@ -1741,6 +1801,52 @@ weechat_ruby_api_config_option_rename (VALUE class, VALUE option,
 }
 
 static VALUE
+weechat_ruby_api_config_option_get_string (VALUE class, VALUE option,
+                                           VALUE property)
+{
+    char *c_option, *c_property;
+    const char *result;
+
+    API_INIT_FUNC(1, "config_option_get_string", API_RETURN_EMPTY);
+    if (NIL_P (option) || NIL_P (property))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    Check_Type (option, T_STRING);
+    Check_Type (property, T_STRING);
+
+    c_option = StringValuePtr (option);
+    c_property = StringValuePtr (property);
+
+    result = weechat_config_option_get_string (API_STR2PTR(c_option),
+                                               c_property);
+
+    API_RETURN_STRING(result);
+}
+
+static VALUE
+weechat_ruby_api_config_option_get_pointer (VALUE class, VALUE option,
+                                            VALUE property)
+{
+    char *c_option, *c_property;
+    const char *result;
+
+    API_INIT_FUNC(1, "config_option_get_pointer", API_RETURN_EMPTY);
+    if (NIL_P (option) || NIL_P (property))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    Check_Type (option, T_STRING);
+    Check_Type (property, T_STRING);
+
+    c_option = StringValuePtr (option);
+    c_property = StringValuePtr (property);
+
+    result = API_PTR2STR(weechat_config_option_get_pointer (API_STR2PTR(c_option),
+                                                            c_property));
+
+    API_RETURN_STRING(result);
+}
+
+static VALUE
 weechat_ruby_api_config_option_is_null (VALUE class, VALUE option)
 {
     char *c_option;
@@ -1817,6 +1923,25 @@ weechat_ruby_api_config_boolean_default (VALUE class, VALUE option)
 }
 
 static VALUE
+weechat_ruby_api_config_boolean_inherited (VALUE class, VALUE option)
+{
+    char *c_option;
+    int value;
+
+    API_INIT_FUNC(1, "config_boolean_inherited", API_RETURN_INT(0));
+    if (NIL_P (option))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    Check_Type (option, T_STRING);
+
+    c_option = StringValuePtr (option);
+
+    value = weechat_config_boolean_inherited (API_STR2PTR(c_option));
+
+    API_RETURN_INT(value);
+}
+
+static VALUE
 weechat_ruby_api_config_integer (VALUE class, VALUE option)
 {
     char *c_option;
@@ -1850,6 +1975,25 @@ weechat_ruby_api_config_integer_default (VALUE class, VALUE option)
     c_option = StringValuePtr (option);
 
     value = weechat_config_integer_default (API_STR2PTR(c_option));
+
+    API_RETURN_INT(value);
+}
+
+static VALUE
+weechat_ruby_api_config_integer_inherited (VALUE class, VALUE option)
+{
+    char *c_option;
+    int value;
+
+    API_INIT_FUNC(1, "config_integer_inherited", API_RETURN_INT(0));
+    if (NIL_P (option))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    Check_Type (option, T_STRING);
+
+    c_option = StringValuePtr (option);
+
+    value = weechat_config_integer_inherited (API_STR2PTR(c_option));
 
     API_RETURN_INT(value);
 }
@@ -1893,6 +2037,25 @@ weechat_ruby_api_config_string_default (VALUE class, VALUE option)
 }
 
 static VALUE
+weechat_ruby_api_config_string_inherited (VALUE class, VALUE option)
+{
+    char *c_option;
+    const char *result;
+
+    API_INIT_FUNC(1, "config_string_inherited", API_RETURN_EMPTY);
+    if (NIL_P (option))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    Check_Type (option, T_STRING);
+
+    c_option = StringValuePtr (option);
+
+    result = weechat_config_string_inherited (API_STR2PTR(c_option));
+
+    API_RETURN_STRING(result);
+}
+
+static VALUE
 weechat_ruby_api_config_color (VALUE class, VALUE option)
 {
     char *c_option;
@@ -1928,6 +2091,82 @@ weechat_ruby_api_config_color_default (VALUE class, VALUE option)
     result = weechat_config_color_default (API_STR2PTR(c_option));
 
     API_RETURN_STRING(result);
+}
+
+static VALUE
+weechat_ruby_api_config_color_inherited (VALUE class, VALUE option)
+{
+    char *c_option;
+    const char *result;
+
+    API_INIT_FUNC(1, "config_color_inherited", API_RETURN_EMPTY);
+    if (NIL_P (option))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    Check_Type (option, T_STRING);
+
+    c_option = StringValuePtr (option);
+
+    result = weechat_config_color_inherited (API_STR2PTR(c_option));
+
+    API_RETURN_STRING(result);
+}
+
+static VALUE
+weechat_ruby_api_config_enum (VALUE class, VALUE option)
+{
+    char *c_option;
+    int value;
+
+    API_INIT_FUNC(1, "config_enum", API_RETURN_INT(0));
+    if (NIL_P (option))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    Check_Type (option, T_STRING);
+
+    c_option = StringValuePtr (option);
+
+    value = weechat_config_enum (API_STR2PTR(c_option));
+
+    API_RETURN_INT(value);
+}
+
+static VALUE
+weechat_ruby_api_config_enum_default (VALUE class, VALUE option)
+{
+    char *c_option;
+    int value;
+
+    API_INIT_FUNC(1, "config_enum_default", API_RETURN_INT(0));
+    if (NIL_P (option))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    Check_Type (option, T_STRING);
+
+    c_option = StringValuePtr (option);
+
+    value = weechat_config_enum_default (API_STR2PTR(c_option));
+
+    API_RETURN_INT(value);
+}
+
+static VALUE
+weechat_ruby_api_config_enum_inherited (VALUE class, VALUE option)
+{
+    char *c_option;
+    int value;
+
+    API_INIT_FUNC(1, "config_enum_inherited", API_RETURN_INT(0));
+    if (NIL_P (option))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    Check_Type (option, T_STRING);
+
+    c_option = StringValuePtr (option);
+
+    value = weechat_config_enum_inherited (API_STR2PTR(c_option));
+
+    API_RETURN_INT(value);
 }
 
 static VALUE
@@ -2259,8 +2498,7 @@ weechat_ruby_api_key_bind (VALUE class, VALUE context, VALUE keys)
 
     num_keys = weechat_key_bind (c_context, c_keys);
 
-    if (c_keys)
-        weechat_hashtable_free (c_keys);
+    weechat_hashtable_free (c_keys);
 
     API_RETURN_INT(num_keys);
 }
@@ -2379,6 +2617,43 @@ weechat_ruby_api_print_date_tags (VALUE class, VALUE buffer, VALUE date,
 }
 
 static VALUE
+weechat_ruby_api_print_datetime_tags (VALUE class, VALUE buffer, VALUE date,
+                                      VALUE date_usec, VALUE tags,
+                                      VALUE message)
+{
+    char *c_buffer, *c_tags, *c_message;
+    time_t c_date;
+    int c_date_usec;
+
+    API_INIT_FUNC(1, "print_datetime_tags", API_RETURN_ERROR);
+    if (NIL_P (buffer) || NIL_P (date) || NIL_P (date_usec) || NIL_P (tags)
+        || NIL_P (message))
+        API_WRONG_ARGS(API_RETURN_ERROR);
+
+    Check_Type (buffer, T_STRING);
+    CHECK_INTEGER(date);
+    CHECK_INTEGER(date_usec);
+    Check_Type (tags, T_STRING);
+    Check_Type (message, T_STRING);
+
+    c_buffer = StringValuePtr (buffer);
+    c_date = NUM2ULONG (date);
+    c_date_usec = NUM2INT (date_usec);
+    c_tags = StringValuePtr (tags);
+    c_message = StringValuePtr (message);
+
+    plugin_script_api_printf_datetime_tags (weechat_ruby_plugin,
+                                            ruby_current_script,
+                                            API_STR2PTR(c_buffer),
+                                            c_date,
+                                            c_date_usec,
+                                            c_tags,
+                                            "%s", c_message);
+
+    API_RETURN_OK;
+}
+
+static VALUE
 weechat_ruby_api_print_y (VALUE class, VALUE buffer, VALUE y, VALUE message)
 {
     char *c_buffer, *c_message;
@@ -2437,6 +2712,46 @@ weechat_ruby_api_print_y_date_tags (VALUE class, VALUE buffer, VALUE y,
                                           c_date,
                                           c_tags,
                                           "%s", c_message);
+
+    API_RETURN_OK;
+}
+
+static VALUE
+weechat_ruby_api_print_y_datetime_tags (VALUE class, VALUE buffer, VALUE y,
+                                        VALUE date, VALUE date_usec, VALUE tags,
+                                        VALUE message)
+{
+    char *c_buffer, *c_tags, *c_message;
+    int c_y, c_date_usec;
+    time_t c_date;
+
+    API_INIT_FUNC(1, "print_y_datetime_tags", API_RETURN_ERROR);
+    if (NIL_P (buffer) || NIL_P (y) || NIL_P (date) || NIL_P (date_usec)
+        || NIL_P (tags) || NIL_P (message))
+        API_WRONG_ARGS(API_RETURN_ERROR);
+
+    Check_Type (buffer, T_STRING);
+    CHECK_INTEGER(y);
+    CHECK_INTEGER(date);
+    CHECK_INTEGER(date_usec);
+    Check_Type (tags, T_STRING);
+    Check_Type (message, T_STRING);
+
+    c_buffer = StringValuePtr (buffer);
+    c_y = NUM2INT (y);
+    c_date = NUM2ULONG (date);
+    c_date_usec = NUM2INT (date_usec);
+    c_tags = StringValuePtr (tags);
+    c_message = StringValuePtr (message);
+
+    plugin_script_api_printf_y_datetime_tags (weechat_ruby_plugin,
+                                              ruby_current_script,
+                                              API_STR2PTR(c_buffer),
+                                              c_y,
+                                              c_date,
+                                              c_date_usec,
+                                              c_tags,
+                                              "%s", c_message);
 
     API_RETURN_OK;
 }
@@ -3038,8 +3353,92 @@ weechat_ruby_api_hook_process_hashtable (VALUE class, VALUE command,
                                                                    c_function,
                                                                    c_data));
 
-    if (c_options)
-        weechat_hashtable_free (c_options);
+    weechat_hashtable_free (c_options);
+
+    API_RETURN_STRING(result);
+}
+
+int
+weechat_ruby_api_hook_url_cb (const void *pointer, void *data,
+                              const char *url,
+                              struct t_hashtable *options,
+                              struct t_hashtable *output)
+{
+    struct t_plugin_script *script;
+    void *func_argv[4];
+    char empty_arg[1] = { '\0' };
+    const char *ptr_function, *ptr_data;
+    int *rc, ret;
+
+    script = (struct t_plugin_script *)pointer;
+    plugin_script_get_function_and_data (data, &ptr_function, &ptr_data);
+
+    if (ptr_function && ptr_function[0])
+    {
+        func_argv[0] = (ptr_data) ? (char *)ptr_data : empty_arg;
+        func_argv[1] = (url) ? (char *)url : empty_arg;
+        func_argv[2] = options;
+        func_argv[3] = output;
+
+        rc = (int *) weechat_ruby_exec (script,
+                                        WEECHAT_SCRIPT_EXEC_INT,
+                                        ptr_function,
+                                        "sshh", func_argv);
+
+        if (!rc)
+            ret = WEECHAT_RC_ERROR;
+        else
+        {
+            ret = *rc;
+            free (rc);
+        }
+
+        return ret;
+    }
+
+    return WEECHAT_RC_ERROR;
+}
+
+static VALUE
+weechat_ruby_api_hook_url (VALUE class, VALUE url,
+                           VALUE options, VALUE timeout,
+                           VALUE function, VALUE data)
+{
+    char *c_url, *c_function, *c_data;
+    const char *result;
+    struct t_hashtable *c_options;
+    int c_timeout;
+
+    API_INIT_FUNC(1, "hook_url", API_RETURN_EMPTY);
+    if (NIL_P (url) || NIL_P (options) || NIL_P (timeout)
+        || NIL_P (function) || NIL_P (data))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    Check_Type (url, T_STRING);
+    Check_Type (options, T_HASH);
+    CHECK_INTEGER(timeout);
+    Check_Type (function, T_STRING);
+    Check_Type (data, T_STRING);
+
+    c_url = StringValuePtr (url);
+    c_options = weechat_ruby_hash_to_hashtable (options,
+                                                WEECHAT_SCRIPT_HASHTABLE_DEFAULT_SIZE,
+                                                WEECHAT_HASHTABLE_STRING,
+                                                WEECHAT_HASHTABLE_STRING);
+    c_timeout = NUM2INT (timeout);
+    c_function = StringValuePtr (function);
+    c_data = StringValuePtr (data);
+
+    result = API_PTR2STR(plugin_script_api_hook_url (weechat_ruby_plugin,
+                                                     ruby_current_script,
+                                                     c_url,
+                                                     c_options,
+                                                     c_timeout,
+                                                     &weechat_ruby_api_hook_url_cb,
+                                                     c_function,
+                                                     c_data));
+
+    weechat_hashtable_free (c_options);
 
     API_RETURN_STRING(result);
 }
@@ -3206,7 +3605,7 @@ weechat_ruby_api_hook_line (VALUE class, VALUE buffer_type, VALUE buffer_name,
 int
 weechat_ruby_api_hook_print_cb (const void *pointer, void *data,
                                 struct t_gui_buffer *buffer,
-                                time_t date,
+                                time_t date, int date_usec,
                                 int tags_count, const char **tags,
                                 int displayed, int highlight,
                                 const char *prefix, const char *message)
@@ -3219,6 +3618,7 @@ weechat_ruby_api_hook_print_cb (const void *pointer, void *data,
     int *rc, ret;
 
     /* make C compiler happy */
+    (void) date_usec;
     (void) tags_count;
 
     script = (struct t_plugin_script *)pointer;
@@ -3251,8 +3651,7 @@ weechat_ruby_api_hook_print_cb (const void *pointer, void *data,
             ret = *rc;
             free (rc);
         }
-        if (func_argv[3])
-            free (func_argv[3]);
+        free (func_argv[3]);
 
         return ret;
     }
@@ -3522,8 +3921,7 @@ weechat_ruby_api_hook_hsignal_send (VALUE class, VALUE signal, VALUE hashtable)
 
     rc = weechat_hook_hsignal_send (c_signal, c_hashtable);
 
-    if (c_hashtable)
-        weechat_hashtable_free (c_hashtable);
+    weechat_hashtable_free (c_hashtable);
 
     API_RETURN_INT(rc);
 }
@@ -4162,8 +4560,7 @@ weechat_ruby_api_buffer_new_props (VALUE class, VALUE name, VALUE properties,
             c_function_close,
             c_data_close));
 
-    if (c_properties)
-        weechat_hashtable_free (c_properties);
+    weechat_hashtable_free (c_properties);
 
     API_RETURN_STRING(result);
 }
@@ -4423,6 +4820,29 @@ weechat_ruby_api_buffer_match_list (VALUE class, VALUE buffer, VALUE string)
                                        c_string);
 
     API_RETURN_INT(value);
+}
+
+static VALUE
+weechat_ruby_api_line_search_by_id (VALUE class, VALUE buffer, VALUE id)
+{
+    char *c_buffer;
+    int c_id;
+    const char *result;
+
+    API_INIT_FUNC(1, "line_search_by_id", API_RETURN_EMPTY);
+    if (NIL_P (buffer) || NIL_P (id))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    Check_Type (buffer, T_STRING);
+    CHECK_INTEGER(id);
+
+    c_buffer = StringValuePtr (buffer);
+    c_id = NUM2INT (id);
+
+    result = API_PTR2STR(weechat_line_search_by_id (API_STR2PTR(c_buffer),
+                                                    c_id));
+
+    API_RETURN_STRING(result);
 }
 
 static VALUE
@@ -5290,8 +5710,7 @@ weechat_ruby_api_command_options (VALUE class, VALUE buffer, VALUE command,
                                             c_command,
                                             c_options);
 
-    if (c_options)
-        weechat_hashtable_free (c_options);
+    weechat_hashtable_free (c_options);
 
     API_RETURN_INT(rc);
 }
@@ -5460,10 +5879,8 @@ weechat_ruby_api_info_get_hashtable (VALUE class, VALUE info_name,
     result_hashtable = weechat_info_get_hashtable (c_info_name, c_hashtable);
     result_hash = weechat_ruby_hashtable_to_hash (result_hashtable);
 
-    if (c_hashtable)
-        weechat_hashtable_free (c_hashtable);
-    if (result_hashtable)
-        weechat_hashtable_free (result_hashtable);
+    weechat_hashtable_free (c_hashtable);
+    weechat_hashtable_free (result_hashtable);
 
     return result_hash;
 }
@@ -6090,12 +6507,9 @@ weechat_ruby_api_hdata_search (VALUE class, VALUE hdata, VALUE pointer,
                                                c_options,
                                                c_move));
 
-    if (c_pointers)
-        weechat_hashtable_free (c_pointers);
-    if (c_extra_vars)
-        weechat_hashtable_free (c_extra_vars);
-    if (c_options)
-        weechat_hashtable_free (c_options);
+    weechat_hashtable_free (c_pointers);
+    weechat_hashtable_free (c_extra_vars);
+    weechat_hashtable_free (c_options);
 
     API_RETURN_STRING(result);
 }
@@ -6176,6 +6590,32 @@ weechat_ruby_api_hdata_long (VALUE class, VALUE hdata, VALUE pointer,
                                 c_name);
 
     API_RETURN_LONG(value);
+}
+
+static VALUE
+weechat_ruby_api_hdata_longlong (VALUE class, VALUE hdata, VALUE pointer,
+                                 VALUE name)
+{
+    char *c_hdata, *c_pointer, *c_name;
+    long long value;
+
+    API_INIT_FUNC(1, "hdata_longlong", API_RETURN_LONG(0));
+    if (NIL_P (hdata) || NIL_P (pointer) || NIL_P (name))
+        API_WRONG_ARGS(API_RETURN_LONGLONG(0));
+
+    Check_Type (hdata, T_STRING);
+    Check_Type (pointer, T_STRING);
+    Check_Type (name, T_STRING);
+
+    c_hdata = StringValuePtr (hdata);
+    c_pointer = StringValuePtr (pointer);
+    c_name = StringValuePtr (name);
+
+    value = weechat_hdata_longlong (API_STR2PTR(c_hdata),
+                                    API_STR2PTR(c_pointer),
+                                    c_name);
+
+    API_RETURN_LONGLONG(value);
 }
 
 static VALUE
@@ -6344,8 +6784,7 @@ weechat_ruby_api_hdata_update (VALUE class, VALUE hdata, VALUE pointer,
                                   API_STR2PTR(c_pointer),
                                   c_hashtable);
 
-    if (c_hashtable)
-        weechat_hashtable_free (c_hashtable);
+    weechat_hashtable_free (c_hashtable);
 
     API_RETURN_INT(value);
 }
@@ -6513,53 +6952,20 @@ weechat_ruby_api_upgrade_close (VALUE class, VALUE upgrade_file)
 void
 weechat_ruby_api_init (VALUE ruby_mWeechat)
 {
-    rb_define_const (ruby_mWeechat, "WEECHAT_RC_OK", INT2NUM(WEECHAT_RC_OK));
-    rb_define_const (ruby_mWeechat, "WEECHAT_RC_OK_EAT", INT2NUM(WEECHAT_RC_OK_EAT));
-    rb_define_const (ruby_mWeechat, "WEECHAT_RC_ERROR", INT2NUM(WEECHAT_RC_ERROR));
+    int i;
 
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_READ_OK", INT2NUM(WEECHAT_CONFIG_READ_OK));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_READ_MEMORY_ERROR", INT2NUM(WEECHAT_CONFIG_READ_MEMORY_ERROR));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_READ_FILE_NOT_FOUND", INT2NUM(WEECHAT_CONFIG_READ_FILE_NOT_FOUND));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_WRITE_OK", INT2NUM(WEECHAT_CONFIG_WRITE_OK));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_WRITE_ERROR", INT2NUM(WEECHAT_CONFIG_WRITE_ERROR));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_WRITE_MEMORY_ERROR", INT2NUM(WEECHAT_CONFIG_WRITE_MEMORY_ERROR));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_OPTION_SET_OK_CHANGED", INT2NUM(WEECHAT_CONFIG_OPTION_SET_OK_CHANGED));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE", INT2NUM(WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_OPTION_SET_ERROR", INT2NUM(WEECHAT_CONFIG_OPTION_SET_ERROR));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_OPTION_SET_OPTION_NOT_FOUND", INT2NUM(WEECHAT_CONFIG_OPTION_SET_OPTION_NOT_FOUND));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_OPTION_UNSET_OK_NO_RESET", INT2NUM(WEECHAT_CONFIG_OPTION_UNSET_OK_NO_RESET));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_OPTION_UNSET_OK_RESET", INT2NUM(WEECHAT_CONFIG_OPTION_UNSET_OK_RESET));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED", INT2NUM(WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED));
-    rb_define_const (ruby_mWeechat, "WEECHAT_CONFIG_OPTION_UNSET_ERROR", INT2NUM(WEECHAT_CONFIG_OPTION_UNSET_ERROR));
+    /* interface constants */
+    for (i = 0; weechat_script_constants[i].name; i++)
+    {
+        rb_define_const (
+            ruby_mWeechat,
+            weechat_script_constants[i].name,
+            (weechat_script_constants[i].value_string) ?
+            rb_str_new2 (weechat_script_constants[i].value_string) :
+            INT2NUM(weechat_script_constants[i].value_integer));
+    }
 
-    rb_define_const (ruby_mWeechat, "WEECHAT_LIST_POS_SORT", rb_str_new2 (WEECHAT_LIST_POS_SORT));
-    rb_define_const (ruby_mWeechat, "WEECHAT_LIST_POS_BEGINNING", rb_str_new2 (WEECHAT_LIST_POS_BEGINNING));
-    rb_define_const (ruby_mWeechat, "WEECHAT_LIST_POS_END", rb_str_new2 (WEECHAT_LIST_POS_END));
-
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOTLIST_LOW", rb_str_new2 (WEECHAT_HOTLIST_LOW));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOTLIST_MESSAGE", rb_str_new2 (WEECHAT_HOTLIST_MESSAGE));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOTLIST_PRIVATE", rb_str_new2 (WEECHAT_HOTLIST_PRIVATE));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOTLIST_HIGHLIGHT", rb_str_new2 (WEECHAT_HOTLIST_HIGHLIGHT));
-
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_PROCESS_RUNNING", INT2NUM(WEECHAT_HOOK_PROCESS_RUNNING));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_PROCESS_ERROR", INT2NUM(WEECHAT_HOOK_PROCESS_ERROR));
-
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_OK", INT2NUM(WEECHAT_HOOK_CONNECT_OK));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND", INT2NUM(WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND", INT2NUM(WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED", INT2NUM(WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_PROXY_ERROR", INT2NUM(WEECHAT_HOOK_CONNECT_PROXY_ERROR));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR", INT2NUM(WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR", INT2NUM(WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR", INT2NUM(WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_MEMORY_ERROR", INT2NUM(WEECHAT_HOOK_CONNECT_MEMORY_ERROR));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_TIMEOUT", INT2NUM(WEECHAT_HOOK_CONNECT_TIMEOUT));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_CONNECT_SOCKET_ERROR", INT2NUM(WEECHAT_HOOK_CONNECT_SOCKET_ERROR));
-
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_SIGNAL_STRING", rb_str_new2 (WEECHAT_HOOK_SIGNAL_STRING));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_SIGNAL_INT", rb_str_new2 (WEECHAT_HOOK_SIGNAL_INT));
-    rb_define_const (ruby_mWeechat, "WEECHAT_HOOK_SIGNAL_POINTER", rb_str_new2 (WEECHAT_HOOK_SIGNAL_POINTER));
-
+    /* interface functions */
     API_DEF_FUNC(register, 7);
     API_DEF_FUNC(plugin_get_name, 1);
     API_DEF_FUNC(charset_set, 1);
@@ -6600,6 +7006,7 @@ weechat_ruby_api_init (VALUE ruby_mWeechat)
     API_DEF_FUNC(list_remove_all, 1);
     API_DEF_FUNC(list_free, 1);
     API_DEF_FUNC(config_new, 3);
+    API_DEF_FUNC(config_set_version, 4);
     API_DEF_FUNC(config_new_section, 14);
     API_DEF_FUNC(config_search_section, 2);
     API_DEF_FUNC(config_new_option, 12);
@@ -6610,16 +7017,25 @@ weechat_ruby_api_init (VALUE ruby_mWeechat)
     API_DEF_FUNC(config_option_set_null, 2);
     API_DEF_FUNC(config_option_unset, 1);
     API_DEF_FUNC(config_option_rename, 2);
+    API_DEF_FUNC(config_option_get_string, 2);
+    API_DEF_FUNC(config_option_get_pointer, 2);
     API_DEF_FUNC(config_option_is_null, 1);
     API_DEF_FUNC(config_option_default_is_null, 1);
     API_DEF_FUNC(config_boolean, 1);
     API_DEF_FUNC(config_boolean_default, 1);
+    API_DEF_FUNC(config_boolean_inherited, 1);
     API_DEF_FUNC(config_integer, 1);
     API_DEF_FUNC(config_integer_default, 1);
+    API_DEF_FUNC(config_integer_inherited, 1);
     API_DEF_FUNC(config_string, 1);
     API_DEF_FUNC(config_string_default, 1);
+    API_DEF_FUNC(config_string_inherited, 1);
     API_DEF_FUNC(config_color, 1);
     API_DEF_FUNC(config_color_default, 1);
+    API_DEF_FUNC(config_color_inherited, 1);
+    API_DEF_FUNC(config_enum, 1);
+    API_DEF_FUNC(config_enum_inherited, 1);
+    API_DEF_FUNC(config_enum_default, 1);
     API_DEF_FUNC(config_write_option, 2);
     API_DEF_FUNC(config_write_line, 3);
     API_DEF_FUNC(config_write, 1);
@@ -6641,8 +7057,10 @@ weechat_ruby_api_init (VALUE ruby_mWeechat)
     API_DEF_FUNC(color, 1);
     API_DEF_FUNC(print, 2);
     API_DEF_FUNC(print_date_tags, 4);
+    API_DEF_FUNC(print_datetime_tags, 5);
     API_DEF_FUNC(print_y, 3);
     API_DEF_FUNC(print_y_date_tags, 5);
+    API_DEF_FUNC(print_y_datetime_tags, 6);
     API_DEF_FUNC(log_print, 1);
     API_DEF_FUNC(hook_command, 7);
     API_DEF_FUNC(hook_completion, 4);
@@ -6653,6 +7071,7 @@ weechat_ruby_api_init (VALUE ruby_mWeechat)
     API_DEF_FUNC(hook_fd, 6);
     API_DEF_FUNC(hook_process, 4);
     API_DEF_FUNC(hook_process_hashtable, 5);
+    API_DEF_FUNC(hook_url, 5);
     API_DEF_FUNC(hook_connect, 8);
     API_DEF_FUNC(hook_line, 5);
     API_DEF_FUNC(hook_print, 6);
@@ -6685,6 +7104,7 @@ weechat_ruby_api_init (VALUE ruby_mWeechat)
     API_DEF_FUNC(buffer_set, 3);
     API_DEF_FUNC(buffer_string_replace_local_var, 2);
     API_DEF_FUNC(buffer_match_list, 2);
+    API_DEF_FUNC(line_search_by_id, 2);
     API_DEF_FUNC(current_window, 0);
     API_DEF_FUNC(window_search_with_buffer, 1);
     API_DEF_FUNC(window_get_integer, 2);
@@ -6754,6 +7174,7 @@ weechat_ruby_api_init (VALUE ruby_mWeechat)
     API_DEF_FUNC(hdata_char, 3);
     API_DEF_FUNC(hdata_integer, 3);
     API_DEF_FUNC(hdata_long, 3);
+    API_DEF_FUNC(hdata_longlong, 3);
     API_DEF_FUNC(hdata_string, 3);
     API_DEF_FUNC(hdata_pointer, 3);
     API_DEF_FUNC(hdata_time, 3);

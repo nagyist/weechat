@@ -1,7 +1,7 @@
 /*
  * buflist-bar-item.c - bar item for buflist plugin
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -30,14 +30,15 @@
 
 
 struct t_gui_bar_item *buflist_bar_item_buflist[BUFLIST_BAR_NUM_ITEMS] =
-{ NULL, NULL, NULL };
+{ NULL, NULL, NULL, NULL, NULL };
 struct t_hashtable *buflist_hashtable_pointers = NULL;
 struct t_hashtable *buflist_hashtable_extra_vars = NULL;
 struct t_hashtable *buflist_hashtable_options_conditions = NULL;
 struct t_arraylist *buflist_list_buffers[BUFLIST_BAR_NUM_ITEMS] =
-{ NULL, NULL, NULL };
+{ NULL, NULL, NULL, NULL, NULL };
 
-int old_line_number_current_buffer[BUFLIST_BAR_NUM_ITEMS] = { -1, -1, -1 };
+int old_line_number_current_buffer[BUFLIST_BAR_NUM_ITEMS] =
+{ -1, -1, -1, -1, -1 };
 
 
 /*
@@ -73,6 +74,9 @@ buflist_bar_item_get_index (const char *item_name)
     int i;
     const char *ptr_item_name;
 
+    if (!item_name)
+        return -1;
+
     for (i = 0; i < BUFLIST_BAR_NUM_ITEMS; i++)
     {
         ptr_item_name = buflist_bar_item_get_name (i);
@@ -104,24 +108,34 @@ buflist_bar_item_get_index_with_pointer (struct t_gui_bar_item *item)
 /*
  * Updates buflist bar item if buflist is enabled (or if force argument is 1).
  *
- * If force == 1, all used items are refreshed
- *   (according to option buflist.look.use_items).
+ * If index == -1, all bar items (or all bar items used) are refreshed,
+ * otherwise only this bar item is refreshed.
+ *
+ * If force == 1, all used items are refreshed (according to option
+ * buflist.look.use_items).
  * If force == 2, all items are refreshed.
  */
 
 void
-buflist_bar_item_update (int force)
+buflist_bar_item_update (int index, int force)
 {
     int i, num_items;
 
     if (force || weechat_config_boolean (buflist_config_look_enabled))
     {
-        num_items = (force == 2) ?
-            BUFLIST_BAR_NUM_ITEMS :
-            weechat_config_integer (buflist_config_look_use_items);
-        for (i = 0; i < num_items; i++)
+        if ((index >= 0) && (index < BUFLIST_BAR_NUM_ITEMS))
         {
-            weechat_bar_item_update (buflist_bar_item_get_name (i));
+            weechat_bar_item_update (buflist_bar_item_get_name (index));
+        }
+        else
+        {
+            num_items = (force == 2) ?
+                BUFLIST_BAR_NUM_ITEMS :
+                weechat_config_integer (buflist_config_look_use_items);
+            for (i = 0; i < num_items; i++)
+            {
+                weechat_bar_item_update (buflist_bar_item_get_name (i));
+            }
         }
     }
 }
@@ -284,7 +298,7 @@ buflist_bar_item_auto_scroll (const char *item_name, int line_number)
 }
 
 /*
- * Returns content of bar item "buffer_plugin": bar item with buffer plugin.
+ * Returns the content of the bar item.
  */
 
 char *
@@ -313,7 +327,7 @@ buflist_bar_item_buflist_cb (const void *pointer, void *data,
                                         "highlight" };
     const char indent_empty[1] = { '\0' };
     const char *ptr_lag, *ptr_item_name, *ptr_tls_version;
-    int item_index, num_buffers, is_channel, is_private;
+    int item_index, num_buffers, is_channel, is_private, is_list;
     int i, j, length_max_number, current_buffer, number, prev_number, priority;
     int rc, count, line_number, line_number_current_buffer;
     int hotlist_priority_number;
@@ -358,8 +372,7 @@ buflist_bar_item_buflist_cb (const void *pointer, void *data,
     snprintf (str_format_number_empty, sizeof (str_format_number_empty),
               "%%-%ds", length_max_number);
 
-    if (buflist_list_buffers[item_index])
-        weechat_arraylist_free (buflist_list_buffers[item_index]);
+    weechat_arraylist_free (buflist_list_buffers[item_index]);
     buflist_list_buffers[item_index] = weechat_arraylist_new (
         16, 0, 1,
         NULL, NULL, NULL, NULL);
@@ -444,7 +457,8 @@ buflist_bar_item_buflist_cb (const void *pointer, void *data,
         ptr_type = weechat_buffer_get_string (ptr_buffer, "localvar_type");
         is_channel = (ptr_type && (strcmp (ptr_type, "channel") == 0));
         is_private = (ptr_type && (strcmp (ptr_type, "private") == 0));
-        ptr_format_indent = (is_channel || is_private) ?
+        is_list = (ptr_type && (strcmp (ptr_type, "list") == 0));
+        ptr_format_indent = (is_channel || is_private || is_list) ?
             weechat_config_string (buflist_config_format_indent) : indent_empty;
 
         /* nick prefix */
@@ -554,7 +568,7 @@ buflist_bar_item_buflist_cb (const void *pointer, void *data,
                                                    str_hotlist_count);
                     if (count > 0)
                     {
-                        if (*hotlist[0])
+                        if ((*hotlist)[0])
                         {
                             weechat_string_dyn_concat (
                                 hotlist,
@@ -574,8 +588,7 @@ buflist_bar_item_buflist_cb (const void *pointer, void *data,
                                                    -1);
                     }
                 }
-                str_hotlist = *hotlist;
-                weechat_string_dyn_free (hotlist, 0);
+                str_hotlist = weechat_string_dyn_free (hotlist, 0);
             }
         }
         weechat_hashtable_set (
@@ -585,8 +598,7 @@ buflist_bar_item_buflist_cb (const void *pointer, void *data,
         weechat_hashtable_set (buflist_hashtable_extra_vars,
                                "hotlist",
                                (str_hotlist) ? str_hotlist : "");
-        if (str_hotlist)
-            free (str_hotlist);
+        free (str_hotlist);
 
         /* lag */
         ptr_lag = weechat_buffer_get_string (ptr_buffer, "localvar_lag");
@@ -618,8 +630,7 @@ buflist_bar_item_buflist_cb (const void *pointer, void *data,
             buflist_hashtable_extra_vars,
             buflist_hashtable_options_conditions);
         rc = (condition && (strcmp (condition, "1") == 0));
-        if (condition)
-            free (condition);
+        free (condition);
         if (!rc)
             continue;
 
@@ -633,7 +644,7 @@ buflist_bar_item_buflist_cb (const void *pointer, void *data,
 
         /* add newline between each buffer (if needed) */
         if (weechat_config_boolean (buflist_config_look_add_newline)
-            && *buflist[0])
+            && (*buflist)[0])
         {
             if (!weechat_string_dyn_concat (buflist, "\n", -1))
                 goto error;
@@ -655,15 +666,15 @@ buflist_bar_item_buflist_cb (const void *pointer, void *data,
         line_number++;
     }
 
-    str_buflist = *buflist;
+    str_buflist = weechat_string_dyn_free (buflist, 0);
 
     goto end;
 
 error:
+    weechat_string_dyn_free (buflist, 1);
     str_buflist = NULL;
 
 end:
-    weechat_string_dyn_free (buflist, 0);
     weechat_arraylist_free (buffers);
 
     if ((line_number_current_buffer != old_line_number_current_buffer[item_index])
@@ -754,6 +765,7 @@ buflist_bar_item_end ()
     for (i = 0; i < BUFLIST_BAR_NUM_ITEMS; i++)
     {
         weechat_bar_item_remove (buflist_bar_item_buflist[i]);
+        buflist_bar_item_buflist[i] = NULL;
     }
 
     weechat_hashtable_free (buflist_hashtable_pointers);

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2014-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2014-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -29,4 +29,4 @@ set_target_properties(trigger PROPERTIES PREFIX "")
 
 target_link_libraries(trigger coverage_config)
 
-install(TARGETS trigger LIBRARY DESTINATION ${WEECHAT_LIBDIR}/plugins)
+install(TARGETS trigger LIBRARY DESTINATION "${WEECHAT_LIBDIR}/plugins")

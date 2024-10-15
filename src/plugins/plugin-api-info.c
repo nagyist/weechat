@@ -1,7 +1,7 @@
 /*
  * plugin-api-info.c - extra info functions for plugin API
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -30,15 +30,17 @@
 #include <time.h>
 
 #include "../core/weechat.h"
-#include "../core/wee-config.h"
-#include "../core/wee-crypto.h"
-#include "../core/wee-hook.h"
-#include "../core/wee-infolist.h"
-#include "../core/wee-proxy.h"
-#include "../core/wee-string.h"
-#include "../core/wee-url.h"
-#include "../core/wee-util.h"
-#include "../core/wee-version.h"
+#include "../core/core-config.h"
+#include "../core/core-crypto.h"
+#include "../core/core-hashtable.h"
+#include "../core/core-hook.h"
+#include "../core/core-infolist.h"
+#include "../core/core-proxy.h"
+#include "../core/core-secure.h"
+#include "../core/core-string.h"
+#include "../core/core-url.h"
+#include "../core/core-util.h"
+#include "../core/core-version.h"
 #include "../gui/gui-bar.h"
 #include "../gui/gui-bar-item.h"
 #include "../gui/gui-bar-window.h"
@@ -52,6 +54,7 @@
 #include "../gui/gui-key.h"
 #include "../gui/gui-layout.h"
 #include "../gui/gui-line.h"
+#include "../gui/gui-mouse.h"
 #include "../gui/gui-nick.h"
 #include "../gui/gui-nicklist.h"
 #include "../gui/gui-window.h"
@@ -96,8 +99,10 @@ plugin_api_info_version_number_cb (const void *pointer, void *data,
     (void) info_name;
     (void) arguments;
 
-    snprintf (version_number, sizeof (version_number), "%d",
-              util_version_number (version_get_version ()));
+    snprintf (
+        version_number, sizeof (version_number), "%d",
+        util_version_number (
+            (arguments && arguments[0]) ? arguments : version_get_version ()));
     return strdup (version_number);
 }
 
@@ -131,7 +136,7 @@ plugin_api_info_date_cb (const void *pointer, void *data,
                          const char *info_name,
                          const char *arguments)
 {
-    const char *version;
+    const char *compilation_date;
 
     /* make C compiler happy */
     (void) pointer;
@@ -139,8 +144,8 @@ plugin_api_info_date_cb (const void *pointer, void *data,
     (void) info_name;
     (void) arguments;
 
-    version = version_get_compilation_date_time ();
-    return (version) ? strdup (version) : NULL;
+    compilation_date = version_get_compilation_date_time ();
+    return (compilation_date) ? strdup (compilation_date) : NULL;
 }
 
 /*
@@ -193,7 +198,7 @@ plugin_api_info_absolute_path (const char *directory)
 {
     char absolute_path[PATH_MAX];
 
-    if (!realpath (directory, absolute_path))
+    if (!directory || !realpath (directory, absolute_path))
         return NULL;
     return strdup ((absolute_path[0]) ? absolute_path : directory);
 }
@@ -232,6 +237,24 @@ plugin_api_info_weechat_data_dir_cb (const void *pointer, void *data,
     (void) arguments;
 
     return plugin_api_info_absolute_path (weechat_data_dir);
+}
+
+/*
+ * Returns WeeChat info "weechat_state_dir".
+ */
+
+char *
+plugin_api_info_weechat_state_dir_cb (const void *pointer, void *data,
+                                      const char *info_name,
+                                      const char *arguments)
+{
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+    (void) arguments;
+
+    return plugin_api_info_absolute_path (weechat_state_dir);
 }
 
 /*
@@ -445,6 +468,55 @@ plugin_api_info_auto_connect_cb (const void *pointer, void *data,
 }
 
 /*
+ * Returns WeeChat info "auto_load_scripts".
+ */
+
+char *
+plugin_api_info_auto_load_scripts_cb (const void *pointer, void *data,
+                                      const char *info_name,
+                                      const char *arguments)
+{
+    char value[32];
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+    (void) arguments;
+
+    snprintf (value, sizeof (value), "%d", weechat_auto_load_scripts);
+    return strdup (value);
+}
+
+/*
+ * Returns WeeChat info "buffer".
+ */
+
+char *
+plugin_api_info_buffer_cb (const void *pointer, void *data,
+                           const char *info_name,
+                           const char *arguments)
+{
+    struct t_gui_buffer *ptr_buffer;
+    char value[64];
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+
+    if (!arguments || !arguments[0])
+        return NULL;
+
+    ptr_buffer = gui_buffer_search_by_full_name (arguments);
+    if (!ptr_buffer)
+        return NULL;
+
+    snprintf (value, sizeof (value), "0x%lx", (unsigned long)ptr_buffer);
+    return strdup (value);
+}
+
+/*
  * Returns WeeChat info "charset_terminal".
  */
 
@@ -568,6 +640,27 @@ plugin_api_info_cursor_mode_cb (const void *pointer, void *data,
     (void) arguments;
 
     snprintf (value, sizeof (value), "%d", gui_cursor_mode);
+    return strdup (value);
+}
+
+/*
+ * Returns WeeChat info "mouse".
+ */
+
+char *
+plugin_api_info_mouse_cb (const void *pointer, void *data,
+                          const char *info_name,
+                          const char *arguments)
+{
+    char value[32];
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+    (void) arguments;
+
+    snprintf (value, sizeof (value), "%d", gui_mouse_enabled);
     return strdup (value);
 }
 
@@ -762,10 +855,10 @@ plugin_api_info_nick_color_cb (const void *pointer, void *data,
 
     result = gui_nick_find_color (
         (num_items >= 1) ? items[0] : NULL,
+        -1,
         (num_items >= 2) ? items[1] : NULL);
 
-    if (items)
-        string_free_split (items);
+    string_free_split (items);
 
     return result;
 }
@@ -791,10 +884,88 @@ plugin_api_info_nick_color_name_cb (const void *pointer, void *data,
 
     result = gui_nick_find_color_name (
         (num_items >= 1) ? items[0] : NULL,
+        -1,
         (num_items >= 2) ? items[1] : NULL);
 
-    if (items)
-        string_free_split (items);
+    string_free_split (items);
+
+    return result;
+}
+
+/*
+ * Returns nick color code for a nickname (case ignored using a range of chars).
+ */
+
+char *
+plugin_api_info_nick_color_ignore_case_cb (const void *pointer, void *data,
+                                           const char *info_name,
+                                           const char *arguments)
+{
+    char **items, *result, *error;
+    int num_items, case_range;
+    long number;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+
+    items = string_split (arguments, ";", NULL, 0, 3, &num_items);
+
+    case_range = -1;
+    if (num_items >= 2)
+    {
+        error = NULL;
+        number = strtol (items[1], &error, 10);
+        if (error && !error[0])
+            case_range = (int)number;
+    }
+
+    result = gui_nick_find_color (
+        (num_items >= 1) ? items[0] : NULL,
+        case_range,
+        (num_items >= 3) ? items[2] : NULL);
+
+    string_free_split (items);
+
+    return result;
+}
+
+/*
+ * Returns nick color name for a nickname (case ignored using a range of chars).
+ */
+
+char *
+plugin_api_info_nick_color_name_ignore_case_cb (const void *pointer, void *data,
+                                                const char *info_name,
+                                                const char *arguments)
+{
+    char **items, *result, *error;
+    int num_items, case_range;
+    long number;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+
+    items = string_split (arguments, ";", NULL, 0, 3, &num_items);
+
+    case_range = -1;
+    if (num_items >= 2)
+    {
+        error = NULL;
+        number = strtol (items[1], &error, 10);
+        if (error && !error[0])
+            case_range = (int)number;
+    }
+
+    result = gui_nick_find_color_name (
+        (num_items >= 1) ? items[0] : NULL,
+        case_range,
+        (num_items >= 3) ? items[2] : NULL);
+
+    string_free_split (items);
 
     return result;
 }
@@ -944,10 +1115,8 @@ plugin_api_info_totp_generate_cb (const void *pointer, void *data,
     return totp;
 
 error:
-    if (argv)
-        string_free_split (argv);
-    if (totp)
-        free (totp);
+    string_free_split (argv);
+    free (totp);
     return NULL;
 }
 
@@ -1017,9 +1186,93 @@ plugin_api_info_totp_validate_cb (const void *pointer, void *data,
     return strdup (value);
 
 error:
-    if (argv)
-        string_free_split (argv);
+    string_free_split (argv);
     return NULL;
+}
+
+/*
+ * Returns WeeChat info "plugin_loaded".
+ */
+
+char *
+plugin_api_info_plugin_loaded_cb (const void *pointer, void *data,
+                                  const char *info_name,
+                                  const char *arguments)
+{
+    struct t_weechat_plugin *ptr_plugin;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+
+    if (!arguments || !arguments[0])
+        return NULL;
+
+    for (ptr_plugin = weechat_plugins; ptr_plugin;
+         ptr_plugin = ptr_plugin->next_plugin)
+    {
+        if (strcmp (ptr_plugin->name, arguments) == 0)
+        {
+            /* plugin loaded */
+            return strdup ("1");
+        }
+    }
+
+    /* plugin not loaded */
+    return NULL;
+}
+
+/*
+ * Returns WeeChat info "window".
+ */
+
+char *
+plugin_api_info_window_cb (const void *pointer, void *data,
+                           const char *info_name,
+                           const char *arguments)
+{
+    struct t_gui_window *ptr_window;
+    long number;
+    char *error, value[64];
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+
+    if (!arguments || !arguments[0])
+        return NULL;
+
+    error = NULL;
+    number = (int)strtol (arguments, &error, 10);
+    if (!error || error[0])
+        return NULL;
+
+    ptr_window = gui_window_search_by_number (number);
+    if (!ptr_window)
+        return NULL;
+
+    snprintf (value, sizeof (value), "0x%lx", (unsigned long)ptr_window);
+    return strdup (value);
+}
+
+/*
+ * Returns secured data hashtable.
+ */
+
+struct t_hashtable *
+plugin_api_info_hashtable_secured_data_cb (const void *pointer, void *data,
+                                           const char *info_name,
+                                           struct t_hashtable *hashtable)
+{
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+    (void) hashtable;
+
+    return hashtable_dup (secure_hashtable_data);
 }
 
 /*
@@ -1065,7 +1318,7 @@ plugin_api_infolist_bar_cb (const void *pointer, void *data,
         for (ptr_bar = gui_bars; ptr_bar; ptr_bar = ptr_bar->next_bar)
         {
             if (!arguments || !arguments[0]
-                || string_match (ptr_bar->name, arguments, 0))
+                || string_match (ptr_bar->name, arguments, 1))
             {
                 if (!gui_bar_add_to_infolist (ptr_infolist, ptr_bar))
                 {
@@ -1124,7 +1377,7 @@ plugin_api_infolist_bar_item_cb (const void *pointer, void *data,
              ptr_bar_item = ptr_bar_item->next_item)
         {
             if (!arguments || !arguments[0]
-                || string_match (ptr_bar_item->name, arguments, 0))
+                || string_match (ptr_bar_item->name, arguments, 1))
             {
                 if (!gui_bar_item_add_to_infolist (ptr_infolist, ptr_bar_item))
                 {
@@ -1257,7 +1510,7 @@ plugin_api_infolist_buffer_cb (const void *pointer, void *data,
              ptr_buffer = ptr_buffer->next_buffer)
         {
             if (!arguments || !arguments[0]
-                || string_match (ptr_buffer->full_name, arguments, 0))
+                || string_match (ptr_buffer->full_name, arguments, 1))
             {
                 if (!gui_buffer_add_to_infolist (ptr_infolist, ptr_buffer))
                 {
@@ -1347,7 +1600,7 @@ plugin_api_infolist_filter_cb (const void *pointer, void *data,
          ptr_filter = ptr_filter->next_filter)
     {
         if (!arguments || !arguments[0]
-            || string_match (ptr_filter->name, arguments, 0))
+            || string_match (ptr_filter->name, arguments, 1))
         {
             if (!gui_filter_add_to_infolist (ptr_infolist, ptr_filter))
             {
@@ -1492,24 +1745,24 @@ plugin_api_infolist_key_cb (const void *pointer, void *data,
     (void) infolist_name;
     (void) obj_pointer;
 
-    ptr_infolist = infolist_new (NULL);
-    if (!ptr_infolist)
-        return NULL;
-
     if (arguments && arguments[0])
         context = gui_key_search_context (arguments);
     else
         context = GUI_KEY_CONTEXT_DEFAULT;
-    if (context >= 0)
+    if (context < 0)
+        return NULL;
+
+    ptr_infolist = infolist_new (NULL);
+    if (!ptr_infolist)
+        return NULL;
+
+    for (ptr_key = gui_keys[context]; ptr_key;
+         ptr_key = ptr_key->next_key)
     {
-        for (ptr_key = gui_keys[context]; ptr_key;
-             ptr_key = ptr_key->next_key)
+        if (!gui_key_add_to_infolist (ptr_infolist, ptr_key))
         {
-            if (!gui_key_add_to_infolist (ptr_infolist, ptr_key))
-            {
-                infolist_free (ptr_infolist);
-                return NULL;
-            }
+            infolist_free (ptr_infolist);
+            return NULL;
         }
     }
     return ptr_infolist;
@@ -1661,7 +1914,7 @@ plugin_api_infolist_plugin_cb (const void *pointer, void *data,
              ptr_plugin = ptr_plugin->next_plugin)
         {
             if (!arguments || !arguments[0]
-                || string_match (ptr_plugin->name, arguments, 0))
+                || string_match (ptr_plugin->name, arguments, 1))
             {
                 if (!plugin_add_to_infolist (ptr_infolist, ptr_plugin))
                 {
@@ -1720,7 +1973,7 @@ plugin_api_infolist_proxy_cb (const void *pointer, void *data,
              ptr_proxy = ptr_proxy->next_proxy)
         {
             if (!arguments || !arguments[0]
-                || string_match (ptr_proxy->name, arguments, 0))
+                || string_match (ptr_proxy->name, arguments, 1))
             {
                 if (!proxy_add_to_infolist (ptr_infolist, ptr_proxy))
                 {
@@ -1880,7 +2133,9 @@ plugin_api_info_init ()
                NULL, &plugin_api_info_version_cb, NULL, NULL);
     hook_info (NULL, "version_number",
                N_("WeeChat version (as number)"),
-               NULL, &plugin_api_info_version_number_cb, NULL, NULL);
+               N_("version (optional, by default the version of the running "
+                  "WeeChat is returned)"),
+               &plugin_api_info_version_number_cb, NULL, NULL);
     hook_info (NULL, "version_git",
                N_("WeeChat git version (output of command \"git describe\" "
                   "for a development version only, empty for a stable "
@@ -1899,7 +2154,8 @@ plugin_api_info_init ()
                N_("WeeChat directory "
                   "(*deprecated* since version 3.2, replaced by "
                   "\"weechat_config_dir\", \"weechat_data_dir\", "
-                  "\"weechat_cache_dir\" and \"weechat_runtime_dir\")"),
+                  "\"weechat_state_dir\" , \"weechat_cache_dir\" "
+                  "and \"weechat_runtime_dir\")"),
                NULL, &plugin_api_info_weechat_data_dir_cb, NULL, NULL);
     hook_info (NULL, "weechat_config_dir",
                N_("WeeChat config directory"),
@@ -1907,6 +2163,9 @@ plugin_api_info_init ()
     hook_info (NULL, "weechat_data_dir",
                N_("WeeChat data directory"),
                NULL, &plugin_api_info_weechat_data_dir_cb, NULL, NULL);
+    hook_info (NULL, "weechat_state_dir",
+               N_("WeeChat state directory"),
+               NULL, &plugin_api_info_weechat_state_dir_cb, NULL, NULL);
     hook_info (NULL, "weechat_cache_dir",
                N_("WeeChat cache directory"),
                NULL, &plugin_api_info_weechat_cache_dir_cb, NULL, NULL);
@@ -1940,9 +2199,18 @@ plugin_api_info_init ()
                NULL, &plugin_api_info_weechat_daemon_cb, NULL, NULL);
     hook_info (NULL, "auto_connect",
                N_("1 if automatic connection to servers is enabled, "
-                  "0 if it has been disabled by the user (option \"-a\" or "
-                  "\"--no-connect\")"),
+                  "0 if it has been disabled by the user "
+                  "(option \"-a\" or \"--no-connect\")"),
                NULL, &plugin_api_info_auto_connect_cb, NULL, NULL);
+    hook_info (NULL, "auto_load_scripts",
+               N_("1 if scripts are automatically loaded, "
+                  "0 if the auto-load has been disabled by the user "
+                  "(option \"-s\" or \"--no-script\")"),
+               NULL, &plugin_api_info_auto_load_scripts_cb, NULL, NULL);
+    hook_info (NULL, "buffer",
+               N_("buffer pointer"),
+               N_("buffer full name"),
+               &plugin_api_info_buffer_cb, NULL, NULL);
     hook_info (NULL, "charset_terminal",
                N_("terminal charset"),
                NULL, &plugin_api_info_charset_terminal_cb, NULL, NULL);
@@ -1961,6 +2229,9 @@ plugin_api_info_init ()
     hook_info (NULL, "cursor_mode",
                N_("1 if cursor mode is enabled"),
                NULL, &plugin_api_info_cursor_mode_cb, NULL, NULL);
+    hook_info (NULL, "mouse",
+               N_("1 if mouse is enabled"),
+               NULL, &plugin_api_info_mouse_cb, NULL, NULL);
     hook_info (NULL, "term_width",
                N_("width of terminal"),
                NULL, &plugin_api_info_term_width_cb, NULL, NULL);
@@ -2001,6 +2272,26 @@ plugin_api_info_init ()
                   "options with nick colors and forced nick colors are "
                   "ignored)"),
                &plugin_api_info_nick_color_name_cb, NULL, NULL);
+    hook_info (NULL, "nick_color_ignore_case",
+               N_("get nick color code, ignoring case"),
+               N_("nickname;range;colors (range is a number of chars (see "
+                  "function strcasecmp_range, 0 = convert to lower case without "
+                   "using a range), colors is an optional comma-separated list "
+                  "of colors to use; background is allowed for a color with "
+                  "format text:background; if colors is present, WeeChat "
+                  "options with nick colors and forced nick colors are "
+                  "ignored)"),
+               &plugin_api_info_nick_color_ignore_case_cb, NULL, NULL);
+    hook_info (NULL, "nick_color_name_ignore_case",
+               N_("get nick color name, ignoring case"),
+               N_("nickname;range;colors (range is a number of chars (see "
+                  "function strcasecmp_range, 0 = convert to lower case without "
+                   "using a range), colors is an optional comma-separated list "
+                  "of colors to use; background is allowed for a color with "
+                  "format text:background; if colors is present, WeeChat "
+                  "options with nick colors and forced nick colors are "
+                  "ignored)"),
+               &plugin_api_info_nick_color_name_ignore_case_cb, NULL, NULL);
     hook_info (NULL, "uptime",
                N_("WeeChat uptime (format: \"days:hh:mm:ss\")"),
                N_("\"days\" (number of days) or \"seconds\" (number of "
@@ -2025,6 +2316,14 @@ plugin_api_info_init ()
                   "timestamp (optional, current time by default), number of "
                   "passwords before/after to test (optional, 0 by default)"),
                &plugin_api_info_totp_validate_cb, NULL, NULL);
+    hook_info (NULL, "plugin_loaded",
+               N_("1 if plugin is loaded"),
+               N_("plugin name"),
+               &plugin_api_info_plugin_loaded_cb, NULL, NULL);
+    hook_info (NULL, "window",
+               N_("window pointer"),
+               N_("window number"),
+               &plugin_api_info_window_cb, NULL, NULL);
 
     /* WeeChat core info_hashtable hooks */
     hook_info_hashtable (NULL,
@@ -2035,6 +2334,15 @@ plugin_api_info_init ()
            "\"y\": y coordinate (string with integer >= 0)"),
         N_("see function \"hook_focus\" in Plugin API reference"),
         &gui_focus_info_hashtable_gui_focus_info_cb, NULL, NULL);
+    /* info (hashtable) with the secured data */
+    hook_info_hashtable (
+        NULL,
+        "secured_data",
+        N_("secured data"),
+        NULL,
+        N_("secured data: names and values (be careful: the values are "
+           "sensitive data: do NOT print/log them anywhere)"),
+        &plugin_api_info_hashtable_secured_data_cb, NULL, NULL);
 
     /* WeeChat core infolist hooks */
     hook_infolist (NULL, "bar",

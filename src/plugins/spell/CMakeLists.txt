@@ -1,6 +1,6 @@
 #
 # Copyright (C) 2006 Emmanuel Bouthenot <kolter@openics.org>
-# Copyright (C) 2006-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2006-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -40,4 +40,4 @@ else()
   endif()
 endif()
 
-install(TARGETS spell LIBRARY DESTINATION ${WEECHAT_LIBDIR}/plugins)
+install(TARGETS spell LIBRARY DESTINATION "${WEECHAT_LIBDIR}/plugins")

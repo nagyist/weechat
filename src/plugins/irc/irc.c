@@ -1,7 +1,7 @@
 /*
  * irc.c - IRC (Internet Relay Chat) plugin for WeeChat
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -26,6 +26,7 @@
 #include "../weechat-plugin.h"
 #include "irc.h"
 #include "irc-bar-item.h"
+#include "irc-batch.h"
 #include "irc-buffer.h"
 #include "irc-channel.h"
 #include "irc-color.h"
@@ -36,6 +37,7 @@
 #include "irc-ignore.h"
 #include "irc-info.h"
 #include "irc-input.h"
+#include "irc-list.h"
 #include "irc-nick.h"
 #include "irc-notify.h"
 #include "irc-protocol.h"
@@ -52,7 +54,7 @@ WEECHAT_PLUGIN_DESCRIPTION(N_("IRC (Internet Relay Chat) protocol"));
 WEECHAT_PLUGIN_AUTHOR("Sébastien Helleu <flashcode@flashtux.org>");
 WEECHAT_PLUGIN_VERSION(WEECHAT_VERSION);
 WEECHAT_PLUGIN_LICENSE(WEECHAT_LICENSE);
-WEECHAT_PLUGIN_PRIORITY(6000);
+WEECHAT_PLUGIN_PRIORITY(IRC_PLUGIN_PRIORITY);
 
 struct t_weechat_plugin *weechat_irc_plugin = NULL;
 
@@ -104,7 +106,7 @@ irc_signal_upgrade_cb (const void *pointer, void *data,
                        void *signal_data)
 {
     struct t_irc_server *ptr_server;
-    int quit, ssl_disconnected;
+    int quit, tls_disconnected;
 
     /* make C compiler happy */
     (void) pointer;
@@ -127,27 +129,29 @@ irc_signal_upgrade_cb (const void *pointer, void *data,
 
     quit = (signal_data && (strcmp (signal_data, "quit") == 0));
 
-    ssl_disconnected = 0;
+    tls_disconnected = 0;
 
     for (ptr_server = irc_servers; ptr_server;
          ptr_server = ptr_server->next_server)
     {
         /*
-         * FIXME: it's not possible to upgrade with SSL servers connected
+         * FIXME: it's not possible to upgrade with TLS servers connected
          * (GnuTLS library can't reload data after upgrade), so we close
-         * connection for all SSL servers currently connected
+         * connection for all TLS servers currently connected
          */
-        if (ptr_server->is_connected && (ptr_server->ssl_connected || quit))
+        if (ptr_server->is_connected && (ptr_server->tls_connected || quit))
         {
             if (!quit)
             {
-                ssl_disconnected++;
+                tls_disconnected++;
                 weechat_printf (
                     ptr_server->buffer,
                     _("%s%s: disconnecting from server because upgrade can't "
-                      "work for servers connected via SSL"),
+                      "work for servers connected via TLS"),
                     weechat_prefix ("error"), IRC_PLUGIN_NAME);
             }
+            /* send QUIT to server, then disconnect */
+            irc_command_quit_server (ptr_server, NULL);
             irc_server_disconnect (ptr_server, 0, 0);
             /*
              * schedule reconnection: WeeChat will reconnect to this server
@@ -160,18 +164,18 @@ irc_signal_upgrade_cb (const void *pointer, void *data,
                 ptr_server->reconnect_delay - 1;
         }
     }
-    if (ssl_disconnected > 0)
+    if (tls_disconnected > 0)
     {
         weechat_printf (
             NULL,
             NG_("%s%s: disconnected from %d server "
-                "(SSL connection not supported with upgrade)",
+                "(TLS connection not supported with upgrade)",
                 "%s%s: disconnected from %d servers "
-                "(SSL connection not supported with upgrade)",
-                ssl_disconnected),
+                "(TLS connection not supported with upgrade)",
+                tls_disconnected),
             weechat_prefix ("error"),
             IRC_PLUGIN_NAME,
-            ssl_disconnected);
+            tls_disconnected);
     }
 
     return WEECHAT_RC_OK;
@@ -189,10 +193,17 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
 
     weechat_plugin = plugin;
 
+    irc_signal_quit_received = 0;
+    irc_signal_upgrade_received = 0;
+
+    irc_color_init ();
+
     if (!irc_config_init ())
         return WEECHAT_RC_ERROR;
 
     irc_config_read ();
+
+    irc_list_init ();
 
     irc_raw_init ();
 
@@ -220,12 +231,16 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
                          &irc_input_send_cb, NULL, NULL);
     weechat_hook_signal ("typing_self_*",
                          &irc_typing_signal_typing_self_cb, NULL, NULL);
+    weechat_hook_signal ("window_scrolled",
+                         &irc_list_window_scrolled_cb, NULL, NULL);
 
     /* hook hsignals for redirection */
     weechat_hook_hsignal ("irc_redirect_pattern",
                           &irc_redirect_pattern_hsignal_cb, NULL, NULL);
     weechat_hook_hsignal ("irc_redirect_command",
                           &irc_redirect_command_hsignal_cb, NULL, NULL);
+    weechat_hook_hsignal ("irc_redirection_server_*_list",
+                          &irc_list_hsignal_redirect_list_cb, NULL, NULL);
 
     /* modifiers */
     weechat_hook_modifier ("irc_color_decode",
@@ -238,6 +253,8 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
                            &irc_tag_modifier_cb, NULL, NULL);
     weechat_hook_modifier ("irc_tag_unescape_value",
                            &irc_tag_modifier_cb, NULL, NULL);
+    weechat_hook_modifier ("irc_batch",
+                           &irc_batch_modifier_cb, NULL, NULL);
 
     /* hook completions */
     irc_completion_init ();
@@ -248,13 +265,12 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
     info_auto_connect = weechat_info_get ("auto_connect", NULL);
     auto_connect = (info_auto_connect && (strcmp (info_auto_connect, "1") == 0)) ?
         1 : 0;
-    if (info_auto_connect)
-        free (info_auto_connect);
+    free (info_auto_connect);
 
     /* look at arguments */
     for (i = 0; i < argc; i++)
     {
-        if ((weechat_strncasecmp (argv[i], IRC_PLUGIN_NAME, 3) == 0))
+        if ((weechat_strncmp (argv[i], IRC_PLUGIN_NAME, 3) == 0))
         {
             if (!irc_server_alloc_with_url (argv[i]))
             {
@@ -302,7 +318,10 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
     (void) plugin;
 
     if (irc_hook_timer)
+    {
         weechat_unhook (irc_hook_timer);
+        irc_hook_timer = NULL;
+    }
 
     if (irc_signal_upgrade_received)
     {
@@ -316,6 +335,8 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
     }
 
     irc_ignore_free_all ();
+
+    irc_list_end ();
 
     irc_raw_end ();
 

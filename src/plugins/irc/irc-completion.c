@@ -1,7 +1,7 @@
 /*
  * irc-completion.c - completion for IRC commands
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -212,6 +212,45 @@ irc_completion_server_nicks_cb (const void *pointer, void *data,
 }
 
 /*
+ * Adds prefix modes filters to completion list.
+ */
+
+int
+irc_completion_server_prefix_modes_filter_cb (const void *pointer, void *data,
+                                              const char *completion_item,
+                                              struct t_gui_buffer *buffer,
+                                              struct t_gui_completion *completion)
+{
+    const char *ptr_prefix_modes;
+    char str_filter[16];
+    int i;
+
+    IRC_BUFFER_GET_SERVER_CHANNEL(buffer);
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) completion_item;
+
+    ptr_prefix_modes = irc_server_get_prefix_modes (ptr_server);
+    if (!ptr_prefix_modes)
+        return WEECHAT_RC_OK;
+
+    for (i = 0; ptr_prefix_modes[i]; i++)
+    {
+        snprintf (str_filter, sizeof (str_filter), "-%c", ptr_prefix_modes[i]);
+        weechat_completion_list_add (completion, str_filter,
+                                     1, WEECHAT_LIST_POS_END);
+    }
+
+    /* add filter on regular users at the end */
+    weechat_completion_list_add (completion, "-*",
+                                 1, WEECHAT_LIST_POS_END);
+
+    return WEECHAT_RC_OK;
+}
+
+/*
  * Adds servers to completion list.
  */
 
@@ -329,12 +368,12 @@ irc_completion_channel_nicks_cb (const void *pointer, void *data,
                                                  WEECHAT_LIST_POS_SORT);
                 }
                 /* add recent speakers on channel */
-                if (weechat_config_integer (irc_config_look_nick_completion_smart) == IRC_CONFIG_NICK_COMPLETION_SMART_SPEAKERS)
+                if (weechat_config_enum (irc_config_look_nick_completion_smart) == IRC_CONFIG_NICK_COMPLETION_SMART_SPEAKERS)
                 {
                     irc_completion_channel_nicks_add_speakers (completion, ptr_server, ptr_channel, 0);
                 }
                 /* add nicks whose make highlights on me recently on this channel */
-                if (weechat_config_integer (irc_config_look_nick_completion_smart) == IRC_CONFIG_NICK_COMPLETION_SMART_SPEAKERS_HIGHLIGHTS)
+                if (weechat_config_enum (irc_config_look_nick_completion_smart) == IRC_CONFIG_NICK_COMPLETION_SMART_SPEAKERS_HIGHLIGHTS)
                 {
                     irc_completion_channel_nicks_add_speakers (completion, ptr_server, ptr_channel, 1);
                 }
@@ -555,8 +594,7 @@ irc_completion_channel_topic_cb (const void *pointer, void *data,
         weechat_completion_list_add (completion,
                                      (topic) ? topic : ptr_channel->topic,
                                      0, WEECHAT_LIST_POS_SORT);
-        if (topic)
-            free (topic);
+        free (topic);
     }
 
     return WEECHAT_RC_OK;
@@ -938,6 +976,10 @@ irc_completion_init ()
     weechat_hook_completion ("irc_server_nicks",
                              N_("nicks on all channels of current IRC server"),
                              &irc_completion_server_nicks_cb, NULL, NULL);
+    weechat_hook_completion ("irc_server_prefix_modes_filter",
+                             N_("arguments to filter by prefix mode "
+                                "(for example: \"-o\", \"-h\", \"-v\", \"-*\")"),
+                             &irc_completion_server_prefix_modes_filter_cb, NULL, NULL);
     weechat_hook_completion ("irc_servers",
                              N_("IRC servers (internal names)"),
                              &irc_completion_servers_cb, NULL, NULL);

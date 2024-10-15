@@ -1,7 +1,7 @@
 /*
  * gui-focus.c - functions about focus (cursor mode and mouse) (used by all GUI)
  *
- * Copyright (C) 2011-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2011-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -27,9 +27,9 @@
 #include <stdio.h>
 
 #include "../core/weechat.h"
-#include "../core/wee-hashtable.h"
-#include "../core/wee-hook.h"
-#include "../core/wee-string.h"
+#include "../core/core-hashtable.h"
+#include "../core/core-hook.h"
+#include "../core/core-string.h"
 #include "../plugins/plugin.h"
 #include "gui-bar.h"
 #include "gui-bar-window.h"
@@ -71,6 +71,9 @@ gui_focus_get_info (int x, int y)
                                   &focus_info->chat_line,
                                   &focus_info->chat_line_x,
                                   &focus_info->chat_word,
+                                  &focus_info->chat_focused_line,
+                                  &focus_info->chat_focused_line_bol,
+                                  &focus_info->chat_focused_line_eol,
                                   &focus_info->chat_bol,
                                   &focus_info->chat_eol);
 
@@ -97,12 +100,15 @@ gui_focus_get_info (int x, int y)
 void
 gui_focus_free_info (struct t_gui_focus_info *focus_info)
 {
-    if (focus_info->chat_word)
-        free (focus_info->chat_word);
-    if (focus_info->chat_bol)
-        free (focus_info->chat_bol);
-    if (focus_info->chat_eol)
-        free (focus_info->chat_eol);
+    if (!focus_info)
+        return;
+
+    free (focus_info->chat_word);
+    free (focus_info->chat_focused_line);
+    free (focus_info->chat_focused_line_bol);
+    free (focus_info->chat_focused_line_eol);
+    free (focus_info->chat_bol);
+    free (focus_info->chat_eol);
 
     free (focus_info);
 }
@@ -209,20 +215,18 @@ gui_focus_to_hashtable (struct t_gui_focus_info *focus_info, const char *key)
         HASHTABLE_SET_INT("_chat_line_x", focus_info->chat_line_x);
         HASHTABLE_SET_INT("_chat_line_y", ((focus_info->chat_line)->data)->y);
         HASHTABLE_SET_TIME("_chat_line_date", ((focus_info->chat_line)->data)->date);
+        HASHTABLE_SET_INT("_chat_line_date_usec", ((focus_info->chat_line)->data)->date_usec);
         HASHTABLE_SET_TIME("_chat_line_date_printed", ((focus_info->chat_line)->data)->date_printed);
+        HASHTABLE_SET_INT("_chat_line_date_usec_printed", ((focus_info->chat_line)->data)->date_usec_printed);
         HASHTABLE_SET_STR_NOT_NULL("_chat_line_time", str_time);
         HASHTABLE_SET_STR_NOT_NULL("_chat_line_tags", str_tags);
         HASHTABLE_SET_STR_NOT_NULL("_chat_line_nick", nick);
         HASHTABLE_SET_STR_NOT_NULL("_chat_line_prefix", str_prefix);
         HASHTABLE_SET_STR_NOT_NULL("_chat_line_message", str_message);
-        if (str_time)
-            free (str_time);
-        if (str_prefix)
-            free (str_prefix);
-        if (str_tags)
-            free (str_tags);
-        if (str_message)
-            free (str_message);
+        free (str_time);
+        free (str_prefix);
+        free (str_tags);
+        free (str_message);
     }
     else
     {
@@ -230,7 +234,9 @@ gui_focus_to_hashtable (struct t_gui_focus_info *focus_info, const char *key)
         HASHTABLE_SET_STR("_chat_line_x", "-1");
         HASHTABLE_SET_STR("_chat_line_y", "-1");
         HASHTABLE_SET_STR("_chat_line_date", "-1");
+        HASHTABLE_SET_STR("_chat_line_date_usec", "-1");
         HASHTABLE_SET_STR("_chat_line_date_printed", "-1");
+        HASHTABLE_SET_STR("_chat_line_date_usec_printed", "-1");
         HASHTABLE_SET_STR("_chat_line_time", "");
         HASHTABLE_SET_STR("_chat_line_tags", "");
         HASHTABLE_SET_STR("_chat_line_nick", "");
@@ -238,6 +244,9 @@ gui_focus_to_hashtable (struct t_gui_focus_info *focus_info, const char *key)
         HASHTABLE_SET_STR("_chat_line_message", "");
     }
     HASHTABLE_SET_STR_NOT_NULL("_chat_word", focus_info->chat_word);
+    HASHTABLE_SET_STR_NOT_NULL("_chat_focused_line", focus_info->chat_focused_line);
+    HASHTABLE_SET_STR_NOT_NULL("_chat_focused_line_bol", focus_info->chat_focused_line_bol);
+    HASHTABLE_SET_STR_NOT_NULL("_chat_focused_line_eol", focus_info->chat_focused_line_eol);
     HASHTABLE_SET_STR_NOT_NULL("_chat_bol", focus_info->chat_bol);
     HASHTABLE_SET_STR_NOT_NULL("_chat_eol", focus_info->chat_eol);
 

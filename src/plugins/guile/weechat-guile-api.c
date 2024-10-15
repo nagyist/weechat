@@ -1,7 +1,7 @@
 /*
  * weechat-guile-api.c - guile API functions
  *
- * Copyright (C) 2011-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2011-2024 Sébastien Helleu <flashcode@flashtux.org>
  * Copyright (C) 2012 Simon Arlott
  *
  * This file is part of WeeChat, the extensible chat client.
@@ -60,8 +60,8 @@
                            GUILE_CURRENT_SCRIPT_NAME,                   \
                            guile_function_name, __string)
 #define API_SCM_TO_STRING(__str)                                        \
-    weechat_guile_api_scm_to_string(__str,                              \
-                                    guile_strings, &guile_num_strings)
+    weechat_guile_api_scm_to_string (__str,                             \
+                                     guile_strings, &guile_num_strings)
 #define API_FREE_STRINGS                                                \
     if (guile_num_strings > 0)                                          \
     {                                                                   \
@@ -76,15 +76,14 @@
     return scm_from_int (0)
 #define API_RETURN_EMPTY                                                \
     API_FREE_STRINGS;                                                   \
-    return scm_from_locale_string("")
+    return scm_from_locale_string ("")
 #define API_RETURN_STRING(__string)                                     \
     return_value = scm_from_locale_string ((__string) ? __string : ""); \
     API_FREE_STRINGS;                                                   \
     return return_value
 #define API_RETURN_STRING_FREE(__string)                                \
     return_value = scm_from_locale_string ((__string) ? __string : ""); \
-    if (__string)                                                       \
-        free (__string);                                                \
+    free (__string);                                                    \
     API_FREE_STRINGS;                                                   \
     return return_value
 #define API_RETURN_INT(__int)                                           \
@@ -93,6 +92,9 @@
 #define API_RETURN_LONG(__long)                                         \
     API_FREE_STRINGS;                                                   \
     return scm_from_long (__long)
+#define API_RETURN_LONGLONG(__long)                                     \
+    API_FREE_STRINGS;                                                   \
+    return scm_from_long_long (__long)
 #define API_RETURN_OTHER(__scm)                                         \
     API_FREE_STRINGS;                                                   \
     return __scm
@@ -142,8 +144,7 @@ weechat_guile_api_free_strings (char *guile_strings[], int *guile_num_strings)
 
     for (i = 0; i < *guile_num_strings; i++)
     {
-        if (guile_strings[i])
-            free (guile_strings[i]);
+        free (guile_strings[i]);
     }
 
     *guile_num_strings = 0;
@@ -176,8 +177,7 @@ weechat_guile_api_register (SCM name, SCM author, SCM version, SCM license,
         || !scm_is_string (charset))
         API_WRONG_ARGS(API_RETURN_ERROR);
 
-    if (plugin_script_search (weechat_guile_plugin, guile_scripts,
-                              API_SCM_TO_STRING(name)))
+    if (plugin_script_search (guile_scripts, API_SCM_TO_STRING(name)))
     {
         /* another script already exists with same name */
         weechat_printf (NULL,
@@ -534,12 +534,9 @@ weechat_guile_api_string_eval_expression (SCM expr, SCM pointers,
                                              c_pointers, c_extra_vars,
                                              c_options);
 
-    if (c_pointers)
-        weechat_hashtable_free (c_pointers);
-    if (c_extra_vars)
-        weechat_hashtable_free (c_extra_vars);
-    if (c_options)
-        weechat_hashtable_free (c_options);
+    weechat_hashtable_free (c_pointers);
+    weechat_hashtable_free (c_extra_vars);
+    weechat_hashtable_free (c_options);
 
     API_RETURN_STRING_FREE(result);
 }
@@ -577,12 +574,9 @@ weechat_guile_api_string_eval_path_home (SCM path, SCM pointers,
                                             c_pointers, c_extra_vars,
                                             c_options);
 
-    if (c_pointers)
-        weechat_hashtable_free (c_pointers);
-    if (c_extra_vars)
-        weechat_hashtable_free (c_extra_vars);
-    if (c_options)
-        weechat_hashtable_free (c_options);
+    weechat_hashtable_free (c_pointers);
+    weechat_hashtable_free (c_extra_vars);
+    weechat_hashtable_free (c_options);
 
     API_RETURN_STRING_FREE(result);
 }
@@ -901,6 +895,62 @@ weechat_guile_api_config_new (SCM name, SCM function, SCM data)
                                                        API_SCM_TO_STRING(data)));
 
     API_RETURN_STRING(result);
+}
+
+struct t_hashtable *
+weechat_guile_api_config_update_cb (const void *pointer, void *data,
+                                    struct t_config_file *config_file,
+                                    int version_read,
+                                    struct t_hashtable *data_read)
+{
+    struct t_plugin_script *script;
+    void *func_argv[4];
+    char empty_arg[1] = { '\0' };
+    const char *ptr_function, *ptr_data;
+    struct t_hashtable *ret_hashtable;
+
+    script = (struct t_plugin_script *)pointer;
+    plugin_script_get_function_and_data (data, &ptr_function, &ptr_data);
+
+    if (ptr_function && ptr_function[0])
+    {
+        func_argv[0] = (ptr_data) ? (char *)ptr_data : empty_arg;
+        func_argv[1] = (char *)API_PTR2STR(config_file);
+        func_argv[2] = &version_read;
+        func_argv[3] = data_read;
+
+        ret_hashtable = weechat_guile_exec (script,
+                                            WEECHAT_SCRIPT_EXEC_HASHTABLE,
+                                            ptr_function,
+                                            "ssih", func_argv);
+
+        return ret_hashtable;
+    }
+
+    return NULL;
+}
+
+SCM
+weechat_guile_api_config_set_version (SCM config_file, SCM version,
+                                      SCM function, SCM data)
+{
+    int rc;
+
+    API_INIT_FUNC(1, "config_set_version", API_RETURN_INT(0));
+    if (!scm_is_string (config_file) || !scm_is_integer (version)
+        || !scm_is_string (function) || !scm_is_string (data))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    rc = plugin_script_api_config_set_version (
+        weechat_guile_plugin,
+        guile_current_script,
+        API_STR2PTR(API_SCM_TO_STRING(config_file)),
+        scm_to_int (version),
+        &weechat_guile_api_config_update_cb,
+        API_SCM_TO_STRING(function),
+        API_SCM_TO_STRING(data));
+
+    API_RETURN_INT(rc);
 }
 
 int
@@ -1248,9 +1298,7 @@ weechat_guile_api_config_option_change_cb (const void *pointer, void *data,
                                  WEECHAT_SCRIPT_EXEC_IGNORE,
                                  ptr_function,
                                  "ss", func_argv);
-
-        if (rc)
-            free (rc);
+        free (rc);
     }
 }
 
@@ -1275,9 +1323,7 @@ weechat_guile_api_config_option_delete_cb (const void *pointer, void *data,
                                  WEECHAT_SCRIPT_EXEC_IGNORE,
                                  ptr_function,
                                  "ss", func_argv);
-
-        if (rc)
-            free (rc);
+        free (rc);
     }
 }
 
@@ -1461,6 +1507,41 @@ weechat_guile_api_config_option_rename (SCM option, SCM new_name)
 }
 
 SCM
+weechat_guile_api_config_option_get_string (SCM option, SCM property)
+{
+    const char *result;
+    SCM return_value;
+
+    API_INIT_FUNC(1, "config_option_get_string", API_RETURN_EMPTY);
+    if (!scm_is_string (option) || !scm_is_string (property))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    result = weechat_config_option_get_string (
+        API_STR2PTR(API_SCM_TO_STRING(option)),
+        API_SCM_TO_STRING(property));
+
+    API_RETURN_STRING(result);
+}
+
+SCM
+weechat_guile_api_config_option_get_pointer (SCM option, SCM property)
+{
+    const char *result;
+    SCM return_value;
+
+    API_INIT_FUNC(1, "config_option_get_pointer", API_RETURN_EMPTY);
+    if (!scm_is_string (option) || !scm_is_string (property))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    result = API_PTR2STR(
+        weechat_config_option_get_pointer (
+            API_STR2PTR(API_SCM_TO_STRING(option)),
+            API_SCM_TO_STRING(property)));
+
+    API_RETURN_STRING(result);
+}
+
+SCM
 weechat_guile_api_config_option_is_null (SCM option)
 {
     int value;
@@ -1517,6 +1598,20 @@ weechat_guile_api_config_boolean_default (SCM option)
 }
 
 SCM
+weechat_guile_api_config_boolean_inherited (SCM option)
+{
+    int value;
+
+    API_INIT_FUNC(1, "config_boolean_inherited", API_RETURN_INT(0));
+    if (!scm_is_string (option))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    value = weechat_config_boolean_inherited (API_STR2PTR(API_SCM_TO_STRING(option)));
+
+    API_RETURN_INT(value);
+}
+
+SCM
 weechat_guile_api_config_integer (SCM option)
 {
     int value;
@@ -1540,6 +1635,20 @@ weechat_guile_api_config_integer_default (SCM option)
         API_WRONG_ARGS(API_RETURN_INT(0));
 
     value = weechat_config_integer_default (API_STR2PTR(API_SCM_TO_STRING(option)));
+
+    API_RETURN_INT(value);
+}
+
+SCM
+weechat_guile_api_config_integer_inherited (SCM option)
+{
+    int value;
+
+    API_INIT_FUNC(1, "config_integer_inherited", API_RETURN_INT(0));
+    if (!scm_is_string (option))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    value = weechat_config_integer_inherited (API_STR2PTR(API_SCM_TO_STRING(option)));
 
     API_RETURN_INT(value);
 }
@@ -1575,6 +1684,21 @@ weechat_guile_api_config_string_default (SCM option)
 }
 
 SCM
+weechat_guile_api_config_string_inherited (SCM option)
+{
+    const char *result;
+    SCM return_value;
+
+    API_INIT_FUNC(1, "config_string_inherited", API_RETURN_EMPTY);
+    if (!scm_is_string (option))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    result = weechat_config_string_inherited (API_STR2PTR(API_SCM_TO_STRING(option)));
+
+    API_RETURN_STRING(result);
+}
+
+SCM
 weechat_guile_api_config_color (SCM option)
 {
     const char *result;
@@ -1602,6 +1726,63 @@ weechat_guile_api_config_color_default (SCM option)
     result = weechat_config_color_default (API_STR2PTR(API_SCM_TO_STRING(option)));
 
     API_RETURN_STRING(result);
+}
+
+SCM
+weechat_guile_api_config_color_inherited (SCM option)
+{
+    const char *result;
+    SCM return_value;
+
+    API_INIT_FUNC(1, "config_color_inherited", API_RETURN_EMPTY);
+    if (!scm_is_string (option))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    result = weechat_config_color_inherited (API_STR2PTR(API_SCM_TO_STRING(option)));
+
+    API_RETURN_STRING(result);
+}
+
+SCM
+weechat_guile_api_config_enum (SCM option)
+{
+    int value;
+
+    API_INIT_FUNC(1, "config_enum", API_RETURN_INT(0));
+    if (!scm_is_string (option))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    value = weechat_config_enum (API_STR2PTR(API_SCM_TO_STRING(option)));
+
+    API_RETURN_INT(value);
+}
+
+SCM
+weechat_guile_api_config_enum_default (SCM option)
+{
+    int value;
+
+    API_INIT_FUNC(1, "config_enum_default", API_RETURN_INT(0));
+    if (!scm_is_string (option))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    value = weechat_config_enum_default (API_STR2PTR(API_SCM_TO_STRING(option)));
+
+    API_RETURN_INT(value);
+}
+
+SCM
+weechat_guile_api_config_enum_inherited (SCM option)
+{
+    int value;
+
+    API_INIT_FUNC(1, "config_enum_inherited", API_RETURN_INT(0));
+    if (!scm_is_string (option))
+        API_WRONG_ARGS(API_RETURN_INT(0));
+
+    value = weechat_config_enum_inherited (API_STR2PTR(API_SCM_TO_STRING(option)));
+
+    API_RETURN_INT(value);
 }
 
 SCM
@@ -1837,8 +2018,7 @@ weechat_guile_api_key_bind (SCM context, SCM keys)
 
     num_keys = weechat_key_bind (API_SCM_TO_STRING(context), c_keys);
 
-    if (c_keys)
-        weechat_hashtable_free (c_keys);
+    weechat_hashtable_free (c_keys);
 
     API_RETURN_INT(num_keys);
 }
@@ -1922,6 +2102,28 @@ weechat_guile_api_print_date_tags (SCM buffer, SCM date, SCM tags, SCM message)
 }
 
 SCM
+weechat_guile_api_print_datetime_tags (SCM buffer, SCM date, SCM date_usec,
+                                       SCM tags, SCM message)
+{
+    API_INIT_FUNC(1, "print_datetime_tags", API_RETURN_ERROR);
+    if (!scm_is_string (buffer) || !scm_is_integer (date)
+        || !scm_is_integer (date_usec) || !scm_is_string (tags)
+        || !scm_is_string (message))
+        API_WRONG_ARGS(API_RETURN_ERROR);
+
+    plugin_script_api_printf_datetime_tags (
+        weechat_guile_plugin,
+        guile_current_script,
+        API_STR2PTR(API_SCM_TO_STRING(buffer)),
+        (time_t)scm_to_long (date),
+        scm_to_int (date_usec),
+        API_SCM_TO_STRING(tags),
+        "%s", API_SCM_TO_STRING(message));
+
+    API_RETURN_OK;
+}
+
+SCM
 weechat_guile_api_print_y (SCM buffer, SCM y, SCM message)
 {
     API_INIT_FUNC(1, "print_y", API_RETURN_ERROR);
@@ -1955,6 +2157,29 @@ weechat_guile_api_print_y_date_tags (SCM buffer, SCM y, SCM date, SCM tags,
                                           (time_t)scm_to_long (date),
                                           API_SCM_TO_STRING(tags),
                                           "%s", API_SCM_TO_STRING(message));
+
+    API_RETURN_OK;
+}
+
+SCM
+weechat_guile_api_print_y_datetime_tags (SCM buffer, SCM y, SCM date,
+                                         SCM date_usec, SCM tags, SCM message)
+{
+    API_INIT_FUNC(1, "print_y_datetime_tags", API_RETURN_ERROR);
+    if (!scm_is_string (buffer) || !scm_is_integer (y)
+        || !scm_is_integer (date) || !scm_is_integer (date_usec)
+        || !scm_is_string (tags) || !scm_is_string (message))
+        API_WRONG_ARGS(API_RETURN_ERROR);
+
+    plugin_script_api_printf_y_datetime_tags (
+        weechat_guile_plugin,
+        guile_current_script,
+        API_STR2PTR(API_SCM_TO_STRING(buffer)),
+        scm_to_int (y),
+        (time_t)scm_to_long (date),
+        scm_to_int (date_usec),
+        API_SCM_TO_STRING(tags),
+        "%s", API_SCM_TO_STRING(message));
 
     API_RETURN_OK;
 }
@@ -2447,8 +2672,81 @@ weechat_guile_api_hook_process_hashtable (SCM command, SCM options, SCM timeout,
                                                                    API_SCM_TO_STRING(function),
                                                                    API_SCM_TO_STRING(data)));
 
-    if (c_options)
-        weechat_hashtable_free (c_options);
+    weechat_hashtable_free (c_options);
+
+    API_RETURN_STRING(result);
+}
+
+int
+weechat_guile_api_hook_url_cb (const void *pointer, void *data,
+                               const char *url,
+                               struct t_hashtable *options,
+                               struct t_hashtable *output)
+{
+    struct t_plugin_script *script;
+    void *func_argv[4];
+    char empty_arg[1] = { '\0' };
+    const char *ptr_function, *ptr_data;
+    int *rc, ret;
+
+    script = (struct t_plugin_script *)pointer;
+    plugin_script_get_function_and_data (data, &ptr_function, &ptr_data);
+
+    if (ptr_function && ptr_function[0])
+    {
+        func_argv[0] = (ptr_data) ? (char *)ptr_data : empty_arg;
+        func_argv[1] = (url) ? (char *)url : empty_arg;
+        func_argv[2] = options;
+        func_argv[3] = output;
+
+        rc = (int *) weechat_guile_exec (script,
+                                         WEECHAT_SCRIPT_EXEC_INT,
+                                         ptr_function,
+                                         "sshh", func_argv);
+
+        if (!rc)
+            ret = WEECHAT_RC_ERROR;
+        else
+        {
+            ret = *rc;
+            free (rc);
+        }
+
+        return ret;
+    }
+
+    return WEECHAT_RC_ERROR;
+}
+
+SCM
+weechat_guile_api_hook_url (SCM url, SCM options, SCM timeout,
+                            SCM function, SCM data)
+{
+    const char *result;
+    SCM return_value;
+    struct t_hashtable *c_options;
+
+    API_INIT_FUNC(1, "hook_url", API_RETURN_EMPTY);
+    if (!scm_is_string (url) || !scm_list_p (options)
+        || !scm_is_integer (timeout) || !scm_is_string (function)
+        || !scm_is_string (data))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    c_options = weechat_guile_alist_to_hashtable (options,
+                                                  WEECHAT_SCRIPT_HASHTABLE_DEFAULT_SIZE,
+                                                  WEECHAT_HASHTABLE_STRING,
+                                                  WEECHAT_HASHTABLE_STRING);
+
+    result = API_PTR2STR(plugin_script_api_hook_url (weechat_guile_plugin,
+                                                     guile_current_script,
+                                                     API_SCM_TO_STRING(url),
+                                                     c_options,
+                                                     scm_to_int (timeout),
+                                                     &weechat_guile_api_hook_url_cb,
+                                                     API_SCM_TO_STRING(function),
+                                                     API_SCM_TO_STRING(data)));
+
+    weechat_hashtable_free (c_options);
 
     API_RETURN_STRING(result);
 }
@@ -2585,7 +2883,7 @@ weechat_guile_api_hook_line (SCM buffer_type, SCM buffer_name, SCM tags,
 int
 weechat_guile_api_hook_print_cb (const void *pointer, void *data,
                                  struct t_gui_buffer *buffer,
-                                 time_t date,
+                                 time_t date, int date_usec,
                                  int tags_count, const char **tags,
                                  int displayed, int highlight,
                                  const char *prefix, const char *message)
@@ -2598,6 +2896,7 @@ weechat_guile_api_hook_print_cb (const void *pointer, void *data,
     int *rc, ret;
 
     /* make C compiler happy */
+    (void) date_usec;
     (void) tags_count;
 
     script = (struct t_plugin_script *)pointer;
@@ -2630,8 +2929,7 @@ weechat_guile_api_hook_print_cb (const void *pointer, void *data,
             ret = *rc;
             free (rc);
         }
-        if (func_argv[3])
-            free (func_argv[3]);
+        free (func_argv[3]);
 
         return ret;
     }
@@ -2863,8 +3161,7 @@ weechat_guile_api_hook_hsignal_send (SCM signal, SCM hashtable)
 
     rc = weechat_hook_hsignal_send (API_SCM_TO_STRING(signal), c_hashtable);
 
-    if (c_hashtable)
-        weechat_hashtable_free (c_hashtable);
+    weechat_hashtable_free (c_hashtable);
 
     API_RETURN_INT(rc);
 }
@@ -3388,8 +3685,7 @@ weechat_guile_api_buffer_new_props (SCM name, SCM properties,
             API_SCM_TO_STRING(function_close),
             API_SCM_TO_STRING(data_close)));
 
-    if (c_properties)
-        weechat_hashtable_free (c_properties);
+    weechat_hashtable_free (c_properties);
 
     API_RETURN_STRING(result);
 }
@@ -3577,6 +3873,22 @@ weechat_guile_api_buffer_match_list (SCM buffer, SCM string)
                                        API_SCM_TO_STRING(string));
 
     API_RETURN_INT(value);
+}
+
+SCM
+weechat_guile_api_line_search_by_id (SCM buffer, SCM id)
+{
+    const char *result;
+    SCM return_value;
+
+    API_INIT_FUNC(1, "line_search_by_id", API_RETURN_EMPTY);
+    if (!scm_is_string (buffer) || !scm_is_integer (id))
+        API_WRONG_ARGS(API_RETURN_EMPTY);
+
+    result = API_PTR2STR(weechat_line_search_by_id (API_STR2PTR(API_SCM_TO_STRING(buffer)),
+                                                    scm_to_int (id)));
+
+    API_RETURN_STRING(result);
 }
 
 SCM
@@ -4197,8 +4509,7 @@ weechat_guile_api_command_options (SCM buffer, SCM command, SCM options)
                                             API_SCM_TO_STRING(command),
                                             c_options);
 
-    if (c_options)
-        weechat_hashtable_free (c_options);
+    weechat_hashtable_free (c_options);
 
     API_RETURN_INT(rc);
 }
@@ -4319,10 +4630,8 @@ weechat_guile_api_info_get_hashtable (SCM info_name, SCM hash)
                                                    c_hashtable);
     result_alist = weechat_guile_hashtable_to_alist (result_hashtable);
 
-    if (c_hashtable)
-        weechat_hashtable_free (c_hashtable);
-    if (result_hashtable)
-        weechat_hashtable_free (result_hashtable);
+    weechat_hashtable_free (c_hashtable);
+    weechat_hashtable_free (result_hashtable);
 
     API_RETURN_OTHER(result_alist);
 }
@@ -4776,12 +5085,9 @@ weechat_guile_api_hdata_search (SCM hdata, SCM pointer, SCM search,
                                                c_options,
                                                scm_to_int (move)));
 
-    if (c_pointers)
-        weechat_hashtable_free (c_pointers);
-    if (c_extra_vars)
-        weechat_hashtable_free (c_extra_vars);
-    if (c_options)
-        weechat_hashtable_free (c_options);
+    weechat_hashtable_free (c_pointers);
+    weechat_hashtable_free (c_extra_vars);
+    weechat_hashtable_free (c_options);
 
     API_RETURN_STRING(result);
 }
@@ -4835,6 +5141,23 @@ weechat_guile_api_hdata_long (SCM hdata, SCM pointer, SCM name)
                                 API_SCM_TO_STRING(name));
 
     API_RETURN_LONG(value);
+}
+
+SCM
+weechat_guile_api_hdata_longlong (SCM hdata, SCM pointer, SCM name)
+{
+    long long value;
+
+    API_INIT_FUNC(1, "hdata_longlong", API_RETURN_LONGLONG(0));
+    if (!scm_is_string (hdata) || !scm_is_string (pointer)
+        || !scm_is_string (name))
+        API_WRONG_ARGS(API_RETURN_LONGLONG(0));
+
+    value = weechat_hdata_longlong (API_STR2PTR(API_SCM_TO_STRING(hdata)),
+                                    API_STR2PTR(API_SCM_TO_STRING(pointer)),
+                                    API_SCM_TO_STRING(name));
+
+    API_RETURN_LONGLONG(value);
 }
 
 SCM
@@ -4947,8 +5270,7 @@ weechat_guile_api_hdata_update (SCM hdata, SCM pointer, SCM hashtable)
                                   API_STR2PTR(API_SCM_TO_STRING(pointer)),
                                   c_hashtable);
 
-    if (c_hashtable)
-        weechat_hashtable_free (c_hashtable);
+    weechat_hashtable_free (c_hashtable);
 
     API_RETURN_INT(value);
 }
@@ -5084,6 +5406,8 @@ weechat_guile_api_upgrade_close (SCM upgrade_file)
 void
 weechat_guile_api_module_init (void *data)
 {
+    char str_const[256];
+    int i;
 #if SCM_MAJOR_VERSION >= 3 || (SCM_MAJOR_VERSION == 2 && SCM_MINOR_VERSION >= 2)
     /* Guile >= 2.2 */
     scm_t_port_type *port_type;
@@ -5151,6 +5475,7 @@ weechat_guile_api_module_init (void *data)
     API_DEF_FUNC(list_remove_all, 1);
     API_DEF_FUNC(list_free, 1);
     API_DEF_FUNC(config_new, 3);
+    API_DEF_FUNC(config_set_version, 4);
     API_DEF_FUNC(config_new_section, 1);
     API_DEF_FUNC(config_search_section, 2);
     API_DEF_FUNC(config_new_option, 1);
@@ -5161,16 +5486,25 @@ weechat_guile_api_module_init (void *data)
     API_DEF_FUNC(config_option_set_null, 2);
     API_DEF_FUNC(config_option_unset, 1);
     API_DEF_FUNC(config_option_rename, 2);
+    API_DEF_FUNC(config_option_get_string, 2);
+    API_DEF_FUNC(config_option_get_pointer, 2);
     API_DEF_FUNC(config_option_is_null, 1);
     API_DEF_FUNC(config_option_default_is_null, 1);
     API_DEF_FUNC(config_boolean, 1);
     API_DEF_FUNC(config_boolean_default, 1);
+    API_DEF_FUNC(config_boolean_inherited, 1);
     API_DEF_FUNC(config_integer, 1);
     API_DEF_FUNC(config_integer_default, 1);
+    API_DEF_FUNC(config_integer_inherited, 1);
     API_DEF_FUNC(config_string, 1);
     API_DEF_FUNC(config_string_default, 1);
+    API_DEF_FUNC(config_string_inherited, 1);
     API_DEF_FUNC(config_color, 1);
     API_DEF_FUNC(config_color_default, 1);
+    API_DEF_FUNC(config_color_inherited, 1);
+    API_DEF_FUNC(config_enum, 1);
+    API_DEF_FUNC(config_enum_default, 1);
+    API_DEF_FUNC(config_enum_inherited, 1);
     API_DEF_FUNC(config_write_option, 2);
     API_DEF_FUNC(config_write_line, 3);
     API_DEF_FUNC(config_write, 1);
@@ -5192,8 +5526,10 @@ weechat_guile_api_module_init (void *data)
     API_DEF_FUNC(color, 1);
     API_DEF_FUNC(print, 2);
     API_DEF_FUNC(print_date_tags, 4);
+    API_DEF_FUNC(print_datetime_tags, 5);
     API_DEF_FUNC(print_y, 3);
     API_DEF_FUNC(print_y_date_tags, 5);
+    API_DEF_FUNC(print_y_datetime_tags, 6);
     API_DEF_FUNC(log_print, 1);
     API_DEF_FUNC(hook_command, 7);
     API_DEF_FUNC(hook_completion, 4);
@@ -5204,6 +5540,7 @@ weechat_guile_api_module_init (void *data)
     API_DEF_FUNC(hook_fd, 6);
     API_DEF_FUNC(hook_process, 4);
     API_DEF_FUNC(hook_process_hashtable, 5);
+    API_DEF_FUNC(hook_url, 5);
     API_DEF_FUNC(hook_connect, 8);
     API_DEF_FUNC(hook_line, 5);
     API_DEF_FUNC(hook_print, 6);
@@ -5236,6 +5573,7 @@ weechat_guile_api_module_init (void *data)
     API_DEF_FUNC(buffer_set, 3);
     API_DEF_FUNC(buffer_string_replace_local_var, 2);
     API_DEF_FUNC(buffer_match_list, 2);
+    API_DEF_FUNC(line_search_by_id, 2);
     API_DEF_FUNC(current_window, 0);
     API_DEF_FUNC(window_search_with_buffer, 1);
     API_DEF_FUNC(window_get_integer, 2);
@@ -5305,6 +5643,7 @@ weechat_guile_api_module_init (void *data)
     API_DEF_FUNC(hdata_char, 3);
     API_DEF_FUNC(hdata_integer, 3);
     API_DEF_FUNC(hdata_long, 3);
+    API_DEF_FUNC(hdata_longlong, 3);
     API_DEF_FUNC(hdata_string, 3);
     API_DEF_FUNC(hdata_pointer, 3);
     API_DEF_FUNC(hdata_time, 3);
@@ -5318,92 +5657,15 @@ weechat_guile_api_module_init (void *data)
     API_DEF_FUNC(upgrade_close, 1);
 
     /* interface constants */
-    scm_c_define ("weechat:WEECHAT_RC_OK", scm_from_int (WEECHAT_RC_OK));
-    scm_c_define ("weechat:WEECHAT_RC_OK_EAT", scm_from_int (WEECHAT_RC_OK_EAT));
-    scm_c_define ("weechat:WEECHAT_RC_ERROR", scm_from_int (WEECHAT_RC_ERROR));
-
-    scm_c_define ("weechat:WEECHAT_CONFIG_READ_OK", scm_from_int (WEECHAT_CONFIG_READ_OK));
-    scm_c_define ("weechat:WEECHAT_CONFIG_READ_MEMORY_ERROR", scm_from_int (WEECHAT_CONFIG_READ_MEMORY_ERROR));
-    scm_c_define ("weechat:WEECHAT_CONFIG_READ_FILE_NOT_FOUND", scm_from_int (WEECHAT_CONFIG_READ_FILE_NOT_FOUND));
-    scm_c_define ("weechat:WEECHAT_CONFIG_WRITE_OK", scm_from_int (WEECHAT_CONFIG_WRITE_OK));
-    scm_c_define ("weechat:WEECHAT_CONFIG_WRITE_ERROR", scm_from_int (WEECHAT_CONFIG_WRITE_ERROR));
-    scm_c_define ("weechat:WEECHAT_CONFIG_WRITE_MEMORY_ERROR", scm_from_int (WEECHAT_CONFIG_WRITE_MEMORY_ERROR));
-    scm_c_define ("weechat:WEECHAT_CONFIG_OPTION_SET_OK_CHANGED", scm_from_int (WEECHAT_CONFIG_OPTION_SET_OK_CHANGED));
-    scm_c_define ("weechat:WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE", scm_from_int (WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE));
-    scm_c_define ("weechat:WEECHAT_CONFIG_OPTION_SET_ERROR", scm_from_int (WEECHAT_CONFIG_OPTION_SET_ERROR));
-    scm_c_define ("weechat:WEECHAT_CONFIG_OPTION_SET_OPTION_NOT_FOUND", scm_from_int (WEECHAT_CONFIG_OPTION_SET_OPTION_NOT_FOUND));
-    scm_c_define ("weechat:WEECHAT_CONFIG_OPTION_UNSET_OK_NO_RESET", scm_from_int (WEECHAT_CONFIG_OPTION_UNSET_OK_NO_RESET));
-    scm_c_define ("weechat:WEECHAT_CONFIG_OPTION_UNSET_OK_RESET", scm_from_int (WEECHAT_CONFIG_OPTION_UNSET_OK_RESET));
-    scm_c_define ("weechat:WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED", scm_from_int (WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED));
-    scm_c_define ("weechat:WEECHAT_CONFIG_OPTION_UNSET_ERROR", scm_from_int (WEECHAT_CONFIG_OPTION_UNSET_ERROR));
-
-    scm_c_define ("weechat:WEECHAT_LIST_POS_SORT", scm_from_locale_string (WEECHAT_LIST_POS_SORT));
-    scm_c_define ("weechat:WEECHAT_LIST_POS_BEGINNING", scm_from_locale_string (WEECHAT_LIST_POS_BEGINNING));
-    scm_c_define ("weechat:WEECHAT_LIST_POS_END", scm_from_locale_string (WEECHAT_LIST_POS_END));
-
-    scm_c_define ("weechat:WEECHAT_HOTLIST_LOW", scm_from_locale_string (WEECHAT_HOTLIST_LOW));
-    scm_c_define ("weechat:WEECHAT_HOTLIST_MESSAGE", scm_from_locale_string (WEECHAT_HOTLIST_MESSAGE));
-    scm_c_define ("weechat:WEECHAT_HOTLIST_PRIVATE", scm_from_locale_string (WEECHAT_HOTLIST_PRIVATE));
-    scm_c_define ("weechat:WEECHAT_HOTLIST_HIGHLIGHT", scm_from_locale_string (WEECHAT_HOTLIST_HIGHLIGHT));
-
-    scm_c_define ("weechat:WEECHAT_HOOK_PROCESS_RUNNING", scm_from_int (WEECHAT_HOOK_PROCESS_RUNNING));
-    scm_c_define ("weechat:WEECHAT_HOOK_PROCESS_ERROR", scm_from_int (WEECHAT_HOOK_PROCESS_ERROR));
-
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_OK", scm_from_int (WEECHAT_HOOK_CONNECT_OK));
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND", scm_from_int (WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND));
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND", scm_from_int (WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND));
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED", scm_from_int (WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED));
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_PROXY_ERROR", scm_from_int (WEECHAT_HOOK_CONNECT_PROXY_ERROR));
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR", scm_from_int (WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR));
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR", scm_from_int (WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR));
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR", scm_from_int (WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR));
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_MEMORY_ERROR", scm_from_int (WEECHAT_HOOK_CONNECT_MEMORY_ERROR));
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_TIMEOUT", scm_from_int (WEECHAT_HOOK_CONNECT_TIMEOUT));
-    scm_c_define ("weechat:WEECHAT_HOOK_CONNECT_SOCKET_ERROR", scm_from_int (WEECHAT_HOOK_CONNECT_SOCKET_ERROR));
-
-    scm_c_define ("weechat:WEECHAT_HOOK_SIGNAL_STRING", scm_from_locale_string (WEECHAT_HOOK_SIGNAL_STRING));
-    scm_c_define ("weechat:WEECHAT_HOOK_SIGNAL_INT", scm_from_locale_string (WEECHAT_HOOK_SIGNAL_INT));
-    scm_c_define ("weechat:WEECHAT_HOOK_SIGNAL_POINTER", scm_from_locale_string (WEECHAT_HOOK_SIGNAL_POINTER));
-
-    scm_c_export ("weechat:WEECHAT_RC_OK",
-                  "weechat:WEECHAT_RC_OK_EAT",
-                  "weechat:WEECHAT_RC_ERROR",
-                  "weechat:WEECHAT_CONFIG_READ_OK",
-                  "weechat:WEECHAT_CONFIG_READ_MEMORY_ERROR",
-                  "weechat:WEECHAT_CONFIG_READ_FILE_NOT_FOUND",
-                  "weechat:WEECHAT_CONFIG_WRITE_OK",
-                  "weechat:WEECHAT_CONFIG_WRITE_ERROR",
-                  "weechat:WEECHAT_CONFIG_WRITE_MEMORY_ERROR",
-                  "weechat:WEECHAT_CONFIG_OPTION_SET_OK_CHANGED",
-                  "weechat:WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE",
-                  "weechat:WEECHAT_CONFIG_OPTION_SET_ERROR",
-                  "weechat:WEECHAT_CONFIG_OPTION_SET_OPTION_NOT_FOUND",
-                  "weechat:WEECHAT_CONFIG_OPTION_UNSET_OK_NO_RESET",
-                  "weechat:WEECHAT_CONFIG_OPTION_UNSET_OK_RESET",
-                  "weechat:WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED",
-                  "weechat:WEECHAT_CONFIG_OPTION_UNSET_ERROR",
-                  "weechat:WEECHAT_LIST_POS_SORT",
-                  "weechat:WEECHAT_LIST_POS_BEGINNING",
-                  "weechat:WEECHAT_LIST_POS_END",
-                  "weechat:WEECHAT_HOTLIST_LOW",
-                  "weechat:WEECHAT_HOTLIST_MESSAGE",
-                  "weechat:WEECHAT_HOTLIST_PRIVATE",
-                  "weechat:WEECHAT_HOTLIST_HIGHLIGHT",
-                  "weechat:WEECHAT_HOOK_PROCESS_RUNNING",
-                  "weechat:WEECHAT_HOOK_PROCESS_ERROR",
-                  "weechat:WEECHAT_HOOK_CONNECT_OK",
-                  "weechat:WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND",
-                  "weechat:WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND",
-                  "weechat:WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED",
-                  "weechat:WEECHAT_HOOK_CONNECT_PROXY_ERROR",
-                  "weechat:WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR",
-                  "weechat:WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR",
-                  "weechat:WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR",
-                  "weechat:WEECHAT_HOOK_CONNECT_MEMORY_ERROR",
-                  "weechat:WEECHAT_HOOK_CONNECT_TIMEOUT",
-                  "weechat:WEECHAT_HOOK_CONNECT_SOCKET_ERROR",
-                  "weechat:WEECHAT_HOOK_SIGNAL_STRING",
-                  "weechat:WEECHAT_HOOK_SIGNAL_INT",
-                  "weechat:WEECHAT_HOOK_SIGNAL_POINTER",
-                  NULL);
+    for (i = 0; weechat_script_constants[i].name; i++)
+    {
+        snprintf (str_const, sizeof (str_const),
+                  "weechat:%s", weechat_script_constants[i].name);
+        scm_c_define (
+            str_const,
+            (weechat_script_constants[i].value_string) ?
+            scm_from_locale_string (weechat_script_constants[i].value_string) :
+            scm_from_int (weechat_script_constants[i].value_integer));
+        scm_c_export (str_const, NULL);
+    }
 }

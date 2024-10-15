@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -41,14 +41,14 @@
 #define IRC_COLOR_BOLD_CHAR      '\x02'  /* bold text                       */
 #define IRC_COLOR_BOLD_STR       "\x02"  /*   [02]...[02]                   */
 
-#define IRC_COLOR_COLOR_CHAR     '\x03'  /* text color: fg / fg,bg / ,bg    */
+#define IRC_COLOR_COLOR_CHAR     '\x03'  /* text color: fg/fg,bg/,bg        */
 #define IRC_COLOR_COLOR_STR      "\x03"  /*   [03]15,05...[03]              */
+
+#define IRC_COLOR_HEX_COLOR_CHAR '\x04'  /* text color (hex): fg/fg,bg/,bg  */
+#define IRC_COLOR_HEX_COLOR_STR  "\x04"  /*   [04]FFFF00,8B008B...[04]      */
 
 #define IRC_COLOR_RESET_CHAR     '\x0F'  /* reset color/attributes          */
 #define IRC_COLOR_RESET_STR      "\x0F"  /*   [0F]...                       */
-
-#define IRC_COLOR_FIXED_CHAR     '\x11'  /* monospaced font (ignored)       */
-#define IRC_COLOR_FIXED_STR      "\x11"  /*   [11]...[11]                   */
 
 #define IRC_COLOR_REVERSE_CHAR   '\x16'  /* reverse video (fg <--> bg)      */
 #define IRC_COLOR_REVERSE_STR    "\x16"  /*   [16]...[16]                   */
@@ -82,7 +82,8 @@
 #define IRC_COLOR_NOTICE weechat_color(weechat_config_string(irc_config_color_notice))
 #define IRC_COLOR_STATUS_NUMBER weechat_color("status_number")
 #define IRC_COLOR_STATUS_NAME weechat_color("status_name")
-#define IRC_COLOR_STATUS_NAME_SSL weechat_color("status_name_ssl")
+#define IRC_COLOR_STATUS_NAME_INSECURE weechat_color("status_name_insecure")
+#define IRC_COLOR_STATUS_NAME_TLS weechat_color("status_name_tls")
 #define IRC_COLOR_MESSAGE_JOIN weechat_color(weechat_config_string(irc_config_color_message_join))
 #define IRC_COLOR_MESSAGE_ACCOUNT weechat_color(weechat_config_string(irc_config_color_message_account))
 #define IRC_COLOR_MESSAGE_CHGHOST weechat_color(weechat_config_string(irc_config_color_message_chghost))
@@ -96,13 +97,17 @@
 #define IRC_COLOR_TOPIC_NEW weechat_color(weechat_config_string(irc_config_color_topic_new))
 #define IRC_COLOR_INPUT_NICK weechat_color(weechat_config_string(irc_config_color_input_nick))
 #define IRC_COLOR_ITEM_AWAY weechat_color(weechat_config_string(irc_config_color_item_away))
-#define IRC_COLOR_ITEM_CHANNEL_MODES weechat_color(weechat_config_string(irc_config_color_item_channel_modes))
 #define IRC_COLOR_ITEM_LAG_COUNTING weechat_color(weechat_config_string(irc_config_color_item_lag_counting))
 #define IRC_COLOR_ITEM_LAG_FINISHED weechat_color(weechat_config_string(irc_config_color_item_lag_finished))
 #define IRC_COLOR_ITEM_NICK_MODES weechat_color(weechat_config_string(irc_config_color_item_nick_modes))
 #define IRC_COLOR_ITEM_TLS_VERSION_OK weechat_color(weechat_config_string(irc_config_color_item_tls_version_ok))
 #define IRC_COLOR_ITEM_TLS_VERSION_DEPRECATED weechat_color(weechat_config_string(irc_config_color_item_tls_version_deprecated))
 #define IRC_COLOR_ITEM_TLS_VERSION_INSECURE weechat_color(weechat_config_string(irc_config_color_item_tls_version_insecure))
+
+#define IRC_COLOR_MSG(__string)                                         \
+    irc_color_decode_const (                                            \
+        __string,                                                       \
+        weechat_config_boolean (irc_config_network_colors_receive))
 
 struct t_irc_color_ansi_state
 {
@@ -113,6 +118,7 @@ struct t_irc_color_ansi_state
 };
 
 extern char *irc_color_decode (const char *string, int keep_colors);
+extern const char *irc_color_decode_const (const char *string, int keep_colors);
 extern char *irc_color_encode (const char *string, int keep_colors);
 extern char *irc_color_decode_ansi (const char *string, int keep_colors);
 extern char *irc_color_modifier_cb (const void *pointer, void *data,
@@ -121,6 +127,7 @@ extern char *irc_color_modifier_cb (const void *pointer, void *data,
                                     const char *string);
 extern char *irc_color_for_tags (const char *color);
 extern int irc_color_weechat_add_to_infolist (struct t_infolist *infolist);
+extern void irc_color_init ();
 extern void irc_color_end ();
 
 #endif /* WEECHAT_PLUGIN_IRC_COLOR_H */

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2017-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2017-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 """
 This script contains WeeChat scripting API tests
-(it can not be run directly and can not be loaded in WeeChat).
+(it cannot be run directly and cannot be loaded in WeeChat).
 
 It is parsed by testapigen.py, using Python AST (Abstract Syntax Trees),
 to generate scripts in all supported languages (Python, Perl, Ruby, ...).
@@ -42,10 +42,59 @@ def check(result, condition, lineno):
                      condition)
 
 
+def test_constants():
+    """Test constants."""
+    check(weechat.WEECHAT_RC_OK == 0)
+    check(weechat.WEECHAT_RC_OK_EAT == 1)
+    check(weechat.WEECHAT_RC_ERROR == -1)
+    check(weechat.WEECHAT_CONFIG_READ_OK == 0)
+    check(weechat.WEECHAT_CONFIG_READ_MEMORY_ERROR == -1)
+    check(weechat.WEECHAT_CONFIG_READ_FILE_NOT_FOUND == -2)
+    check(weechat.WEECHAT_CONFIG_WRITE_OK == 0)
+    check(weechat.WEECHAT_CONFIG_WRITE_ERROR == -1)
+    check(weechat.WEECHAT_CONFIG_WRITE_MEMORY_ERROR == -2)
+    check(weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED == 2)
+    check(weechat.WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE == 1)
+    check(weechat.WEECHAT_CONFIG_OPTION_SET_ERROR == 0)
+    check(weechat.WEECHAT_CONFIG_OPTION_SET_OPTION_NOT_FOUND == -1)
+    check(weechat.WEECHAT_CONFIG_OPTION_UNSET_OK_NO_RESET == 0)
+    check(weechat.WEECHAT_CONFIG_OPTION_UNSET_OK_RESET == 1)
+    check(weechat.WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED == 2)
+    check(weechat.WEECHAT_CONFIG_OPTION_UNSET_ERROR == -1)
+    check(weechat.WEECHAT_LIST_POS_SORT == 'sort')
+    check(weechat.WEECHAT_LIST_POS_BEGINNING == 'beginning')
+    check(weechat.WEECHAT_LIST_POS_END == 'end')
+    check(weechat.WEECHAT_HOTLIST_LOW == '0')
+    check(weechat.WEECHAT_HOTLIST_MESSAGE == '1')
+    check(weechat.WEECHAT_HOTLIST_PRIVATE == '2')
+    check(weechat.WEECHAT_HOTLIST_HIGHLIGHT == '3')
+    check(weechat.WEECHAT_HOOK_PROCESS_RUNNING == -1)
+    check(weechat.WEECHAT_HOOK_PROCESS_ERROR == -2)
+    check(weechat.WEECHAT_HOOK_CONNECT_IPV6_DISABLE == 0)
+    check(weechat.WEECHAT_HOOK_CONNECT_IPV6_AUTO == 1)
+    check(weechat.WEECHAT_HOOK_CONNECT_IPV6_FORCE == 2)
+    check(weechat.WEECHAT_HOOK_CONNECT_OK == 0)
+    check(weechat.WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND == 1)
+    check(weechat.WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND == 2)
+    check(weechat.WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED == 3)
+    check(weechat.WEECHAT_HOOK_CONNECT_PROXY_ERROR == 4)
+    check(weechat.WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR == 5)
+    check(weechat.WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR == 6)
+    check(weechat.WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR == 7)
+    check(weechat.WEECHAT_HOOK_CONNECT_MEMORY_ERROR == 8)
+    check(weechat.WEECHAT_HOOK_CONNECT_TIMEOUT == 9)
+    check(weechat.WEECHAT_HOOK_CONNECT_SOCKET_ERROR == 10)
+    check(weechat.WEECHAT_HOOK_SIGNAL_STRING == 'string')
+    check(weechat.WEECHAT_HOOK_SIGNAL_INT == 'int')
+    check(weechat.WEECHAT_HOOK_SIGNAL_POINTER == 'pointer')
+
+
 def test_plugins():
     """Test plugins functions."""
     check(weechat.plugin_get_name('') == 'core')
-    check(weechat.plugin_get_name(weechat.buffer_get_pointer(weechat.buffer_search_main(), 'plugin')) == 'core')
+    check(weechat.plugin_get_name(
+        weechat.buffer_get_pointer(
+            weechat.buffer_search_main(), 'plugin')) == 'core')
 
 
 def test_strings():
@@ -81,7 +130,7 @@ def test_strings():
     check(weechat.string_parse_size('123 b') == 123)
     check(weechat.string_parse_size('120k') == 120000)
     check(weechat.string_parse_size('1500m') == 1500000000)
-    check(weechat.string_parse_size('3g') == 3000000000)
+    check(weechat.string_parse_size('2g') == 2000000000)
     check(weechat.string_color_code_size('') == 0)
     check(weechat.string_color_code_size('test') == 0)
     str_color = weechat.color('yellow,red')
@@ -149,6 +198,11 @@ def config_reload_cb(data, config_file):
     return weechat.WEECHAT_RC_OK
 
 
+def config_update_cb(data, config_file, version, data_read):
+    """Config update callback."""
+    return weechat.WEECHAT_RC_OK
+
+
 def section_read_cb(data, config_file, section, option_name, value):
     """Section read callback."""
     return weechat.WEECHAT_RC_OK
@@ -192,11 +246,12 @@ def option_delete_cb(data, option):
 def test_config():
     """Test config functions."""
     # config
-    ptr_config = weechat.config_new(
-        'test_config_' + '{SCRIPT_LANGUAGE}',
-        'config_reload_cb', 'config_reload_data',
-    )
+    ptr_config = weechat.config_new('test_config_' + '{SCRIPT_LANGUAGE}',
+                                    'config_reload_cb', 'config_reload_data')
     check(ptr_config != '')
+    # set version
+    weechat.config_set_version(ptr_config, 2,
+                               'config_update_cb', 'config_update_data')
     # section
     ptr_section = weechat.config_new_section(
         ptr_config, 'section1', 0, 0,
@@ -227,6 +282,18 @@ def test_config():
     check(weechat.config_option_reset(ptr_opt_bool, 1) == 2)  # SET_OK_CHANGED
     check(weechat.config_option_reset(ptr_opt_bool, 1) == 1)  # SET_OK_SAME_VALUE
     check(weechat.config_boolean(ptr_opt_bool) == 1)
+    # boolean option with parent option
+    ptr_opt_bool_child = weechat.config_new_option(
+        ptr_config, ptr_section,
+        'option_bool_child << test_config_' + '{SCRIPT_LANGUAGE}' + '.section1.option_bool',
+        'boolean', 'bool option', '', 0, 0, None, None, 1,
+        'option_check_value_cb', '',
+        'option_change_cb', '',
+        'option_delete_cb', '',
+    )
+    check(ptr_opt_bool_child != '')
+    check(weechat.config_boolean(ptr_opt_bool_child) == 0)
+    check(weechat.config_boolean_inherited(ptr_opt_bool_child) == 1)
     # integer option
     ptr_opt_int = weechat.config_new_option(
         ptr_config, ptr_section, 'option_int', 'integer', 'int option',
@@ -244,7 +311,19 @@ def test_config():
     check(weechat.config_option_reset(ptr_opt_int, 1) == 2)  # SET_OK_CHANGED
     check(weechat.config_option_reset(ptr_opt_int, 1) == 1)  # SET_OK_SAME_VALUE
     check(weechat.config_integer(ptr_opt_int) == 2)
-    # integer option (with string values)
+    # integer option with parent option
+    ptr_opt_int_child = weechat.config_new_option(
+        ptr_config, ptr_section,
+        'option_int_child << test_config_' + '{SCRIPT_LANGUAGE}' + '.section1.option_int',
+        'integer', 'int option', '', 0, 256, None, None, 1,
+        'option_check_value_cb', '',
+        'option_change_cb', '',
+        'option_delete_cb', '',
+    )
+    check(ptr_opt_int_child != '')
+    check(weechat.config_integer(ptr_opt_int_child) == 0)
+    check(weechat.config_integer_inherited(ptr_opt_int_child) == 2)
+    # integer option (with string values: enum with WeeChat >= 4.1.0)
     ptr_opt_int_str = weechat.config_new_option(
         ptr_config, ptr_section, 'option_int_str', 'integer', 'int option str',
         'val1|val2|val3', 0, 0, 'val2', 'val2', 0,
@@ -265,6 +344,19 @@ def test_config():
     check(weechat.config_option_reset(ptr_opt_int_str, 1) == 1)  # SET_OK_SAME_VALUE
     check(weechat.config_integer(ptr_opt_int_str) == 1)
     check(weechat.config_string(ptr_opt_int_str) == 'val2')
+    # integer option with parent option (with string values: enum with WeeChat >= 4.1.0)
+    ptr_opt_int_str_child = weechat.config_new_option(
+        ptr_config, ptr_section,
+        'option_int_str_child << test_config_' + '{SCRIPT_LANGUAGE}' + '.section1.option_int_str',
+        'integer', 'int option str',
+        'val1|val2|val3', 0, 0, None, None, 1,
+        'option_check_value_cb', '',
+        'option_change_cb', '',
+        'option_delete_cb', '',
+    )
+    check(ptr_opt_int_str_child != '')
+    check(weechat.config_integer(ptr_opt_int_str_child) == 0)
+    check(weechat.config_integer_inherited(ptr_opt_int_str_child) == 1)
     # string option
     ptr_opt_str = weechat.config_new_option(
         ptr_config, ptr_section, 'option_str', 'string', 'str option',
@@ -291,6 +383,18 @@ def test_config():
     check(weechat.config_option_unset(ptr_opt_str) == 0)  # UNSET_OK_NO_RESET
     check(weechat.config_string(ptr_opt_str) == 'value')
     check(weechat.config_option_default_is_null(ptr_opt_str) == 0)
+    # string option with parent option
+    ptr_opt_str_child = weechat.config_new_option(
+        ptr_config, ptr_section,
+        'option_str_child << test_config_' + '{SCRIPT_LANGUAGE}' + '.section1.option_str',
+        'string', 'str option', '', 0, 0, None, None, 1,
+        'option_check_value_cb', '',
+        'option_change_cb', '',
+        'option_delete_cb', '',
+    )
+    check(ptr_opt_str_child != '')
+    check(weechat.config_string(ptr_opt_str_child) == '')
+    check(weechat.config_string_inherited(ptr_opt_str_child) == 'value')
     # color option
     ptr_opt_col = weechat.config_new_option(
         ptr_config, ptr_section, 'option_col', 'color', 'col option',
@@ -308,6 +412,55 @@ def test_config():
     check(weechat.config_option_reset(ptr_opt_col, 1) == 2)  # SET_OK_CHANGED
     check(weechat.config_option_reset(ptr_opt_col, 1) == 1)  # SET_OK_SAME_VALUE
     check(weechat.config_color(ptr_opt_col) == 'lightgreen')
+    # color option with parent option
+    ptr_opt_col_child = weechat.config_new_option(
+        ptr_config, ptr_section,
+        'option_col_child << test_config_' + '{SCRIPT_LANGUAGE}' + '.section1.option_col',
+        'color', 'col option', '', 0, 0, None, None, 1,
+        'option_check_value_cb', '',
+        'option_change_cb', '',
+        'option_delete_cb', '',
+    )
+    check(ptr_opt_col_child != '')
+    check(weechat.config_color(ptr_opt_col_child) == '')
+    check(weechat.config_color_inherited(ptr_opt_col_child) == 'lightgreen')
+    # enum option
+    ptr_opt_enum = weechat.config_new_option(
+        ptr_config, ptr_section, 'option_enum', 'enum', 'enum option',
+        'val1|val2|val3', 0, 0, 'val2', 'val2', 0,
+        'option_check_value_cb', '',
+        'option_change_cb', '',
+        'option_delete_cb', '',
+    )
+    check(ptr_opt_enum != '')
+    check(weechat.config_enum(ptr_opt_enum) == 1)
+    check(weechat.config_integer(ptr_opt_enum) == 1)
+    check(weechat.config_string(ptr_opt_enum) == 'val2')
+    check(weechat.config_option_set(ptr_opt_enum, 'val1', 1) == 2)  # SET_OK_CHANGED
+    check(weechat.config_option_set(ptr_opt_enum, 'val1', 1) == 1)  # SET_OK_SAME_VALUE
+    check(weechat.config_enum(ptr_opt_enum) == 0)
+    check(weechat.config_integer(ptr_opt_enum) == 0)
+    check(weechat.config_string(ptr_opt_enum) == 'val1')
+    check(weechat.config_enum_default(ptr_opt_enum) == 1)
+    check(weechat.config_integer_default(ptr_opt_enum) == 1)
+    check(weechat.config_string_default(ptr_opt_enum) == 'val2')
+    check(weechat.config_option_reset(ptr_opt_enum, 1) == 2)  # SET_OK_CHANGED
+    check(weechat.config_option_reset(ptr_opt_enum, 1) == 1)  # SET_OK_SAME_VALUE
+    check(weechat.config_enum(ptr_opt_enum) == 1)
+    check(weechat.config_integer(ptr_opt_enum) == 1)
+    check(weechat.config_string(ptr_opt_enum) == 'val2')
+    # enum option with parent option
+    ptr_opt_enum_child = weechat.config_new_option(
+        ptr_config, ptr_section,
+        'option_enum_child << test_config_' + '{SCRIPT_LANGUAGE}' + '.section1.option_enum',
+        'enum', 'enum option', 'val1|val2|val3', 0, 0, None, None, 1,
+        'option_check_value_cb', '',
+        'option_change_cb', '',
+        'option_delete_cb', '',
+    )
+    check(ptr_opt_enum_child != '')
+    check(weechat.config_enum(ptr_opt_enum_child) == 0)
+    check(weechat.config_enum_inherited(ptr_opt_enum_child) == 1)
     # search option
     ptr_opt_bool2 = weechat.config_search_option(ptr_config, ptr_section,
                                                  'option_bool')
@@ -320,6 +473,12 @@ def test_config():
     check(weechat.config_string_to_boolean('1') == 1)
     # rename option
     weechat.config_option_rename(ptr_opt_bool, 'option_bool_renamed')
+    # get string property of option
+    check(weechat.config_option_get_string(ptr_opt_bool, 'type') == 'boolean')
+    check(weechat.config_option_get_string(ptr_opt_bool, 'name') == 'option_bool_renamed')
+    # get pointer property of option
+    check(weechat.config_option_get_pointer(ptr_opt_bool, 'config_file') == ptr_config)
+    check(weechat.config_option_get_pointer(ptr_opt_bool, 'section') == ptr_section)
     # read config (create it because it does not exist yet)
     check(weechat.config_read(ptr_config) == 0)  # CONFIG_READ_OK
     # write config
@@ -385,8 +544,10 @@ def test_display():
     check(weechat.color('green') != '')
     check(weechat.color('unknown') == '')
     weechat.prnt('', '## test print core buffer')
-    weechat.prnt_date_tags('', 946681200, 'tag1,tag2', '## test print_date_tags core buffer')
-    weechat.prnt_date_tags('', 5680744830, 'tag1,tag2', '## test print_date_tags core buffer, year 2150')
+    weechat.prnt_date_tags('', 946681200, 'tag1,tag2',
+                           '## test print_date_tags core buffer')
+    weechat.prnt_datetime_tags('', 2146383600, 123456, 'tag1,tag2',
+                               '## test print_date_tags core buffer, January, 6th 2038')
     hdata_buffer = weechat.hdata_get('buffer')
     hdata_lines = weechat.hdata_get('lines')
     hdata_line = weechat.hdata_get('line')
@@ -395,19 +556,25 @@ def test_display():
     own_lines = weechat.hdata_pointer(hdata_buffer, buffer, 'own_lines')
     line = weechat.hdata_pointer(hdata_lines, own_lines, 'last_line')
     data = weechat.hdata_pointer(hdata_line, line, 'data')
-    check(weechat.hdata_time(hdata_line_data, data, 'date') == 5680744830)
-    buffer = weechat.buffer_new('test_formatted', 'buffer_input_cb', '', 'buffer_close_cb', '')
+    check(weechat.hdata_time(hdata_line_data, data, 'date') == 2146383600)
+    check(weechat.hdata_integer(hdata_line_data, data, 'date_usec') == 123456)
+    buffer = weechat.buffer_new('test_formatted',
+                                'buffer_input_cb', '', 'buffer_close_cb', '')
     check(buffer != '')
     check(weechat.buffer_get_integer(buffer, 'type') == 0)
     weechat.prnt(buffer, '## test print formatted buffer')
-    weechat.prnt_date_tags(buffer, 946681200, 'tag1,tag2', '## test print_date_tags formatted buffer')
+    weechat.prnt_date_tags(buffer, 946681200, 'tag1,tag2',
+                           '## test print_date_tags formatted buffer')
     weechat.buffer_close(buffer)
-    buffer = weechat.buffer_new_props('test_free', {'type': 'free'}, 'buffer_input_cb', '', 'buffer_close_cb', '')
+    buffer = weechat.buffer_new_props('test_free', {'type': 'free'},
+                                      'buffer_input_cb', '', 'buffer_close_cb', '')
     check(weechat.buffer_get_integer(buffer, 'type') == 1)
     check(buffer != '')
     weechat.prnt_y(buffer, 0, '## test print_y free buffer')
-    weechat.prnt_y_date_tags(buffer, 0, 946681200, 'tag1,tag2', '## test print_y_date_tags free buffer')
-    weechat.prnt_y_date_tags(buffer, 1, 5680744830, 'tag1,tag2', '## test print_y_date_tags free buffer, year 2150')
+    weechat.prnt_y_date_tags(buffer, 0, 946681200, 'tag1,tag2',
+                             '## test print_y_date_tags free buffer')
+    weechat.prnt_y_datetime_tags(buffer, 1, 2146383600, 123456, 'tag1,tag2',
+                                 '## test print_y_date_tags free buffer, January, 6th 2038')
     weechat.buffer_close(buffer)
 
 
@@ -441,7 +608,7 @@ def timer_cb(data, remaining_calls):
 
 
 def test_hooks():
-    """Test function hook_command."""
+    """Test hook functions."""
     # hook_completion / hook_completion_args / and hook_command
     hook_cmplt = weechat.hook_completion('{SCRIPT_NAME}', 'description',
                                          'completion_cb', 'completion_data')
@@ -459,14 +626,83 @@ def test_hooks():
     weechat.unhook(hook_cmd)
     weechat.unhook(hook_cmplt)
     # hook_timer
-    hook_timer = weechat.hook_timer(5000111000, 0, 1,
+    hook_timer = weechat.hook_timer(2000111000, 0, 1,
                                     'timer_cb', 'timer_cb_data')
     ptr_infolist = weechat.infolist_get('hook', hook_timer, '')
     check(ptr_infolist != '')
     check(weechat.infolist_next(ptr_infolist) == 1)
-    check(weechat.infolist_string(ptr_infolist, 'interval') == '5000111000')
+    check(weechat.infolist_string(ptr_infolist, 'interval') == '2000111000')
     weechat.infolist_free(ptr_infolist)
     weechat.unhook(hook_timer)
+
+
+def test_buffers():
+    """Test buffer functions."""
+    buffer1 = weechat.buffer_new('test1', 'buffer_input_cb', '', 'buffer_close_cb', '')
+    check(buffer1 != '')
+    check(weechat.buffer_get_integer(buffer1, 'number') == 2)
+    check(weechat.buffer_get_string(buffer1, 'short_name') == 'test1')
+    props = {
+        'short_name': 't2',
+    }
+    buffer2 = weechat.buffer_new_props('test2', props, 'buffer_input_cb', '', 'buffer_close_cb', '')
+    check(buffer2 != '')
+    check(weechat.buffer_get_integer(buffer2, 'number') == 3)
+    check(weechat.buffer_get_string(buffer2, 'short_name') == 't2')
+    check(weechat.buffer_get_integer(buffer2, 'next_line_id') == 0)
+    weechat.prnt(buffer2, '## test line 1')
+    check(weechat.buffer_get_integer(buffer2, 'next_line_id') == 1)
+    weechat.buffer_clear(buffer2)
+    weechat.buffer_merge(buffer2, buffer1)
+    check(weechat.buffer_get_integer(buffer1, 'number') == 2)
+    check(weechat.buffer_get_integer(buffer2, 'number') == 2)
+    weechat.buffer_unmerge(buffer2, 3)
+    check(weechat.buffer_get_integer(buffer1, 'number') == 2)
+    check(weechat.buffer_get_integer(buffer2, 'number') == 3)
+    check(weechat.current_buffer() != '')
+    check(weechat.buffer_get_integer(buffer1, 'hidden') == 0)
+    weechat.buffer_set(buffer1, 'hidden', '1')
+    check(weechat.buffer_get_integer(buffer1, 'hidden') == 1)
+    weechat.buffer_set(buffer1, 'hidden', '0')
+    check(weechat.buffer_get_integer(buffer1, 'hidden') == 0)
+    weechat.buffer_set(buffer1, 'localvar_set_var1', 'value1')
+    check(weechat.buffer_string_replace_local_var(buffer1, 'test $var1') == 'test value1')
+    buffer = weechat.buffer_search_main()
+    buffer_id = weechat.buffer_get_string(buffer, 'id')
+    check(weechat.buffer_search('xxx', 'yyy') == '')
+    check(weechat.buffer_search('==', 'xxx') == '')
+    check(weechat.buffer_search('==id', '0') == '')
+    check(weechat.buffer_search('core', 'weechat') == buffer)
+    check(weechat.buffer_search('==', 'core.weechat') == buffer)
+    check(weechat.buffer_search('==id', buffer_id) == buffer)
+    check(weechat.buffer_match_list(buffer, '') == 0)
+    check(weechat.buffer_match_list(buffer, '*') == 1)
+    check(weechat.buffer_match_list(buffer, 'core.weechat') == 1)
+    check(weechat.buffer_match_list(buffer, '*,!core.weechat') == 0)
+    weechat.buffer_close(buffer1)
+    weechat.buffer_close(buffer2)
+
+
+def test_lines():
+    """Test line functions."""
+    buffer = weechat.buffer_search_main()
+    check(weechat.line_search_by_id(buffer, -1) == '')
+    check(weechat.line_search_by_id(buffer, 1234567) == '')
+    check(weechat.line_search_by_id(buffer, 0) != '')
+
+
+def test_windows():
+    """Test window functions."""
+    window = weechat.current_window()
+    check(window != '')
+    buffer = weechat.buffer_search_main()
+    check(weechat.window_search_with_buffer(buffer) != '')
+    buffer1 = weechat.buffer_new('test1', 'buffer_input_cb', '', 'buffer_close_cb', '')
+    check(buffer1 != '')
+    check(weechat.window_search_with_buffer(buffer1) == '')
+    weechat.buffer_close(buffer1)
+    check(weechat.window_get_integer(window, 'number') == 1)
+    check(weechat.window_get_string(window, 'xxx') == '')
 
 
 def test_command():
@@ -487,8 +723,8 @@ def infolist_cb(data, infolist_name, pointer, arguments):
     check(weechat.infolist_new_var_pointer(item, 'pointer', '0xabcdef') != '')
     # Tue Jan 06 2009 08:40:30 GMT+0000
     check(weechat.infolist_new_var_time(item, 'time1', 1231231230) != '')
-    # Tue Jan 06 2150 08:40:30 GMT+0000
-    check(weechat.infolist_new_var_time(item, 'time2', 5680744830) != '')
+    # Wed Jan 06 2038 09:40:00 GMT+0000
+    check(weechat.infolist_new_var_time(item, 'time2', 2146383600) != '')
     return infolist
 
 
@@ -505,7 +741,7 @@ def test_infolist():
     check(weechat.infolist_string(ptr_infolist, 'string') == 'test string')
     check(weechat.infolist_pointer(ptr_infolist, 'pointer') == '0xabcdef')
     check(weechat.infolist_time(ptr_infolist, 'time1') == 1231231230)
-    check(weechat.infolist_time(ptr_infolist, 'time2') == 5680744830)
+    check(weechat.infolist_time(ptr_infolist, 'time2') == 2146383600)
     check(weechat.infolist_fields(ptr_infolist) == 'i:integer,s:string,p:pointer,t:time1,t:time2')
     check(weechat.infolist_next(ptr_infolist) == 0)
     weechat.infolist_free(ptr_infolist)
@@ -532,17 +768,17 @@ def test_hdata():
     check(hdata_irc_server != '')
     # create a test buffer with 3 messages
     buffer2 = weechat.buffer_new('test', 'buffer_input_cb', '', 'buffer_close_cb', '')
-    weechat.prnt_date_tags(buffer2, 5680744830, 'tag1,tag2', 'prefix1\t## msg1')
-    weechat.prnt_date_tags(buffer2, 5680744831, 'tag3,tag4', 'prefix2\t## msg2')
-    weechat.prnt_date_tags(buffer2, 5680744832, 'tag5,tag6', 'prefix3\t## msg3')
+    weechat.prnt_date_tags(buffer2, 2146383600, 'tag1,tag2', 'prefix1\t## msg1')
+    weechat.prnt_date_tags(buffer2, 2146383601, 'tag3,tag4', 'prefix2\t## msg2')
+    weechat.prnt_date_tags(buffer2, 2146383602, 'tag5,tag6', 'prefix3\t## msg3')
     own_lines = weechat.hdata_pointer(hdata_buffer, buffer2, 'own_lines')
     line1 = weechat.hdata_pointer(hdata_lines, own_lines, 'first_line')
     line1_data = weechat.hdata_pointer(hdata_line, line1, 'data')
     line2 = weechat.hdata_pointer(hdata_line, line1, 'next_line')
     line3 = weechat.hdata_pointer(hdata_line, line2, 'next_line')
     # hdata_get_var_offset
-    check(weechat.hdata_get_var_offset(hdata_buffer, 'plugin') == 0)
-    check(weechat.hdata_get_var_offset(hdata_buffer, 'number') > 0)
+    check(weechat.hdata_get_var_offset(hdata_buffer, 'id') == 0)
+    check(weechat.hdata_get_var_offset(hdata_buffer, 'plugin') > 0)
     # hdata_get_var_type_string
     check(weechat.hdata_get_var_type_string(hdata_buffer, 'plugin') == 'pointer')
     check(weechat.hdata_get_var_type_string(hdata_buffer, 'number') == 'integer')
@@ -551,14 +787,16 @@ def test_hdata():
     check(weechat.hdata_get_var_type_string(hdata_line_data, 'displayed') == 'char')
     check(weechat.hdata_get_var_type_string(hdata_line_data, 'prefix') == 'shared_string')
     check(weechat.hdata_get_var_type_string(hdata_line_data, 'date') == 'time')
-    check(weechat.hdata_get_var_type_string(hdata_hotlist, 'creation_time.tv_usec') == 'long')
-    check(weechat.hdata_get_var_type_string(hdata_irc_server, 'gnutls_sess') == 'other')
+    check(weechat.hdata_get_var_type_string(hdata_hotlist, 'time') == 'time')
+    check(weechat.hdata_get_var_type_string(hdata_hotlist, 'time_usec') == 'long')
+    check(weechat.hdata_get_var_type_string(hdata_irc_server, 'sasl_scram_salted_pwd') == 'other')
     # hdata_get_var_array_size
     check(weechat.hdata_get_var_array_size(hdata_buffer, buffer2, 'name') == -1)
     check(weechat.hdata_get_var_array_size(hdata_buffer, buffer2, 'highlight_tags_array') >= 0)
     # hdata_get_var_array_size_string
     check(weechat.hdata_get_var_array_size_string(hdata_buffer, buffer2, 'name') == '')
-    check(weechat.hdata_get_var_array_size_string(hdata_buffer, buffer2, 'highlight_tags_array') == 'highlight_tags_count')
+    check(weechat.hdata_get_var_array_size_string(
+        hdata_buffer, buffer2, 'highlight_tags_array') == 'highlight_tags_count')
     # hdata_get_var_hdata
     check(weechat.hdata_get_var_hdata(hdata_buffer, 'plugin') == 'plugin')
     check(weechat.hdata_get_var_hdata(hdata_buffer, 'own_lines') == 'lines')
@@ -581,11 +819,13 @@ def test_hdata():
     # hdata_char
     check(weechat.hdata_char(hdata_line_data, line1_data, 'displayed') == 1)
     # hdata_integer
-    check(weechat.hdata_char(hdata_buffer, buffer2, 'number') == 2)
+    check(weechat.hdata_integer(hdata_buffer, buffer2, 'number') == 2)
     # hdata_long
     weechat.buffer_set(buffer, 'hotlist', weechat.WEECHAT_HOTLIST_MESSAGE)
     gui_hotlist = weechat.hdata_get_list(hdata_hotlist, 'gui_hotlist')
     check(weechat.hdata_long(hdata_hotlist, gui_hotlist, 'creation_time.tv_usec') >= 0)
+    # hdata_longlong
+    check(weechat.hdata_longlong(hdata_buffer, buffer2, 'id') > 1708874542000000)
     # hdata_string
     check(weechat.hdata_string(hdata_buffer, buffer2, 'name') == 'test')
     # hdata_pointer
@@ -601,16 +841,16 @@ def test_hdata():
     check(weechat.hdata_compare(hdata_buffer, buffer2, buffer, 'name', 0) < 0)
     check(weechat.hdata_compare(hdata_buffer, buffer, buffer, 'name', 0) == 0)
     # hdata_update
-    check(weechat.hdata_time(hdata_line_data, line1_data, 'date') == 5680744830)
+    check(weechat.hdata_time(hdata_line_data, line1_data, 'date') == 2146383600)
     check(weechat.hdata_string(hdata_line_data, line1_data, 'prefix') == 'prefix1')
     check(weechat.hdata_string(hdata_line_data, line1_data, 'message') == '## msg1')
     update = {
-        'date': '5680744835',
+        'date': '2146383605',
         'prefix': 'new_prefix1',
         'message': 'new_message1'
     }
     check(weechat.hdata_update(hdata_line_data, line1_data, update) == 3)
-    check(weechat.hdata_time(hdata_line_data, line1_data, 'date') == 5680744835)
+    check(weechat.hdata_time(hdata_line_data, line1_data, 'date') == 2146383605)
     check(weechat.hdata_string(hdata_line_data, line1_data, 'prefix') == 'new_prefix1')
     check(weechat.hdata_string(hdata_line_data, line1_data, 'message') == 'new_message1')
     # hdata_get_string
@@ -626,6 +866,7 @@ def cmd_test_cb(data, buf, args):
     weechat.prnt('', '>>> ------------------------------')
     weechat.prnt('', '>>> Testing ' + '{SCRIPT_LANGUAGE}' + ' API')
     weechat.prnt('', '  > TESTS: ' + '{SCRIPT_TESTS}')
+    test_constants()
     test_plugins()
     test_strings()
     test_lists()
@@ -633,6 +874,9 @@ def cmd_test_cb(data, buf, args):
     test_key()
     test_display()
     test_hooks()
+    test_buffers()
+    test_lines()
+    test_windows()
     test_command()
     test_infolist()
     test_hdata()

@@ -1,7 +1,7 @@
 /*
  * test-core-calc.cpp - test calculations functions
  *
- * Copyright (C) 2019-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2019-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -26,8 +26,8 @@ extern "C"
 #include <stdio.h>
 #include <string.h>
 #include <locale.h>
-#include "src/core/wee-arraylist.h"
-#include "src/core/wee-calc.h"
+#include "src/core/core-arraylist.h"
+#include "src/core/core-calc.h"
 
 extern void calc_list_free_cb (void *data, struct t_arraylist *arraylist,
                                void *pointer);

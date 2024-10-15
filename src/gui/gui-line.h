@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -35,7 +35,9 @@ struct t_gui_line_data
                                        /* free buffer: equals to "y"        */
     int y;                             /* line position (for free buffer)   */
     time_t date;                       /* date/time of line (may be past)   */
+    int date_usec;                     /* microseconds for date             */
     time_t date_printed;               /* date/time when weechat print it   */
+    int date_usec_printed;             /* microseconds for date printed     */
     char *str_time;                    /* time string (for display)         */
     int tags_count;                    /* number of tags for line           */
     char **tags_array;                 /* tags for line                     */
@@ -85,6 +87,7 @@ extern int gui_line_get_align (struct t_gui_buffer *buffer,
                                int with_suffix, int first_line);
 extern char *gui_line_build_string_prefix_message (const char *prefix,
                                                    const char *message);
+extern char *gui_line_build_string_message_nick_offline (const char *message);
 extern char *gui_line_build_string_message_tags (const char *message,
                                                  int tags_count,
                                                  char **tags_array,
@@ -94,6 +97,8 @@ extern struct t_gui_line *gui_line_get_first_displayed (struct t_gui_buffer *buf
 extern struct t_gui_line *gui_line_get_last_displayed (struct t_gui_buffer *buffer);
 extern struct t_gui_line *gui_line_get_prev_displayed (struct t_gui_line *line);
 extern struct t_gui_line *gui_line_get_next_displayed (struct t_gui_line *line);
+extern struct t_gui_line *gui_line_search_by_id (struct t_gui_buffer *buffer,
+                                                 int id);
 extern int gui_line_search_text (struct t_gui_buffer *buffer,
                                  struct t_gui_line *line);
 extern int gui_line_match_regex (struct t_gui_line_data *line_data,
@@ -107,6 +112,7 @@ extern const char *gui_line_search_tag_starting_with (struct t_gui_line *line,
 extern const char *gui_line_get_nick_tag (struct t_gui_line *line);
 extern int gui_line_has_highlight (struct t_gui_line *line);
 extern int gui_line_has_offline_nick (struct t_gui_line *line);
+extern int gui_line_is_action (struct t_gui_line *line);
 extern void gui_line_compute_buffer_max_length (struct t_gui_buffer *buffer,
                                                 struct t_gui_lines *lines);
 extern void gui_line_compute_prefix_max_length (struct t_gui_lines *lines);
@@ -124,7 +130,9 @@ extern void gui_line_set_highlight (struct t_gui_line *line,
 extern struct t_gui_line *gui_line_new (struct t_gui_buffer *buffer,
                                         int y,
                                         time_t date,
+                                        int date_usec,
                                         time_t date_printed,
+                                        int date_usec_printed,
                                         const char *tags,
                                         const char *prefix,
                                         const char *message);

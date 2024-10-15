@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -34,7 +34,9 @@ enum t_relay_weechat_compression
 {
     RELAY_WEECHAT_COMPRESSION_OFF = 0, /* no compression of binary objects  */
     RELAY_WEECHAT_COMPRESSION_ZLIB,    /* zlib compression                  */
+#ifdef HAVE_ZSTD
     RELAY_WEECHAT_COMPRESSION_ZSTD,    /* Zstandard compression             */
+#endif
     /* number of compressions */
     RELAY_WEECHAT_NUM_COMPRESSIONS,
 };
@@ -44,12 +46,14 @@ struct t_relay_weechat_data
     /* handshake status */
     int handshake_done;                /* 1 if handshake has been done      */
 
+    /* handshake options */
+    enum t_relay_weechat_compression compression; /* compression type       */
+    int escape_commands;               /* 1 if backslashes are interpreted  */
+                                       /* in commands sent by client        */
+
     /* authentication status (init command) */
     int password_ok;                   /* password received and OK?         */
     int totp_ok;                       /* TOTP received and OK?             */
-
-    /* options set by client (init command) */
-    enum t_relay_weechat_compression compression; /* compression type       */
 
     /* sync of buffers */
     struct t_hashtable *buffers_sync;  /* buffers synchronized (events      */

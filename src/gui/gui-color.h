@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -60,16 +60,16 @@ enum t_gui_color_enum
      * following obsolete colors are kept here for compatibility
      * with WeeChat <= 0.3.3
      */
-    GUI_COLOR_CHAT_NICK1_OBSOLETE,  /* not used any more since WeeChat 0.3.4 */
-    GUI_COLOR_CHAT_NICK2_OBSOLETE,  /* not used any more since WeeChat 0.3.4 */
-    GUI_COLOR_CHAT_NICK3_OBSOLETE,  /* not used any more since WeeChat 0.3.4 */
-    GUI_COLOR_CHAT_NICK4_OBSOLETE,  /* not used any more since WeeChat 0.3.4 */
-    GUI_COLOR_CHAT_NICK5_OBSOLETE,  /* not used any more since WeeChat 0.3.4 */
-    GUI_COLOR_CHAT_NICK6_OBSOLETE,  /* not used any more since WeeChat 0.3.4 */
-    GUI_COLOR_CHAT_NICK7_OBSOLETE,  /* not used any more since WeeChat 0.3.4 */
-    GUI_COLOR_CHAT_NICK8_OBSOLETE,  /* not used any more since WeeChat 0.3.4 */
-    GUI_COLOR_CHAT_NICK9_OBSOLETE,  /* not used any more since WeeChat 0.3.4 */
-    GUI_COLOR_CHAT_NICK10_OBSOLETE, /* not used any more since WeeChat 0.3.4 */
+    GUI_COLOR_CHAT_NICK1_OBSOLETE,  /* not used anymore since WeeChat 0.3.4 */
+    GUI_COLOR_CHAT_NICK2_OBSOLETE,  /* not used anymore since WeeChat 0.3.4 */
+    GUI_COLOR_CHAT_NICK3_OBSOLETE,  /* not used anymore since WeeChat 0.3.4 */
+    GUI_COLOR_CHAT_NICK4_OBSOLETE,  /* not used anymore since WeeChat 0.3.4 */
+    GUI_COLOR_CHAT_NICK5_OBSOLETE,  /* not used anymore since WeeChat 0.3.4 */
+    GUI_COLOR_CHAT_NICK6_OBSOLETE,  /* not used anymore since WeeChat 0.3.4 */
+    GUI_COLOR_CHAT_NICK7_OBSOLETE,  /* not used anymore since WeeChat 0.3.4 */
+    GUI_COLOR_CHAT_NICK8_OBSOLETE,  /* not used anymore since WeeChat 0.3.4 */
+    GUI_COLOR_CHAT_NICK9_OBSOLETE,  /* not used anymore since WeeChat 0.3.4 */
+    GUI_COLOR_CHAT_NICK10_OBSOLETE, /* not used anymore since WeeChat 0.3.4 */
     GUI_COLOR_CHAT_HOST,
     GUI_COLOR_CHAT_DELIMITERS,
     GUI_COLOR_CHAT_HIGHLIGHT,
@@ -88,6 +88,8 @@ enum t_gui_color_enum
     GUI_COLOR_EMPHASIS,
     GUI_COLOR_CHAT_DAY_CHANGE,
     GUI_COLOR_CHAT_VALUE_NULL,
+    GUI_COLOR_CHAT_STATUS_DISABLED,
+    GUI_COLOR_CHAT_STATUS_ENABLED,
 
     /* number of colors */
     GUI_COLOR_NUM_COLORS,
@@ -157,6 +159,9 @@ enum t_gui_color_enum
     "([<>])|"                                   \
     "(\\[[0-9;?]*[A-Za-z]))"
 
+#define GUI_COLOR_ANSI_DEFAULT_FG 39
+#define GUI_COLOR_ANSI_DEFAULT_BG 49
+
 #define GUI_COLOR_BUFFER_NAME "color"
 
 /* color structure */
@@ -183,6 +188,7 @@ extern struct t_gui_color *gui_color[];
 extern struct t_hashtable *gui_color_hash_palette_color;
 extern struct t_hashtable *gui_color_hash_palette_alias;
 extern struct t_weelist *gui_color_list_with_alias;
+extern int gui_color_term256[];
 
 /* color functions */
 

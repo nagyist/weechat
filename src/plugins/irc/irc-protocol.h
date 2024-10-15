@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -24,90 +24,70 @@
 
 #define IRC_PROTOCOL_CALLBACK(__command)                                \
     int                                                                 \
-    irc_protocol_cb_##__command (struct t_irc_server *server,           \
-                                 time_t date,                           \
-                                 const char *irc_message,               \
-                                 struct t_hashtable *tags,              \
-                                 const char *nick,                      \
-                                 const char *address,                   \
-                                 const char *host,                      \
-                                 const char *command,                   \
-                                 int ignored,                           \
-                                 const char **params,                   \
-                                 int num_params)
+    irc_protocol_cb_##__command (                                       \
+        struct t_irc_protocol_ctxt *ctxt)
 
-#define IRC_PROTOCOL_RUN_CALLBACK(__name)                               \
-    irc_protocol_cb_##__name (server, date, irc_message, tags, nick,    \
-                              address, host, command, ignored, params,  \
-                              num_params)
-
-#define IRCB(__message, __decode_color, __keep_trailing_spaces,         \
-             __func_cb)                                                 \
+#define IRCB(__message, __func_cb)                                      \
     { #__message,                                                       \
-      __decode_color,                                                   \
-      __keep_trailing_spaces,                                           \
       &irc_protocol_cb_##__func_cb }
 
 #define IRC_PROTOCOL_MIN_PARAMS(__min_params)                           \
-    (void) date;                                                        \
-    (void) irc_message;                                                 \
-    (void) tags;                                                        \
-    (void) nick;                                                        \
-    (void) address;                                                     \
-    (void) host;                                                        \
-    (void) command;                                                     \
-    (void) ignored;                                                     \
-    (void) params;                                                      \
-    (void) num_params;                                                  \
-    if (num_params < __min_params)                                      \
+    if (ctxt->num_params < __min_params)                                \
     {                                                                   \
-        weechat_printf (server->buffer,                                 \
+        weechat_printf (ctxt->server->buffer,                           \
                         _("%s%s: too few parameters received in "       \
                           "command \"%s\" (received: %d, expected: "    \
                           "at least %d)"),                              \
                         weechat_prefix ("error"), IRC_PLUGIN_NAME,      \
-                        command, num_params, __min_params);             \
+                        ctxt->command, ctxt->num_params, __min_params); \
         return WEECHAT_RC_ERROR;                                        \
     }
 
 #define IRC_PROTOCOL_CHECK_NICK                                         \
-    if (!nick || !nick[0])                                              \
+    if (!ctxt->nick || !ctxt->nick[0])                                  \
     {                                                                   \
-        weechat_printf (server->buffer,                                 \
+        weechat_printf (ctxt->server->buffer,                           \
                         _("%s%s: command \"%s\" received without "      \
                           "nick"),                                      \
                         weechat_prefix ("error"), IRC_PLUGIN_NAME,      \
-                        command);                                       \
+                        ctxt->command);                                 \
         return WEECHAT_RC_ERROR;                                        \
     }
 
 struct t_irc_server;
 
-typedef int (t_irc_recv_func)(struct t_irc_server *server,
-                              time_t date, const char *irc_message,
-                              struct t_hashtable *tags,
-                              const char *nick, const char *address,
-                              const char *host, const char *command,
-                              int ignored,
-                              const char **params, int num_params);
+struct t_irc_protocol_ctxt
+{
+    struct t_irc_server *server;       /* IRC server                        */
+    time_t date;                       /* message date                      */
+    int date_usec;                     /* microseconds of date              */
+    char *irc_message;                 /* whole raw IRC message             */
+    struct t_hashtable *tags;          /* IRC tags                          */
+    char *nick;                        /* nick of sender                    */
+    int nick_is_me;                    /* nick of sender is myself          */
+    char *address;                     /* address of sender                 */
+    char *host;                        /* host of sender                    */
+    char *command;                     /* IRC command (eg: PRIVMSG)         */
+    int ignore_remove;                 /* msg ignored (not displayed)       */
+    int ignore_tag;                    /* msg ignored (displayed with tag)  */
+    char **params;                     /* IRC command parameters            */
+    int num_params;                    /* number of IRC command parameters  */
+};
+
+typedef int (t_irc_recv_func)(struct t_irc_protocol_ctxt *ctxt);
 
 struct t_irc_protocol_msg
 {
     char *name;                     /* IRC message name                      */
-    int decode_color;               /* decode color before calling function  */
-    int keep_trailing_spaces;       /* keep trailing spaces in message       */
     t_irc_recv_func *recv_function; /* function called when msg is received  */
 };
 
-extern const char *irc_protocol_tags (const char *command,
-                                      struct t_hashtable *irc_msg_tags,
-                                      const char *extra_tags,
-                                      const char *nick,
-                                      const char *address);
-extern time_t irc_protocol_parse_time (const char *time);
+extern const char *irc_protocol_tags (struct t_irc_protocol_ctxt *ctxt,
+                                      const char *extra_tags);
 extern void irc_protocol_recv_command (struct t_irc_server *server,
                                        const char *irc_message,
                                        const char *msg_command,
-                                       const char *msg_channel);
+                                       const char *msg_channel,
+                                       int ignore_batch_tag);
 
 #endif /* WEECHAT_PLUGIN_IRC_PROTOCOL_H */

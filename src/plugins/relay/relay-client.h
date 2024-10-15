@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -25,26 +25,16 @@
 #include <gnutls/gnutls.h>
 
 struct t_relay_server;
-
-/* relay status */
-
-enum t_relay_status
-{
-    RELAY_STATUS_CONNECTING = 0,       /* connecting to client              */
-    RELAY_STATUS_WAITING_AUTH,         /* waiting AUTH from client          */
-    RELAY_STATUS_CONNECTED,            /* connected to client               */
-    RELAY_STATUS_AUTH_FAILED,          /* AUTH failed with client           */
-    RELAY_STATUS_DISCONNECTED,         /* disconnected from client          */
-    /* number of relay status */
-    RELAY_NUM_STATUS,
-};
+struct t_relay_http_request;
 
 /* type of data exchanged with client */
 
 enum t_relay_client_data_type
 {
-    RELAY_CLIENT_DATA_TEXT = 0,        /* text messages                     */
+    RELAY_CLIENT_DATA_TEXT_LINE = 0,   /* text messages (on one line)       */
     RELAY_CLIENT_DATA_BINARY,          /* binary messages                   */
+    RELAY_CLIENT_DATA_HTTP,            /* HTTP messages (mostly text)       */
+    RELAY_CLIENT_DATA_TEXT_MULTILINE,  /* multi-line text (eg: JSON)        */
     /* number of data types */
     RELAY_NUM_CLIENT_DATA_TYPES,
 };
@@ -53,7 +43,6 @@ enum t_relay_client_data_type
 
 enum t_relay_client_websocket_status
 {
-    /* 0=not a ws, 1=init ws, 2=ws ready */
     RELAY_CLIENT_WEBSOCKET_NOT_USED = 0, /* no webseocket or not yet init.  */
     RELAY_CLIENT_WEBSOCKET_INITIALIZING, /* websocket used, initializing    */
     RELAY_CLIENT_WEBSOCKET_READY,        /* websocket used, ready           */
@@ -61,23 +50,10 @@ enum t_relay_client_websocket_status
     RELAY_NUM_CLIENT_WEBSOCKET_STATUS,
 };
 
-/* type of message exchanged with the client (used for websockets) */
+/* fake send function (for tests) */
 
-enum t_relay_client_msg_type
-{
-    RELAY_CLIENT_MSG_STANDARD,
-    RELAY_CLIENT_MSG_PING,
-    RELAY_CLIENT_MSG_PONG,
-    RELAY_CLIENT_MSG_CLOSE,
-    /* number of message types */
-    RELAY_NUM_CLIENT_MSG_TYPES,
-};
-
-/* macros for status */
-
-#define RELAY_CLIENT_HAS_ENDED(client)                                  \
-    ((client->status == RELAY_STATUS_AUTH_FAILED) ||                    \
-     (client->status == RELAY_STATUS_DISCONNECTED))
+typedef void (t_relay_fake_send_func)(void *client,
+                                      const char *data, int data_size);
 
 /* output queue of messages to client */
 
@@ -101,22 +77,24 @@ struct t_relay_client
     char *desc;                        /* description, used for display     */
     int sock;                          /* socket for connection             */
     int server_port;                   /* port used for connection          */
-    int ssl;                           /* 1 if SSL is enabled               */
-    gnutls_session_t gnutls_sess;      /* gnutls session (only if SSL used) */
+    int tls;                           /* 1 if TLS is enabled               */
+    gnutls_session_t gnutls_sess;      /* gnutls session (only if TLS used) */
+    t_relay_fake_send_func *fake_send_func; /* function called for fake send*/
+                                       /* (used in tests only)              */
     struct t_hook *hook_timer_handshake; /* timer for doing gnutls handshake*/
     int gnutls_handshake_ok;           /* 1 if handshake was done and OK    */
     enum t_relay_client_websocket_status websocket; /* websocket status     */
-    struct t_hashtable *http_headers;  /* HTTP headers for websocket        */
+    struct t_relay_websocket_deflate *ws_deflate; /* websocket deflate data */
+    struct t_relay_http_request *http_req; /* HTTP request                  */
     char *address;                     /* string with IP address            */
     char *real_ip;                     /* real IP (X-Real-IP HTTP header)   */
     enum t_relay_status status;        /* status (connecting, active,..)    */
     enum t_relay_protocol protocol;    /* protocol (irc,..)                 */
-    char *protocol_string;             /* example: "ipv6.ssl.irc.libera"    */
+    char *protocol_string;             /* example: "ipv6.tls.irc.libera"    */
     char *protocol_args;               /* arguments used for protocol       */
                                        /* example: server for irc protocol  */
     char *nonce;                       /* nonce used in salt of hashed pwd  */
     int password_hash_algo;            /* password hash algo (negotiated)   */
-    int password_hash_iterations;      /* password hash iterations          */
     time_t listen_start_time;          /* when listening started            */
     time_t start_time;                 /* time of client connection         */
     time_t end_time;                   /* time of client disconnection      */
@@ -127,6 +105,8 @@ struct t_relay_client
     unsigned long long bytes_sent;     /* bytes sent to client              */
     enum t_relay_client_data_type recv_data_type; /* type recv from client  */
     enum t_relay_client_data_type send_data_type; /* type sent to client    */
+    char *partial_ws_frame;            /* part. binary websocket frame recv */
+    int partial_ws_frame_size;         /* size of partial websocket frame   */
     char *partial_message;             /* partial text message received     */
     void *protocol_data;               /* data depending on protocol used   */
     struct t_relay_client_outqueue *outqueue; /* queue for outgoing msgs    */
@@ -135,9 +115,6 @@ struct t_relay_client
     struct t_relay_client *next_client;/* link to next client               */
 };
 
-extern char *relay_client_status_string[];
-extern char *relay_client_status_name[];
-extern char *relay_client_msg_type_string[];
 extern struct t_relay_client *relay_clients;
 extern struct t_relay_client *last_relay_client;
 extern int relay_client_count;
@@ -145,16 +122,16 @@ extern int relay_client_count;
 extern int relay_client_valid (struct t_relay_client *client);
 extern struct t_relay_client *relay_client_search_by_number (int number);
 extern struct t_relay_client *relay_client_search_by_id (int id);
-extern int relay_client_status_search (const char *name);
 extern int relay_client_count_active_by_port (int server_port);
 extern void relay_client_set_desc (struct t_relay_client *client);
+extern void relay_client_recv_buffer (struct t_relay_client *client,
+                                      const char *buffer, int buffer_size);
 extern int relay_client_recv_cb (const void *pointer, void *data, int fd);
 extern int relay_client_send (struct t_relay_client *client,
-                              enum t_relay_client_msg_type msg_type,
+                              enum t_relay_msg_type msg_type,
                               const char *data,
                               int data_size, const char *message_raw_buffer);
-extern int relay_client_timer_cb (const void *pointer, void *data,
-                                  int remaining_calls);
+extern void relay_client_timer ();
 extern struct t_relay_client *relay_client_new (int sock, const char *address,
                                                 struct t_relay_server *server);
 extern struct t_relay_client *relay_client_new_with_infolist (struct t_infolist *infolist);

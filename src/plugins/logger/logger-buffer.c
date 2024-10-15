@@ -1,7 +1,7 @@
 /*
  * logger-buffer.c - logger buffer list management
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -27,6 +27,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
 #include <sys/stat.h>
 
 #include "../weechat-plugin.h"
@@ -236,8 +238,7 @@ logger_buffer_create_log_file (struct t_logger_buffer *logger_buffer)
 {
     char *charset, *message, buf_time[256], buf_beginning[1024];
     int log_level, rc;
-    time_t seconds;
-    struct tm *date_tmp;
+    struct timeval tv_now;
     struct stat statbuf;
 
     if (logger_buffer->log_file)
@@ -311,16 +312,11 @@ logger_buffer_create_log_file (struct t_logger_buffer *logger_buffer)
     if (weechat_config_boolean (logger_config_file_info_lines)
         && logger_buffer->write_start_info_line)
     {
-        buf_time[0] = '\0';
-        seconds = time (NULL);
-        date_tmp = localtime (&seconds);
-        if (date_tmp)
-        {
-            if (strftime (buf_time, sizeof (buf_time) - 1,
-                          weechat_config_string (logger_config_file_time_format),
-                          date_tmp) == 0)
-                buf_time[0] = '\0';
-        }
+        gettimeofday (&tv_now, NULL);
+        weechat_util_strftimeval (
+            buf_time, sizeof (buf_time),
+            weechat_config_string (logger_config_file_time_format),
+            &tv_now);
         snprintf (buf_beginning, sizeof (buf_beginning),
                   _("%s\t****  Beginning of log  ****"),
                   buf_time);
@@ -329,10 +325,8 @@ logger_buffer_create_log_file (struct t_logger_buffer *logger_buffer)
             weechat_iconv_from_internal (charset, buf_beginning) : NULL;
         fprintf (logger_buffer->log_file,
                  "%s\n", (message) ? message : buf_beginning);
-        if (charset)
-            free (charset);
-        if (message)
-            free (message);
+        free (charset);
+        free (message);
         logger_buffer->flush_needed = 1;
     }
     logger_buffer->write_start_info_line = 0;
@@ -351,7 +345,7 @@ logger_buffer_compress_file (struct t_logger_buffer *logger_buffer)
     const char *ptr_extension;
     int compression_type, compression_level;
 
-    compression_type = weechat_config_integer (
+    compression_type = weechat_config_enum (
         logger_config_file_rotation_compression_type);
     ptr_extension = logger_buffer_compression_extension[compression_type];
 
@@ -375,6 +369,7 @@ logger_buffer_compress_file (struct t_logger_buffer *logger_buffer)
                 unlink (filename);
             }
             break;
+#ifdef HAVE_ZSTD
         case LOGGER_BUFFER_COMPRESSION_ZSTD:
             if (weechat_file_compress (filename, new_filename,
                                        "zstd", compression_level))
@@ -382,6 +377,7 @@ logger_buffer_compress_file (struct t_logger_buffer *logger_buffer)
                 unlink (filename);
             }
             break;
+#endif
         default:
             break;
     }
@@ -475,8 +471,14 @@ logger_buffer_rotate (struct t_logger_buffer *logger_buffer)
                             logger_buffer->log_filename);
     }
 
-    compression_type = weechat_config_integer (
+    compression_type = weechat_config_enum (
         logger_config_file_rotation_compression_type);
+
+#ifndef HAVE_ZSTD
+    if (compression_type == LOGGER_BUFFER_COMPRESSION_ZSTD)
+        compression_type = LOGGER_BUFFER_COMPRESSION_NONE;
+#endif
+
     ptr_extension = logger_buffer_compression_extension[compression_type];
 
     /* find the highest existing extension index */
@@ -631,10 +633,8 @@ logger_buffer_write_line (struct t_logger_buffer *logger_buffer,
             weechat_iconv_from_internal (charset, vbuffer) : NULL;
         fprintf (logger_buffer->log_file,
                  "%s\n", (message) ? message : vbuffer);
-        if (charset)
-            free (charset);
-        if (message)
-            free (message);
+        free (charset);
+        free (message);
         logger_buffer->flush_needed = 1;
         if (!logger_hook_timer)
         {
@@ -655,8 +655,7 @@ logger_buffer_write_line (struct t_logger_buffer *logger_buffer,
 void
 logger_buffer_stop (struct t_logger_buffer *logger_buffer, int write_info_line)
 {
-    time_t seconds;
-    struct tm *date_tmp;
+    struct timeval tv_now;
     char buf_time[256];
 
     if (!logger_buffer)
@@ -666,16 +665,11 @@ logger_buffer_stop (struct t_logger_buffer *logger_buffer, int write_info_line)
     {
         if (write_info_line && weechat_config_boolean (logger_config_file_info_lines))
         {
-            buf_time[0] = '\0';
-            seconds = time (NULL);
-            date_tmp = localtime (&seconds);
-            if (date_tmp)
-            {
-                if (strftime (buf_time, sizeof (buf_time) - 1,
-                              weechat_config_string (logger_config_file_time_format),
-                              date_tmp) == 0)
-                    buf_time[0] = '\0';
-            }
+            gettimeofday (&tv_now, NULL);
+            weechat_util_strftimeval (
+                buf_time, sizeof (buf_time),
+                weechat_config_string (logger_config_file_time_format),
+                &tv_now);
             logger_buffer_write_line (logger_buffer,
                                       _("%s\t****  End of log  ****"),
                                       buf_time);
@@ -713,7 +707,10 @@ logger_buffer_start (struct t_gui_buffer *buffer, int write_info_line)
 
     log_level = logger_get_level_for_buffer (buffer);
     log_enabled =  weechat_config_boolean (logger_config_file_auto_log)
-        && (log_level > 0);
+        && (log_level > 0)
+        && (logger_check_conditions (
+                buffer,
+                weechat_config_string (logger_config_file_log_conditions)));
 
     ptr_logger_buffer = logger_buffer_search_buffer (buffer);
 
@@ -877,8 +874,7 @@ logger_buffer_free (struct t_logger_buffer *logger_buffer)
         (logger_buffer->next_buffer)->prev_buffer = logger_buffer->prev_buffer;
 
     /* free data */
-    if (logger_buffer->log_filename)
-        free (logger_buffer->log_filename);
+    free (logger_buffer->log_filename);
     if (logger_buffer->log_file)
         fclose (logger_buffer->log_file);
 

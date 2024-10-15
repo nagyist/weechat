@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2006-2007 Emmanuel Bouthenot <kolter@openics.org>
- * Copyright (C) 2006-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2006-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -23,15 +23,9 @@
 
 #define weechat_plugin weechat_lua_plugin
 #define LUA_PLUGIN_NAME "lua"
+#define LUA_PLUGIN_PRIORITY 4050
 
 #define LUA_CURRENT_SCRIPT_NAME ((lua_current_script) ? lua_current_script->name : "-")
-
-struct t_lua_const
-{
-    char *name;
-    int int_value;
-    char *str_value;
-};
 
 extern struct t_weechat_plugin *weechat_lua_plugin;
 
@@ -58,7 +52,6 @@ extern void *weechat_lua_exec (struct t_plugin_script *script,
                                const char *function,
                                const char *format, void **argv);
 extern void weechat_lua_register_lib (lua_State *L, const char *libname,
-                                      const luaL_Reg *lua_api_funcs,
-                                      struct t_lua_const lua_api_consts[]);
+                                      const luaL_Reg *lua_api_funcs);
 
 #endif /* WEECHAT_PLUGIN_LUA_H */

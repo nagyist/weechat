@@ -1,7 +1,7 @@
 #
 # Copyright (C) 2008-2010 Dmitry Kobylin <fnfal@academ.tsc.ru>
 # Copyright (C) 2008 Julien Louis <ptitlouis@sysif.net>
-# Copyright (C) 2008-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2008-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -33,4 +33,4 @@ if(TCL_FOUND)
   target_link_libraries(tcl ${TCL_LIBRARY} weechat_plugins_scripts coverage_config)
 endif()
 
-install(TARGETS tcl LIBRARY DESTINATION ${WEECHAT_LIBDIR}/plugins)
+install(TARGETS tcl LIBRARY DESTINATION "${WEECHAT_LIBDIR}/plugins")

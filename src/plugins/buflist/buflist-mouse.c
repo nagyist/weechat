@@ -1,7 +1,7 @@
 /*
  * buflist-mouse.c - mouse actions for buflist
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -62,6 +62,7 @@ buflist_focus_cb (const void *pointer, void *data, struct t_hashtable *info)
     ptr_bar_item_line = weechat_hashtable_get (info, "_bar_item_line");
     if (!ptr_bar_item_line)
         goto end;
+    error = NULL;
     item_line = strtol (ptr_bar_item_line, &error, 10);
     if (!error || error[0])
         goto end;
@@ -124,6 +125,14 @@ end:
                                               ptr_buffer, list_keys[i]) : -1);
                 weechat_hashtable_set (info, list_keys[i], str_value);
                 break;
+            case WEECHAT_HDATA_LONGLONG:
+                snprintf (str_value, sizeof (str_value),
+                          "%lld",
+                          (ptr_buffer) ?
+                          weechat_hdata_longlong (buflist_hdata_buffer,
+                                                  ptr_buffer, list_keys[i]) : 0);
+                weechat_hashtable_set (info, list_keys[i], str_value);
+                break;
             case WEECHAT_HDATA_STRING:
             case WEECHAT_HDATA_SHARED_STRING:
                 ptr_value = weechat_hdata_string (buflist_hdata_buffer,
@@ -146,8 +155,7 @@ end:
     }
 
     /* add pointer and plugin name */
-    snprintf (str_value, sizeof (str_value),
-              "0x%lx", (unsigned long)ptr_buffer);
+    snprintf (str_value, sizeof (str_value), "0x%lx", (unsigned long)ptr_buffer);
     weechat_hashtable_set (info, "pointer", str_value);
     weechat_hashtable_set (info, "plugin",
                            weechat_buffer_get_string (ptr_buffer, "plugin"));
@@ -213,6 +221,106 @@ buflist_mouse_move_buffer (const char *key, struct t_gui_buffer *buffer,
 }
 
 /*
+ * Switches to previous/next buffer displayed in an item, starting from
+ * current buffer.
+ */
+
+void
+buflist_mouse_move_current_buffer (const char *item_name, int direction)
+{
+    struct t_gui_buffer *ptr_current_buffer, *ptr_buffer, *gui_buffers;
+    char str_command[1024];
+    int i, size, index_item, index_current, index2, number_current;
+    int number, number2;
+
+    if (!item_name)
+        return;
+
+    index_item = buflist_bar_item_get_index (item_name);
+    if (index_item < 0)
+        return;
+
+    if (!buflist_list_buffers[index_item])
+        return;
+
+    size = weechat_arraylist_size (buflist_list_buffers[index_item]);
+    if (size <= 0)
+        return;
+
+    ptr_current_buffer = weechat_current_buffer ();
+    if (!ptr_current_buffer)
+        return;
+
+    index_current = -1;
+    for (i = 0; i < size; i++)
+    {
+        if ((struct t_gui_buffer *)weechat_arraylist_get (
+                buflist_list_buffers[index_item], i) == ptr_current_buffer)
+        {
+            index_current = i;
+            break;
+        }
+    }
+
+    if (index_current < 0)
+        return;
+
+    number_current = weechat_buffer_get_integer (ptr_current_buffer, "number");
+
+    gui_buffers = weechat_hdata_get_list (buflist_hdata_buffer, "gui_buffers");
+
+    /* search previous/next buffer with a different number */
+    index2 = index_current;
+    while (1)
+    {
+        if (direction < 0)
+        {
+            index2--;
+            if (index2 < 0)
+                index2 = size - 1;
+        }
+        else
+        {
+            index2++;
+            if (index2 >= size)
+                index2 = 0;
+        }
+        if (index2 == index_current)
+            return;
+        ptr_buffer = (struct t_gui_buffer *)weechat_arraylist_get (
+            buflist_list_buffers[index_item], index2);
+        if (!ptr_buffer)
+            return;
+        if (!weechat_hdata_check_pointer (buflist_hdata_buffer,
+                                          gui_buffers, ptr_buffer))
+            return;
+        number2 = weechat_buffer_get_integer (ptr_buffer, "number");
+        if (number2 != number_current)
+            break;
+    }
+
+    /* search first buffer with the number found */
+    for (i = 0; i < size; i++)
+    {
+        ptr_buffer = (struct t_gui_buffer *)weechat_arraylist_get (
+            buflist_list_buffers[index_item], i);
+        if (!ptr_buffer)
+            break;
+        number = weechat_buffer_get_integer (ptr_buffer, "number");
+        if (number == number2)
+            break;
+    }
+    if (i >= size)
+        return;
+
+    /* switch to the buffer found */
+    snprintf (str_command, sizeof (str_command),
+              "/buffer %s",
+              weechat_buffer_get_string (ptr_buffer, "full_name"));
+    weechat_command (NULL, str_command);
+}
+
+/*
  * Callback called when a mouse action occurs in buflist bar or bar item.
  */
 
@@ -225,7 +333,6 @@ buflist_hsignal_cb (const void *pointer, void *data, const char *signal,
     struct t_gui_buffer *ptr_buffer;
     char *error, str_command[1024];
     long number, number2;
-    unsigned long value;
     int rc, current_buffer_number;
 
     /* make C compiler happy */
@@ -245,14 +352,15 @@ buflist_hsignal_cb (const void *pointer, void *data, const char *signal,
         return WEECHAT_RC_OK;
     }
 
-    rc = sscanf (ptr_pointer, "%lx", &value);
+    rc = sscanf (ptr_pointer, "%p", &ptr_buffer);
     if ((rc == EOF) || (rc == 0))
         return WEECHAT_RC_OK;
-    ptr_buffer = (struct t_gui_buffer *)value;
 
+    error = NULL;
     number = strtol (ptr_number, &error, 10);
     if (!error || error[0])
         return WEECHAT_RC_OK;
+    error = NULL;
     number2 = strtol (ptr_number2, &error, 10);
     if (!error || error[0])
         return WEECHAT_RC_OK;
@@ -269,7 +377,7 @@ buflist_hsignal_cb (const void *pointer, void *data, const char *signal,
                     buflist_config_look_mouse_jump_visited_buffer)
                 && (current_buffer_number == number))
             {
-                weechat_command (NULL, "/input jump_previously_visited_buffer");
+                weechat_command (NULL, "/buffer jump prev_visited");
             }
             else
             {
@@ -290,21 +398,25 @@ buflist_hsignal_cb (const void *pointer, void *data, const char *signal,
                 buflist_config_look_mouse_jump_visited_buffer)
             && (current_buffer_number == number))
         {
-            weechat_command (NULL, "/input jump_next_visited_buffer");
+            weechat_command (NULL, "/buffer jump next_visited");
         }
     }
     else if (weechat_string_match (ptr_key, "*wheelup", 1))
     {
         if (weechat_config_boolean (buflist_config_look_mouse_wheel))
         {
-            weechat_command (NULL, "/buffer -1");
+            buflist_mouse_move_current_buffer (
+                (const char *)weechat_hashtable_get (hashtable, "_bar_item_name"),
+                -1);  /* previous buffer */
         }
     }
     else if (weechat_string_match (ptr_key, "*wheeldown", 1))
     {
         if (weechat_config_boolean (buflist_config_look_mouse_wheel))
         {
-            weechat_command (NULL, "/buffer +1");
+            buflist_mouse_move_current_buffer (
+                (const char *)weechat_hashtable_get (hashtable, "_bar_item_name"),
+                +1);  /* next buffer */
         }
     }
     else

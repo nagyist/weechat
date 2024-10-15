@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -46,6 +46,7 @@ enum t_gui_bar_item_weechat
     GUI_BAR_ITEM_BUFFER_NICKLIST,
     GUI_BAR_ITEM_WINDOW_NUMBER,
     GUI_BAR_ITEM_MOUSE_STATUS,
+    GUI_BAR_ITEM_LAG,
     GUI_BAR_ITEM_AWAY,
     GUI_BAR_ITEM_SPACER,
     /* number of bar items */
@@ -85,11 +86,11 @@ struct t_gui_bar_item_hook
 extern struct t_gui_bar_item *gui_bar_items;
 extern struct t_gui_bar_item *last_gui_bar_item;
 extern char *gui_bar_item_names[];
-extern char *gui_bar_items_default_for_bars[][2];
 
 /* functions */
 
 extern int gui_bar_item_valid (struct t_gui_bar_item *bar_item);
+extern int gui_bar_item_search_default (const char *item_name);
 extern struct t_gui_bar_item *gui_bar_item_search (const char *name);
 extern int gui_bar_item_used_in_bar (struct t_gui_bar *bar,
                                      const char *item_name,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2022-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -69,6 +69,7 @@ extern struct t_gui_bar_item_custom *gui_bar_item_custom_new (const char *name,
 extern void gui_bar_item_custom_use_temp_items ();
 extern int gui_bar_item_custom_rename (struct t_gui_bar_item_custom *item,
                                        const char *new_name);
+extern void gui_bar_item_custom_free_data (struct t_gui_bar_item_custom *item);
 extern void gui_bar_item_custom_free (struct t_gui_bar_item_custom *item);
 extern void gui_bar_item_custom_free_all ();
 

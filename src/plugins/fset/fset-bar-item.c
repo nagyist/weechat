@@ -1,7 +1,7 @@
 /*
  * fset-bar-item.c - bar item for Fast Set plugin
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -123,8 +123,42 @@ fset_bar_item_fset_cb (const void *pointer, void *data,
             -1);
     }
 
-    if ((ptr_fset_option->string_values && ptr_fset_option->string_values[0])
-        || (ptr_fset_option->type == FSET_OPTION_TYPE_INTEGER))
+    if (ptr_fset_option->type == FSET_OPTION_TYPE_INTEGER)
+    {
+        ptr_option = weechat_config_get (ptr_fset_option->name);
+        if (ptr_option)
+        {
+            weechat_string_dyn_concat (default_and_values,
+                                       weechat_color ("bar_fg"),
+                                       -1);
+            weechat_string_dyn_concat (default_and_values, ", ", -1);
+            weechat_string_dyn_concat (default_and_values, _("values:"), -1);
+            weechat_string_dyn_concat (default_and_values, " ", -1);
+            weechat_string_dyn_concat (
+                default_and_values,
+                weechat_color (
+                    weechat_config_string (
+                        fset_config_color_help_values)),
+                -1);
+            weechat_string_dyn_concat (default_and_values,
+                                       ptr_fset_option->min,
+                                       -1);
+            weechat_string_dyn_concat (default_and_values,
+                                       weechat_color ("bar_fg"),
+                                       -1);
+            weechat_string_dyn_concat (default_and_values, " ... ", -1);
+            weechat_string_dyn_concat (
+                default_and_values,
+                weechat_color (
+                    weechat_config_string (
+                        fset_config_color_help_values)),
+                -1);
+            weechat_string_dyn_concat (default_and_values,
+                                       ptr_fset_option->max,
+                                       -1);
+        }
+    }
+    else if (ptr_fset_option->type == FSET_OPTION_TYPE_ENUM)
     {
         ptr_option = weechat_config_get (ptr_fset_option->name);
         if (ptr_option)
@@ -135,8 +169,7 @@ fset_bar_item_fset_cb (const void *pointer, void *data,
                 ptr_string_values = weechat_config_option_get_pointer (
                     ptr_option, "string_values");
             }
-            if (ptr_string_values
-                || (ptr_fset_option->type == FSET_OPTION_TYPE_INTEGER))
+            if (ptr_string_values)
             {
                 weechat_string_dyn_concat (default_and_values,
                                            weechat_color ("bar_fg"),
@@ -144,32 +177,17 @@ fset_bar_item_fset_cb (const void *pointer, void *data,
                 weechat_string_dyn_concat (default_and_values, ", ", -1);
                 weechat_string_dyn_concat (default_and_values, _("values:"), -1);
                 weechat_string_dyn_concat (default_and_values, " ", -1);
-                if (ptr_string_values)
+                for (i = 0; ptr_string_values[i]; i++)
                 {
-                    for (i = 0; ptr_string_values[i]; i++)
+                    if (i > 0)
                     {
-                        if (i > 0)
-                        {
-                            weechat_string_dyn_concat (default_and_values,
-                                                       weechat_color ("bar_fg"),
-                                                       -1);
-                            weechat_string_dyn_concat (default_and_values,
-                                                       ", ",
-                                                       -1);
-                        }
-                        weechat_string_dyn_concat (
-                            default_and_values,
-                            weechat_color (
-                                weechat_config_string (
-                                    fset_config_color_help_values)),
-                            -1);
                         weechat_string_dyn_concat (default_and_values,
-                                                   ptr_string_values[i],
+                                                   weechat_color ("bar_fg"),
+                                                   -1);
+                        weechat_string_dyn_concat (default_and_values,
+                                                   ", ",
                                                    -1);
                     }
-                }
-                else
-                {
                     weechat_string_dyn_concat (
                         default_and_values,
                         weechat_color (
@@ -177,20 +195,7 @@ fset_bar_item_fset_cb (const void *pointer, void *data,
                                 fset_config_color_help_values)),
                         -1);
                     weechat_string_dyn_concat (default_and_values,
-                                               ptr_fset_option->min,
-                                               -1);
-                    weechat_string_dyn_concat (default_and_values,
-                                               weechat_color ("bar_fg"),
-                                               -1);
-                    weechat_string_dyn_concat (default_and_values, " ... ", -1);
-                    weechat_string_dyn_concat (
-                        default_and_values,
-                        weechat_color (
-                            weechat_config_string (
-                                fset_config_color_help_values)),
-                        -1);
-                    weechat_string_dyn_concat (default_and_values,
-                                               ptr_fset_option->max,
+                                               ptr_string_values[i],
                                                -1);
                 }
             }
@@ -199,12 +204,14 @@ fset_bar_item_fset_cb (const void *pointer, void *data,
 
     snprintf (str_help, sizeof (str_help),
               /* TRANSLATORS: "%s%s%s:" at beginning of string it the name of option */
-              _("%s%s%s: %s %s[%s%s]%s"),
+              _("%s%s%s: %s%s%s %s[%s%s]%s"),
               weechat_color (weechat_config_string (fset_config_color_help_name)),
               ptr_fset_option->name,
               weechat_color ("bar_fg"),
+              weechat_color (weechat_config_string (fset_config_color_help_description)),
               (ptr_fset_option->description && ptr_fset_option->description[0]) ?
               _(ptr_fset_option->description) : _("(no description)"),
+              weechat_color ("bar_fg"),
               weechat_color ("bar_delim"),
               *default_and_values,
               weechat_color ("bar_delim"),
@@ -241,4 +248,5 @@ void
 fset_bar_item_end ()
 {
     weechat_bar_item_remove (fset_bar_item_fset);
+    fset_bar_item_fset = NULL;
 }

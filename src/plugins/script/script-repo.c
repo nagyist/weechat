@@ -1,7 +1,7 @@
 /*
  * script-repo.c - download and read repository file (plugins.xml.gz)
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -112,7 +112,7 @@ script_repo_search_displayed_by_number (int number)
 }
 
 /*
- * Searches for a script by name (example: "iset").
+ * Searches for a script by name (example: "go").
  *
  * Returns pointer to script found, NULL if not found.
  */
@@ -121,6 +121,9 @@ struct t_script_repo *
 script_repo_search_by_name (const char *name)
 {
     struct t_script_repo *ptr_script;
+
+    if (!name)
+        return NULL;
 
     for (ptr_script = scripts_repo; ptr_script;
          ptr_script = ptr_script->next_script)
@@ -143,6 +146,9 @@ struct t_script_repo *
 script_repo_search_by_name_ext (const char *name_with_extension)
 {
     struct t_script_repo *ptr_script;
+
+    if (!name_with_extension)
+        return NULL;
 
     for (ptr_script = scripts_repo; ptr_script;
          ptr_script = ptr_script->next_script)
@@ -174,8 +180,7 @@ script_repo_get_filename_loaded (struct t_script_repo *script)
     filename = malloc (length);
     if (!filename)
     {
-        if (weechat_data_dir)
-            free (weechat_data_dir);
+        free (weechat_data_dir);
         return NULL;
     }
 
@@ -195,8 +200,7 @@ script_repo_get_filename_loaded (struct t_script_repo *script)
         }
     }
 
-    if (weechat_data_dir)
-        free (weechat_data_dir);
+    free (weechat_data_dir);
 
     if (!filename[0])
     {
@@ -619,34 +623,20 @@ script_repo_free (struct t_script_repo *script)
     if (!script)
         return;
 
-    if (script->name)
-        free (script->name);
-    if (script->name_with_extension)
-        free (script->name_with_extension);
-    if (script->author)
-        free (script->author);
-    if (script->mail)
-        free (script->mail);
-    if (script->version)
-        free (script->version);
-    if (script->license)
-        free (script->license);
-    if (script->description)
-        free (script->description);
-    if (script->tags)
-        free (script->tags);
-    if (script->requirements)
-        free (script->requirements);
-    if (script->min_weechat)
-        free (script->min_weechat);
-    if (script->max_weechat)
-        free (script->max_weechat);
-    if (script->sha512sum)
-        free (script->sha512sum);
-    if (script->url)
-        free (script->url);
-    if (script->version_loaded)
-        free (script->version_loaded);
+    free (script->name);
+    free (script->name_with_extension);
+    free (script->author);
+    free (script->mail);
+    free (script->version);
+    free (script->license);
+    free (script->description);
+    free (script->tags);
+    free (script->requirements);
+    free (script->min_weechat);
+    free (script->max_weechat);
+    free (script->sha512sum);
+    free (script->url);
+    free (script->version_loaded);
 
     free (script);
  }
@@ -759,7 +749,7 @@ script_repo_sha512sum_file (const char *filename)
     if (!weechat_crypto_hash_file (filename, "sha512", hash, &hash_size))
         return NULL;
 
-    weechat_string_base_encode (16, hash, hash_size, hash_hexa);
+    weechat_string_base_encode ("16", hash, hash_size, hash_hexa);
 
     return weechat_string_tolower (hash_hexa);
 }
@@ -814,8 +804,7 @@ script_repo_update_status (struct t_script_repo *script)
         free (filename);
     }
 
-    if (weechat_data_dir)
-        free (weechat_data_dir);
+    free (weechat_data_dir);
 
     /* check if script is held */
     if (script_repo_script_is_held (script))
@@ -826,8 +815,7 @@ script_repo_update_status (struct t_script_repo *script)
     if (version)
     {
         script->status |= SCRIPT_STATUS_RUNNING;
-        if (script->version_loaded)
-            free (script->version_loaded);
+        free (script->version_loaded);
         script->version_loaded = strdup (version);
     }
     else
@@ -859,8 +847,7 @@ script_repo_update_status (struct t_script_repo *script)
         }
     }
 
-    if (sha512sum)
-        free (sha512sum);
+    free (sha512sum);
 }
 
 /*
@@ -886,8 +873,7 @@ script_repo_update_status_all ()
 void
 script_repo_set_filter (const char *filter)
 {
-    if (script_repo_filter)
-        free (script_repo_filter);
+    free (script_repo_filter);
     script_repo_filter = (filter) ? strdup (filter) : NULL;
 
     script_buffer_set_localvar_filter ();
@@ -980,10 +966,8 @@ script_repo_match_filter (struct t_script_repo *script)
         }
     }
 
-    if (words)
-        weechat_string_free_split (words);
-    if (tags)
-        weechat_string_free_split (tags);
+    weechat_string_free_split (words);
+    weechat_string_free_split (tags);
 
     return 1;
 }
@@ -1145,8 +1129,7 @@ script_repo_file_read (int quiet)
 
     version = weechat_info_get ("version", NULL);
     version_number = weechat_util_version_number (version);
-    if (version)
-        free (version);
+    free (version);
 
     filename = script_config_get_xml_filename ();
     if (!filename)
@@ -1208,8 +1191,7 @@ script_repo_file_read (int quiet)
         {
             if (strstr (ptr_line, "<plugin id="))
             {
-                if (script)
-                    script_repo_free (script);
+                script_repo_free (script);
                 script = script_repo_alloc ();
                 weechat_hashtable_remove_all (descriptions);
             }
@@ -1369,16 +1351,11 @@ script_repo_file_read (int quiet)
                                         script->date_updated = mktime (&tm_script);
                                 }
                             }
-                            if (name)
-                                free (name);
-                            if (value1)
-                                free (value1);
-                            if (value2)
-                                free (value2);
-                            if (value3)
-                                free (value3);
-                            if (value)
-                                free (value);
+                            free (name);
+                            free (value1);
+                            free (value2);
+                            free (value3);
+                            free (value);
                         }
                     }
                 }
@@ -1395,8 +1372,7 @@ script_repo_file_read (int quiet)
                         _("%s: %d scripts for WeeChat %s"),
                         SCRIPT_PLUGIN_NAME, script_repo_count,
                         version);
-        if (version)
-            free (version);
+        free (version);
     }
 
     if (!scripts_repo)
@@ -1408,14 +1384,10 @@ script_repo_file_read (int quiet)
                         SCRIPT_PLUGIN_NAME);
     }
 
-    if (script)
-        script_repo_free (script);
-    if (locale)
-        free (locale);
-    if (locale_language)
-        free (locale_language);
-    if (descriptions)
-        weechat_hashtable_free (descriptions);
+    script_repo_free (script);
+    free (locale);
+    free (locale_language);
+    weechat_hashtable_free (descriptions);
 
     return 1;
 }
@@ -1425,42 +1397,41 @@ script_repo_file_read (int quiet)
  */
 
 int
-script_repo_file_update_process_cb (const void *pointer, void *data,
-                                    const char *command,
-                                    int return_code, const char *out,
-                                    const char *err)
+script_repo_file_update_url_cb (const void *pointer, void *data,
+                                const char *url,
+                                struct t_hashtable *options,
+                                struct t_hashtable *output)
 {
+    const char *ptr_error;
     int quiet;
 
     /* make C compiler happy */
     (void) data;
-    (void) command;
-    (void) out;
+    (void) url;
+    (void) options;
 
     quiet = (pointer) ? 1 : 0;
 
-    if (return_code >= 0)
+    ptr_error = weechat_hashtable_get (output, "error");
+    if (ptr_error && ptr_error[0])
     {
-        if (err && err[0])
-        {
-            weechat_printf (NULL,
-                            _("%s%s: error downloading list of scripts: %s"),
-                            weechat_prefix ("error"),
-                            SCRIPT_PLUGIN_NAME,
-                            err);
-            return WEECHAT_RC_OK;
-        }
+        weechat_printf (NULL,
+                        _("%s%s: error downloading list of scripts: %s"),
+                        weechat_prefix ("error"),
+                        SCRIPT_PLUGIN_NAME,
+                        ptr_error);
+        return WEECHAT_RC_OK;
+    }
 
-        if (script_repo_file_read (quiet) && scripts_repo)
-        {
-            if (script_buffer)
-                script_buffer_refresh (1);
-            if (!script_action_run_all ())
-                script_buffer_refresh (1);
-        }
-        else
+    if (script_repo_file_read (quiet) && scripts_repo)
+    {
+        if (script_buffer)
+            script_buffer_refresh (1);
+        if (!script_action_run_all ())
             script_buffer_refresh (1);
     }
+    else
+        script_buffer_refresh (1);
 
     return WEECHAT_RC_OK;
 }
@@ -1476,7 +1447,7 @@ script_repo_file_update_process_cb (const void *pointer, void *data,
 int
 script_repo_file_update (int quiet)
 {
-    char *filename, *url;
+    char *filename;
     struct t_hashtable *options;
 
     if (!script_download_enabled (1))
@@ -1494,26 +1465,20 @@ script_repo_file_update (int quiet)
                                      NULL, NULL);
     if (options)
     {
-        url = script_build_download_url (
-            weechat_config_string (script_config_scripts_url));
-        if (url)
+        if (!quiet)
         {
-            if (!quiet)
-            {
-                weechat_printf (NULL,
-                                _("%s: downloading list of scripts..."),
-                                SCRIPT_PLUGIN_NAME);
-            }
-            weechat_hashtable_set (options, "file_out", filename);
-            weechat_hook_process_hashtable (
-                url,
-                options,
-                weechat_config_integer (script_config_scripts_download_timeout) * 1000,
-                &script_repo_file_update_process_cb,
-                (quiet) ? (void *)1 : (void *)0,
-                NULL);
-            free (url);
+            weechat_printf (NULL,
+                            _("%s: downloading list of scripts..."),
+                            SCRIPT_PLUGIN_NAME);
         }
+        weechat_hashtable_set (options, "file_out", filename);
+        weechat_hook_url (
+            weechat_config_string (script_config_scripts_url),
+            options,
+            weechat_config_integer (script_config_scripts_download_timeout) * 1000,
+            &script_repo_file_update_url_cb,
+            (quiet) ? (void *)1 : (void *)0,
+            NULL);
         weechat_hashtable_free (options);
     }
 
@@ -1649,24 +1614,24 @@ script_repo_print_log ()
          ptr_script = ptr_script->next_script)
     {
         weechat_log_printf ("");
-        weechat_log_printf ("[script (addr:0x%lx)]", ptr_script);
-        weechat_log_printf ("  name. . . . . . . . . : '%s'",  ptr_script->name);
-        weechat_log_printf ("  name_with_extension . : '%s'",  ptr_script->name_with_extension);
-        weechat_log_printf ("  language. . . . . . . : %d",    ptr_script->language);
-        weechat_log_printf ("  author. . . . . . . . : '%s'",  ptr_script->author);
-        weechat_log_printf ("  mail. . . . . . . . . : '%s'",  ptr_script->mail);
-        weechat_log_printf ("  version . . . . . . . : '%s'",  ptr_script->version);
-        weechat_log_printf ("  license . . . . . . . : '%s'",  ptr_script->license);
-        weechat_log_printf ("  description . . . . . : '%s'",  ptr_script->description);
-        weechat_log_printf ("  tags. . . . . . . . . : '%s'",  ptr_script->tags);
-        weechat_log_printf ("  requirements. . . . . : '%s'",  ptr_script->requirements);
-        weechat_log_printf ("  min_weechat . . . . . : '%s'",  ptr_script->min_weechat);
-        weechat_log_printf ("  max_weechat . . . . . : '%s'",  ptr_script->max_weechat);
-        weechat_log_printf ("  sha512sum . . . . . . : '%s'",  ptr_script->sha512sum);
-        weechat_log_printf ("  url . . . . . . . . . : '%s'",  ptr_script->url);
-        weechat_log_printf ("  popularity. . . . . . : %d",    ptr_script->popularity);
-        weechat_log_printf ("  date_added. . . . . . : %lld",  (long long)ptr_script->date_added);
-        weechat_log_printf ("  date_updated. . . . . : %lld",  (long long)ptr_script->date_updated);
+        weechat_log_printf ("[script (addr:%p)]", ptr_script);
+        weechat_log_printf ("  name. . . . . . . . . : '%s'", ptr_script->name);
+        weechat_log_printf ("  name_with_extension . : '%s'", ptr_script->name_with_extension);
+        weechat_log_printf ("  language. . . . . . . : %d", ptr_script->language);
+        weechat_log_printf ("  author. . . . . . . . : '%s'", ptr_script->author);
+        weechat_log_printf ("  mail. . . . . . . . . : '%s'", ptr_script->mail);
+        weechat_log_printf ("  version . . . . . . . : '%s'", ptr_script->version);
+        weechat_log_printf ("  license . . . . . . . : '%s'", ptr_script->license);
+        weechat_log_printf ("  description . . . . . : '%s'", ptr_script->description);
+        weechat_log_printf ("  tags. . . . . . . . . : '%s'", ptr_script->tags);
+        weechat_log_printf ("  requirements. . . . . : '%s'", ptr_script->requirements);
+        weechat_log_printf ("  min_weechat . . . . . : '%s'", ptr_script->min_weechat);
+        weechat_log_printf ("  max_weechat . . . . . : '%s'", ptr_script->max_weechat);
+        weechat_log_printf ("  sha512sum . . . . . . : '%s'", ptr_script->sha512sum);
+        weechat_log_printf ("  url . . . . . . . . . : '%s'", ptr_script->url);
+        weechat_log_printf ("  popularity. . . . . . : %d", ptr_script->popularity);
+        weechat_log_printf ("  date_added. . . . . . : %lld", (long long)ptr_script->date_added);
+        weechat_log_printf ("  date_updated. . . . . : %lld", (long long)ptr_script->date_updated);
         weechat_log_printf ("  status. . . . . . . . : %d (%s%s%s%s%s )",
                             ptr_script->status,
                             (ptr_script->status & SCRIPT_STATUS_INSTALLED) ? " installed": "",
@@ -1674,10 +1639,10 @@ script_repo_print_log ()
                             (ptr_script->status & SCRIPT_STATUS_HELD) ? " held": "",
                             (ptr_script->status & SCRIPT_STATUS_RUNNING) ? " running": "",
                             (ptr_script->status & SCRIPT_STATUS_NEW_VERSION) ? " new_version": "");
-        weechat_log_printf ("  version_loaded. . . . : '%s'",  ptr_script->version_loaded);
-        weechat_log_printf ("  displayed . . . . . . : %d",    ptr_script->displayed);
-        weechat_log_printf ("  install_order . . . . : %d",    ptr_script->install_order);
-        weechat_log_printf ("  prev_script . . . . . : 0x%lx", ptr_script->prev_script);
-        weechat_log_printf ("  next_script . . . . . : 0x%lx", ptr_script->next_script);
+        weechat_log_printf ("  version_loaded. . . . : '%s'", ptr_script->version_loaded);
+        weechat_log_printf ("  displayed . . . . . . : %d", ptr_script->displayed);
+        weechat_log_printf ("  install_order . . . . : %d", ptr_script->install_order);
+        weechat_log_printf ("  prev_script . . . . . : %p", ptr_script->prev_script);
+        weechat_log_printf ("  next_script . . . . . : %p", ptr_script->next_script);
     }
 }

@@ -1,7 +1,7 @@
 /*
  * xfer-command.c - xfer command
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -55,12 +55,12 @@ xfer_command_me (const void *pointer, void *data,
                         _("%s%s: can't find xfer for buffer \"%s\""),
                         weechat_prefix ("error"), XFER_PLUGIN_NAME,
                         weechat_buffer_get_string (buffer, "name"));
-        return WEECHAT_RC_OK;
+        return WEECHAT_RC_ERROR;
     }
 
     if (!XFER_HAS_ENDED(ptr_xfer->status))
     {
-        xfer_chat_sendf (ptr_xfer, "\01ACTION %s\01\r\n",
+        xfer_chat_sendf (ptr_xfer, "\001ACTION %s\001\r\n",
                          (argv_eol[1]) ? argv_eol[1] : "");
         weechat_printf_date_tags (buffer,
                                   0,
@@ -207,13 +207,13 @@ xfer_command_xfer (const void *pointer, void *data,
     (void) buffer;
     (void) argv_eol;
 
-    if ((argc > 1) && (weechat_strcasecmp (argv[1], "list") == 0))
+    if ((argc > 1) && (weechat_strcmp (argv[1], "list") == 0))
     {
         xfer_command_xfer_list (0);
         return WEECHAT_RC_OK;
     }
 
-    if ((argc > 1) && (weechat_strcasecmp (argv[1], "listfull") == 0))
+    if ((argc > 1) && (weechat_strcmp (argv[1], "listfull") == 0))
     {
         xfer_command_xfer_list (1);
         return WEECHAT_RC_OK;
@@ -256,18 +256,21 @@ xfer_command_init ()
     weechat_hook_command (
         "me",
         N_("send a CTCP action to remote host"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("<message>"),
-        N_("message: message to send"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("message: message to send")),
         NULL,
         &xfer_command_me, NULL, NULL);
     weechat_hook_command (
         "xfer",
         N_("xfer control"),
         "[list|listfull]",
-        N_("    list: list xfer\n"
-           "listfull: list xfer (verbose)\n"
-           "\n"
-           "Without argument, this command opens buffer with xfer list."),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[list]: list xfer"),
+            N_("raw[listfull]: list xfer (verbose)"),
+            "",
+            N_("Without argument, this command opens buffer with xfer list.")),
         "list|listfull",
         &xfer_command_xfer, NULL, NULL);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -27,13 +27,16 @@
 
 #define weechat_plugin weechat_xfer_plugin
 #define XFER_PLUGIN_NAME "xfer"
+#define XFER_PLUGIN_PRIORITY 7000
 
 /* xfer types */
 
 enum t_xfer_type
 {
-    XFER_TYPE_FILE_RECV = 0,
-    XFER_TYPE_FILE_SEND,
+    XFER_TYPE_FILE_RECV_ACTIVE = 0,
+    XFER_TYPE_FILE_RECV_PASSIVE,
+    XFER_TYPE_FILE_SEND_ACTIVE,
+    XFER_TYPE_FILE_SEND_PASSIVE,
     XFER_TYPE_CHAT_RECV,
     XFER_TYPE_CHAT_SEND,
     /* number of xfer types */
@@ -116,14 +119,22 @@ enum t_xfer_hash_status
 
 /* macros for type/status */
 
-#define XFER_IS_FILE(type) ((type == XFER_TYPE_FILE_RECV) ||    \
-                            (type == XFER_TYPE_FILE_SEND))
+#define XFER_IS_FILE(type) ((type == XFER_TYPE_FILE_RECV_ACTIVE) ||  \
+                            (type == XFER_TYPE_FILE_RECV_PASSIVE) || \
+                            (type == XFER_TYPE_FILE_SEND_ACTIVE) ||  \
+                            (type == XFER_TYPE_FILE_SEND_PASSIVE))
 #define XFER_IS_CHAT(type) ((type == XFER_TYPE_CHAT_RECV) ||    \
                             (type == XFER_TYPE_CHAT_SEND))
-#define XFER_IS_RECV(type) ((type == XFER_TYPE_FILE_RECV) ||    \
+#define XFER_IS_RECV(type) ((type == XFER_TYPE_FILE_RECV_ACTIVE) ||  \
+                            (type == XFER_TYPE_FILE_RECV_PASSIVE) || \
                             (type == XFER_TYPE_CHAT_RECV))
-#define XFER_IS_SEND(type) ((type == XFER_TYPE_FILE_SEND) ||    \
+#define XFER_IS_SEND(type) ((type == XFER_TYPE_FILE_SEND_ACTIVE) ||  \
+                            (type == XFER_TYPE_FILE_SEND_PASSIVE) || \
                             (type == XFER_TYPE_CHAT_SEND))
+#define XFER_IS_ACTIVE(type) ((type == XFER_TYPE_FILE_RECV_ACTIVE) || \
+                              (type == XFER_TYPE_FILE_SEND_ACTIVE))
+#define XFER_IS_FILE_PASSIVE(type) ((type == XFER_TYPE_FILE_RECV_PASSIVE) || \
+                                    (type == XFER_TYPE_FILE_SEND_PASSIVE))
 
 #define XFER_HAS_ENDED(status) ((status == XFER_STATUS_DONE) ||      \
                                 (status == XFER_STATUS_FAILED) ||    \
@@ -149,6 +160,7 @@ struct t_xfer
     socklen_t remote_address_length;   /* remote sockaddr length            */
     char *remote_address_str;          /* remote IP address as string       */
     int port;                          /* remote port                       */
+    char *token;                       /* remote passive-DCC token          */
 
     /* internal data */
     enum t_xfer_status status;         /* xfer status (waiting, sending,..) */
@@ -170,9 +182,9 @@ struct t_xfer
     char *unterminated_message;        /* beginning of a message            */
     int file;                          /* local file (read or write)        */
     char *local_filename;              /* local filename (with path)        */
-    char *temp_local_filename;         /* local filename filename with      */
-                                       /* temp. suffix (during transfer,    */
-                                       /* for receive file only)            */
+    char *temp_local_filename;         /* local filename with temp. suffix  */
+                                       /* (during transfer, for receive     */
+                                       /* file only)                        */
     int filename_suffix;               /* suffix (like .1) if renaming file */
     unsigned long long pos;            /* number of bytes received/sent     */
     unsigned long long ack;            /* number of bytes received OK       */

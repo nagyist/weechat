@@ -1,7 +1,7 @@
 /*
  * charset.c - charset plugin for WeeChat: encode/decode strings
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -28,21 +28,17 @@
 #include <iconv.h>
 
 #include "../weechat-plugin.h"
+#include "charset.h"
 
-
-#define CHARSET_PLUGIN_NAME "charset"
 
 WEECHAT_PLUGIN_NAME(CHARSET_PLUGIN_NAME);
 WEECHAT_PLUGIN_DESCRIPTION(N_("Charset conversions"));
 WEECHAT_PLUGIN_AUTHOR("Sébastien Helleu <flashcode@flashtux.org>");
 WEECHAT_PLUGIN_VERSION(WEECHAT_VERSION);
 WEECHAT_PLUGIN_LICENSE(WEECHAT_LICENSE);
-WEECHAT_PLUGIN_PRIORITY(16000);
-
-#define CHARSET_CONFIG_NAME "charset"
+WEECHAT_PLUGIN_PRIORITY(CHARSET_PLUGIN_PRIORITY);
 
 struct t_weechat_plugin *weechat_charset_plugin = NULL;
-#define weechat_plugin weechat_charset_plugin
 
 struct t_config_file *charset_config_file = NULL;
 struct t_config_option *charset_default_decode = NULL;
@@ -201,8 +197,9 @@ charset_config_init ()
 {
     struct t_config_section *ptr_section;
 
-    charset_config_file = weechat_config_new (CHARSET_CONFIG_NAME,
-                                              &charset_config_reload, NULL, NULL);
+    charset_config_file = weechat_config_new (
+        CHARSET_CONFIG_PRIO_NAME,
+        &charset_config_reload, NULL, NULL);
     if (!charset_config_file)
         return 0;
 
@@ -518,7 +515,7 @@ charset_command_cb (const void *pointer, void *data,
         snprintf (option_name, length, "%s.%s", plugin_name, name);
     }
 
-    if (weechat_strcasecmp (argv[1], "reset") == 0)
+    if (weechat_strcmp (argv[1], "reset") == 0)
     {
         charset_set (charset_config_section_decode, "decode", option_name,
                      NULL);
@@ -529,12 +526,12 @@ charset_command_cb (const void *pointer, void *data,
     {
         if (argc > 2)
         {
-            if (weechat_strcasecmp (argv[1], "decode") == 0)
+            if (weechat_strcmp (argv[1], "decode") == 0)
             {
                 ptr_section = charset_config_section_decode;
                 ptr_charset = argv_eol[2];
             }
-            else if (weechat_strcasecmp (argv[1], "encode") == 0)
+            else if (weechat_strcmp (argv[1], "encode") == 0)
             {
                 ptr_section = charset_config_section_encode;
                 ptr_charset = argv_eol[2];
@@ -545,8 +542,7 @@ charset_command_cb (const void *pointer, void *data,
                                 _("%s%s: wrong charset type (decode or encode "
                                   "expected)"),
                                 weechat_prefix ("error"), CHARSET_PLUGIN_NAME);
-                if (option_name)
-                    free (option_name);
+                free (option_name);
                 return WEECHAT_RC_OK;
             }
         }
@@ -559,8 +555,7 @@ charset_command_cb (const void *pointer, void *data,
                             _("%s%s: invalid charset: \"%s\""),
                             weechat_prefix ("error"), CHARSET_PLUGIN_NAME,
                             ptr_charset);
-            if (option_name)
-                free (option_name);
+            free (option_name);
             return WEECHAT_RC_OK;
         }
         if (ptr_section)
@@ -611,12 +606,14 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
     weechat_hook_command (
         "charset",
         N_("change charset for current buffer"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("decode|encode <charset>"
            " || reset"),
-        N_(" decode: change decoding charset\n"
-           " encode: change encoding charset\n"
-           "charset: new charset for current buffer\n"
-           "  reset: reset charsets for current buffer"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[decode]: change decoding charset"),
+            N_("raw[encode]: change encoding charset"),
+            N_("charset: new charset for current buffer"),
+            N_("raw[reset]: reset charsets for current buffer")),
         "decode|encode|reset",
         &charset_command_cb, NULL, NULL);
 
@@ -640,11 +637,13 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
     charset_config_write ();
 
     weechat_config_free (charset_config_file);
+    charset_config_file = NULL;
 
-    if (charset_terminal)
-        free (charset_terminal);
-    if (charset_internal)
-        free (charset_internal);
+    free (charset_terminal);
+    charset_terminal = NULL;
+
+    free (charset_internal);
+    charset_internal = NULL;
 
     return WEECHAT_RC_OK;
 }

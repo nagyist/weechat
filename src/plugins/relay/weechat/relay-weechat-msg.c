@@ -1,7 +1,7 @@
 /*
  * relay-weechat-msg.c - build binary messages for WeeChat protocol
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -29,7 +29,9 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <zlib.h>
+#ifdef HAVE_ZSTD
 #include <zstd.h>
+#endif
 
 #include "../../weechat-plugin.h"
 #include "../relay.h"
@@ -174,6 +176,23 @@ relay_weechat_msg_add_long (struct t_relay_weechat_msg *msg, long value)
 }
 
 /*
+ * Adds a long long integer to a message.
+ */
+
+void
+relay_weechat_msg_add_longlong (struct t_relay_weechat_msg *msg,
+                                long long value)
+{
+    char str_longlong[128];
+    unsigned char length;
+
+    snprintf (str_longlong, sizeof (str_longlong), "%lld", value);
+    length = strlen (str_longlong);
+    relay_weechat_msg_add_bytes (msg, &length, 1);
+    relay_weechat_msg_add_bytes (msg, str_longlong, length);
+}
+
+/*
  * Adds length + string to a message.
  */
 
@@ -281,6 +300,8 @@ relay_weechat_msg_hashtable_map_cb (void *data,
             relay_weechat_msg_add_pointer (msg, (void *)pointers[i]);
         else if (strcmp (type, WEECHAT_HASHTABLE_TIME) == 0)
             relay_weechat_msg_add_time (msg, *((time_t *)pointers[i]));
+        else if (strcmp (type, WEECHAT_HASHTABLE_LONGLONG) == 0)
+            relay_weechat_msg_add_longlong (msg, *((long long *)pointers[i]));
     }
 }
 
@@ -309,6 +330,8 @@ relay_weechat_msg_add_hashtable (struct t_relay_weechat_msg *msg,
             relay_weechat_msg_add_type (msg, RELAY_WEECHAT_MSG_OBJ_POINTER);
         else if (strcmp (type, WEECHAT_HASHTABLE_TIME) == 0)
             relay_weechat_msg_add_type (msg, RELAY_WEECHAT_MSG_OBJ_TIME);
+        else if (strcmp (type, WEECHAT_HASHTABLE_LONGLONG) == 0)
+            relay_weechat_msg_add_type (msg, RELAY_WEECHAT_MSG_OBJ_LONG);
     }
 
     /* number of items */
@@ -432,6 +455,7 @@ relay_weechat_msg_add_hdata_path (struct t_relay_weechat_msg *msg,
                                 relay_weechat_msg_add_type (msg, RELAY_WEECHAT_MSG_OBJ_INT);
                                 break;
                             case WEECHAT_HDATA_LONG:
+                            case WEECHAT_HDATA_LONGLONG:
                                 relay_weechat_msg_add_type (msg, RELAY_WEECHAT_MSG_OBJ_LONG);
                                 break;
                             case WEECHAT_HDATA_STRING:
@@ -477,6 +501,12 @@ relay_weechat_msg_add_hdata_path (struct t_relay_weechat_msg *msg,
                                                                 weechat_hdata_long (hdata,
                                                                                     pointer,
                                                                                     name));
+                                    break;
+                                case WEECHAT_HDATA_LONGLONG:
+                                    relay_weechat_msg_add_longlong (msg,
+                                                                    weechat_hdata_longlong (hdata,
+                                                                                            pointer,
+                                                                                            name));
                                     break;
                                 case WEECHAT_HDATA_STRING:
                                 case WEECHAT_HDATA_SHARED_STRING:
@@ -558,7 +588,6 @@ relay_weechat_msg_add_hdata (struct t_relay_weechat_msg *msg,
     char *path_returned;
     const char *hdata_name, *array_size;
     void *pointer, **path_pointers;
-    unsigned long value;
     int rc, num_keys, num_path, i, type, pos_count, count, rc_sscanf;
     uint32_t count32;
 
@@ -599,10 +628,9 @@ relay_weechat_msg_add_hdata (struct t_relay_weechat_msg *msg,
         pos[0] = '\0';
     if (strncmp (list_path[0], "0x", 2) == 0)
     {
-        rc_sscanf = sscanf (list_path[0], "%lx", &value);
+        rc_sscanf = sscanf (list_path[0], "%p", &pointer);
         if ((rc_sscanf != EOF) && (rc_sscanf != 0))
         {
-            pointer = (void *)value;
             if (!weechat_hdata_check_pointer (ptr_hdata_head, NULL, pointer))
             {
                 if (weechat_relay_plugin->debug >= 1)
@@ -615,6 +643,10 @@ relay_weechat_msg_add_hdata (struct t_relay_weechat_msg *msg,
                 }
                 goto end;
             }
+        }
+        else
+        {
+            pointer = NULL;
         }
     }
     else
@@ -692,6 +724,7 @@ relay_weechat_msg_add_hdata (struct t_relay_weechat_msg *msg,
                         strcat (keys_types, RELAY_WEECHAT_MSG_OBJ_INT);
                         break;
                     case WEECHAT_HDATA_LONG:
+                    case WEECHAT_HDATA_LONGLONG:
                         strcat (keys_types, RELAY_WEECHAT_MSG_OBJ_LONG);
                         break;
                     case WEECHAT_HDATA_STRING:
@@ -741,16 +774,11 @@ relay_weechat_msg_add_hdata (struct t_relay_weechat_msg *msg,
     rc = 1;
 
 end:
-    if (list_keys)
-        weechat_string_free_split (list_keys);
-    if (keys_types)
-        free (keys_types);
-    if (list_path)
-        weechat_string_free_split (list_path);
-    if (path_returned)
-        free (path_returned);
-    if (hdata_head)
-        free (hdata_head);
+    weechat_string_free_split (list_keys);
+    free (keys_types);
+    weechat_string_free_split (list_path);
+    free (path_returned);
+    free (hdata_head);
 
     return rc;
 }
@@ -880,7 +908,6 @@ relay_weechat_msg_add_nicklist_buffer (struct t_relay_weechat_msg *msg,
                                        struct t_relay_weechat_nicklist *nicklist)
 {
     int count, i;
-    struct t_hdata *ptr_hdata_group, *ptr_hdata_nick;
     struct t_gui_nick_group *ptr_group;
     struct t_gui_nick *ptr_nick;
 
@@ -907,9 +934,6 @@ relay_weechat_msg_add_nicklist_buffer (struct t_relay_weechat_msg *msg,
     else
     {
         /* send full nicklist */
-        ptr_hdata_group = weechat_hdata_get ("nick_group");
-        ptr_hdata_nick = weechat_hdata_get ("nick");
-
         ptr_group = NULL;
         ptr_nick = NULL;
         weechat_nicklist_get_next_item (buffer, &ptr_group, &ptr_nick);
@@ -920,27 +944,32 @@ relay_weechat_msg_add_nicklist_buffer (struct t_relay_weechat_msg *msg,
                 relay_weechat_msg_add_pointer (msg, buffer);
                 relay_weechat_msg_add_pointer (msg, ptr_nick);
                 relay_weechat_msg_add_char (msg, 0); /* group */
-                relay_weechat_msg_add_char (msg,
-                                            (char)weechat_hdata_integer (ptr_hdata_nick,
-                                                                         ptr_nick,
-                                                                         "visible"));
+                relay_weechat_msg_add_char (
+                    msg,
+                    (char)weechat_hdata_integer (relay_hdata_nick,
+                                                 ptr_nick,
+                                                 "visible"));
                 relay_weechat_msg_add_int (msg, 0); /* level */
-                relay_weechat_msg_add_string (msg,
-                                              weechat_hdata_string (ptr_hdata_nick,
-                                                                    ptr_nick,
-                                                                    "name"));
-                relay_weechat_msg_add_string (msg,
-                                              weechat_hdata_string (ptr_hdata_nick,
-                                                                    ptr_nick,
-                                                                    "color"));
-                relay_weechat_msg_add_string (msg,
-                                              weechat_hdata_string (ptr_hdata_nick,
-                                                                    ptr_nick,
-                                                                    "prefix"));
-                relay_weechat_msg_add_string (msg,
-                                              weechat_hdata_string (ptr_hdata_nick,
-                                                                    ptr_nick,
-                                                                    "prefix_color"));
+                relay_weechat_msg_add_string (
+                    msg,
+                    weechat_hdata_string (relay_hdata_nick,
+                                          ptr_nick,
+                                          "name"));
+                relay_weechat_msg_add_string (
+                    msg,
+                    weechat_hdata_string (relay_hdata_nick,
+                                          ptr_nick,
+                                          "color"));
+                relay_weechat_msg_add_string (
+                    msg,
+                    weechat_hdata_string (relay_hdata_nick,
+                                          ptr_nick,
+                                          "prefix"));
+                relay_weechat_msg_add_string (
+                    msg,
+                    weechat_hdata_string (relay_hdata_nick,
+                                          ptr_nick,
+                                          "prefix_color"));
                 count++;
             }
             else
@@ -948,22 +977,26 @@ relay_weechat_msg_add_nicklist_buffer (struct t_relay_weechat_msg *msg,
                 relay_weechat_msg_add_pointer (msg, buffer);
                 relay_weechat_msg_add_pointer (msg, ptr_group);
                 relay_weechat_msg_add_char (msg, 1); /* group */
-                relay_weechat_msg_add_char (msg,
-                                            (char)weechat_hdata_integer (ptr_hdata_group,
-                                                                         ptr_group,
-                                                                         "visible"));
-                relay_weechat_msg_add_int (msg,
-                                           weechat_hdata_integer (ptr_hdata_group,
-                                                                  ptr_group,
-                                                                  "level"));
-                relay_weechat_msg_add_string (msg,
-                                              weechat_hdata_string (ptr_hdata_group,
-                                                                    ptr_group,
-                                                                    "name"));
-                relay_weechat_msg_add_string (msg,
-                                              weechat_hdata_string (ptr_hdata_group,
-                                                                    ptr_group,
-                                                                    "color"));
+                relay_weechat_msg_add_char (
+                    msg,
+                    (char)weechat_hdata_integer (relay_hdata_nick_group,
+                                                 ptr_group,
+                                                 "visible"));
+                relay_weechat_msg_add_int (
+                    msg,
+                    weechat_hdata_integer (relay_hdata_nick_group,
+                                           ptr_group,
+                                           "level"));
+                relay_weechat_msg_add_string (
+                    msg,
+                    weechat_hdata_string (relay_hdata_nick_group,
+                                          ptr_group,
+                                          "name"));
+                relay_weechat_msg_add_string (
+                    msg,
+                    weechat_hdata_string (relay_hdata_nick_group,
+                                          ptr_group,
+                                          "color"));
                 relay_weechat_msg_add_string (msg, NULL); /* prefix */
                 relay_weechat_msg_add_string (msg, NULL); /* prefix_color */
                 count++;
@@ -988,7 +1021,6 @@ relay_weechat_msg_add_nicklist (struct t_relay_weechat_msg *msg,
                                 struct t_relay_weechat_nicklist *nicklist)
 {
     char str_vars[512];
-    struct t_hdata *ptr_hdata;
     struct t_gui_buffer *ptr_buffer;
     int pos_count, count;
     uint32_t count32;
@@ -1014,12 +1046,11 @@ relay_weechat_msg_add_nicklist (struct t_relay_weechat_msg *msg,
     }
     else
     {
-        ptr_hdata = weechat_hdata_get ("buffer");
-        ptr_buffer = weechat_hdata_get_list (ptr_hdata, "gui_buffers");
+        ptr_buffer = weechat_hdata_get_list (relay_hdata_buffer, "gui_buffers");
         while (ptr_buffer)
         {
             count += relay_weechat_msg_add_nicklist_buffer (msg, ptr_buffer, NULL);
-            ptr_buffer = weechat_hdata_move (ptr_hdata, ptr_buffer, 1);
+            ptr_buffer = weechat_hdata_move (relay_hdata_buffer, ptr_buffer, 1);
         }
     }
 
@@ -1086,15 +1117,14 @@ relay_weechat_msg_compress_zlib (struct t_relay_client *client,
               msg->id);
 
     /* send compressed data */
-    relay_client_send (client, RELAY_CLIENT_MSG_STANDARD,
+    relay_client_send (client, RELAY_MSG_STANDARD,
                        (const char *)dest, dest_size + 5,
                        raw_message);
 
     rc = 1;
 
 error:
-    if (dest)
-        free (dest);
+    free (dest);
 
     return rc;
 }
@@ -1111,6 +1141,7 @@ int
 relay_weechat_msg_compress_zstd (struct t_relay_client *client,
                                  struct t_relay_weechat_msg *msg)
 {
+#ifdef HAVE_ZSTD
     char raw_message[1024];
     uint32_t size32;
     Bytef *dest;
@@ -1132,7 +1163,7 @@ relay_weechat_msg_compress_zstd (struct t_relay_client *client,
     compression_level = (((compression - 1) * 19) / 100) + 1;
 
     gettimeofday (&tv1, NULL);
-    comp_size = ZSTD_compress(
+    comp_size = ZSTD_compress (
         dest + 5,
         dest_size,
         (void *)(msg->data + 5),
@@ -1158,17 +1189,23 @@ relay_weechat_msg_compress_zstd (struct t_relay_client *client,
               msg->id);
 
     /* send compressed data */
-    relay_client_send (client, RELAY_CLIENT_MSG_STANDARD,
+    relay_client_send (client, RELAY_MSG_STANDARD,
                        (const char *)dest, comp_size + 5,
                        raw_message);
 
     rc = 1;
 
 error:
-    if (dest)
-        free (dest);
+    free (dest);
 
     return rc;
+#else
+    /* make C compiler happy */
+    (void) client;
+    (void) msg;
+
+    return 0;
+#endif /* HAVE_ZSTD */
 }
 
 /*
@@ -1190,10 +1227,12 @@ relay_weechat_msg_send (struct t_relay_client *client,
                 if (relay_weechat_msg_compress_zlib (client, msg))
                     return;
                 break;
+#ifdef HAVE_ZSTD
             case RELAY_WEECHAT_COMPRESSION_ZSTD:
                 if (relay_weechat_msg_compress_zstd (client, msg))
                     return;
                 break;
+#endif
             default:
                 break;
         }
@@ -1210,7 +1249,7 @@ relay_weechat_msg_send (struct t_relay_client *client,
     /* send uncompressed data */
     snprintf (raw_message, sizeof (raw_message),
               "obj: %d bytes, id: %s", msg->data_size, msg->id);
-    relay_client_send (client, RELAY_CLIENT_MSG_STANDARD,
+    relay_client_send (client, RELAY_MSG_STANDARD,
                        msg->data, msg->data_size, raw_message);
 }
 
@@ -1224,10 +1263,8 @@ relay_weechat_msg_free (struct t_relay_weechat_msg *msg)
     if (!msg)
         return;
 
-    if (msg->id)
-        free (msg->id);
-    if (msg->data)
-        free (msg->data);
+    free (msg->id);
+    free (msg->data);
 
     free (msg);
 }

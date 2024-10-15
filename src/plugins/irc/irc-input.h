@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -20,10 +20,21 @@
 #ifndef WEECHAT_PLUGIN_IRC_INPUT_H
 #define WEECHAT_PLUGIN_IRC_INPUT_H
 
+#include <time.h>
+
+struct t_hashtable;
 struct t_gui_buffer;
 
-extern void irc_input_user_message_display (struct t_gui_buffer *buffer,
-                                            int action, const char *text);
+extern void irc_input_user_message_display (struct t_irc_server *server,
+                                            time_t date,
+                                            int date_usec,
+                                            struct t_hashtable *tags,
+                                            const char *target,
+                                            const char *address,
+                                            const char *command,
+                                            const char *ctcp_type,
+                                            const char *text,
+                                            int decode_colors);
 extern int irc_input_data_cb (const void *pointer, void *data,
                               struct t_gui_buffer *buffer,
                               const char *input_data);

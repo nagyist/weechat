@@ -1,7 +1,7 @@
 /*
  * test-irc-nick.cpp - test IRC nick functions
  *
- * Copyright (C) 2019-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2019-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -21,9 +21,12 @@
 
 #include "CppUTest/TestHarness.h"
 
+#include "tests/tests.h"
+
 extern "C"
 {
 #include <string.h>
+#include "src/gui/gui-color.h"
 #include "src/plugins/irc/irc-nick.h"
 #include "src/plugins/irc/irc-server.h"
 }
@@ -171,4 +174,325 @@ TEST(IrcNick, IsNick)
     LONGS_EQUAL(0, irc_nick_is_nick (server, "\xf0\xa4\xad\xa2")); /* han char */
 
     irc_server_free (server);
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_find_color
+ *   irc_nick_find_color_name
+ */
+
+TEST(IrcNick, FindColor)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_set_current_prefix
+ */
+
+TEST(IrcNick, SetCurrentPrefix)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_set_prefix
+ */
+
+TEST(IrcNick, SetPrefix)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_set_prefixes
+ */
+
+TEST(IrcNick, SetPrefixes)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_set_host
+ */
+
+TEST(IrcNick, SetHost)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_is_op_or_higher
+ */
+
+TEST(IrcNick, IsOpOrHigher)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_has_prefix_mode
+ */
+
+TEST(IrcNick, HasPrefixMode)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_get_nicklist_group
+ */
+
+TEST(IrcNick, GetNicklistGroup)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_get_prefix_color_name
+ */
+
+TEST(IrcNick, GetPrefixColorName)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_get_color_for_nicklist
+ */
+
+TEST(IrcNick, GetColorForNicklist)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_nicklist_add
+ */
+
+TEST(IrcNick, NicklistAdd)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_nicklist_remove
+ */
+
+TEST(IrcNick, NicklistRemove)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_nicklist_set
+ */
+
+TEST(IrcNick, NicklistSet)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_nicklist_set_prefix_color_all
+ */
+
+TEST(IrcNick, NicklistSetPrefixColorAll)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_nicklist_set_color_all
+ */
+
+TEST(IrcNick, NicklistSetColorAll)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_new
+ */
+
+TEST(IrcNick, New)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_change
+ */
+
+TEST(IrcNick, Change)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_set_mode
+ */
+
+TEST(IrcNick, SetMode)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_realloc_prefixes
+ */
+
+TEST(IrcNick, ReallocPrefixes)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_free
+ */
+
+TEST(IrcNick, Free)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_free_all
+ */
+
+TEST(IrcNick, FreeAll)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_search
+ */
+
+TEST(IrcNick, Search)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_count
+ */
+
+TEST(IrcNick, Count)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_set_away
+ */
+
+TEST(IrcNick, SetAway)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_mode_for_display
+ */
+
+TEST(IrcNick, ModeForDisplay)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_as_prefix
+ */
+
+TEST(IrcNick, AsPrefix)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_color_for_msg
+ */
+
+TEST(IrcNick, ColorForMsg)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_color_for_pv
+ */
+
+TEST(IrcNick, ColorForPv)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_default_ban_mask
+ */
+
+TEST(IrcNick, DefaultBanMask)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_hdata_nick_cb
+ */
+
+TEST(IrcNick, HdataNickCb)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_add_to_infolist
+ */
+
+TEST(IrcNick, AddToInfolist)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   irc_nick_print_log
+ */
+
+TEST(IrcNick, PrintLog)
+{
+    /* TODO: write tests */
 }

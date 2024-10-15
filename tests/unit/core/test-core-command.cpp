@@ -1,7 +1,7 @@
 /*
  * test-core-command.cpp - test command functions
  *
- * Copyright (C) 2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2022-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -22,6 +22,7 @@
 #include "CppUTest/TestHarness.h"
 
 #include "tests/tests.h"
+#include "tests/tests-record.h"
 
 extern "C"
 {
@@ -29,9 +30,9 @@ extern "C"
 #define HAVE_CONFIG_H
 #endif
 #include "src/core/weechat.h"
-#include "src/core/wee-command.h"
-#include "src/core/wee-input.h"
-#include "src/core/wee-string.h"
+#include "src/core/core-command.h"
+#include "src/core/core-input.h"
+#include "src/core/core-string.h"
 #include "src/gui/gui-buffer.h"
 }
 
@@ -41,19 +42,17 @@ extern "C"
 #define WEE_CMD_CORE(__command)                                         \
     command_record ("core.weechat", __command);
 
-#define WEE_CHECK_MSG_BUFFER(__buffer_name, __message)                  \
-    if (!record_search (__buffer_name, __message))                      \
+#define WEE_CHECK_MSG_BUFFER(__buffer_name, __prefix, __message)        \
+    if (!record_search (__buffer_name, __prefix, __message, NULL))      \
     {                                                                   \
-        char **msg = command_build_error (                              \
-            "Message not displayed on buffer " __buffer_name ": "       \
-            "\"" __message "\n"                                         \
-            "All messages displayed:\n");                               \
+        char **msg = command_build_error (__buffer_name, __prefix,      \
+                                          __message);                   \
         record_dump (msg);                                              \
         FAIL(string_dyn_free (msg, 0));                                 \
     }
 
-#define WEE_CHECK_MSG_CORE(__message)                                   \
-    WEE_CHECK_MSG_BUFFER("core.weechat", __message);
+#define WEE_CHECK_MSG_CORE(__prefix, __message)                         \
+    WEE_CHECK_MSG_BUFFER("core.weechat", __prefix, __message);
 
 
 TEST_GROUP(CoreCommand)
@@ -68,16 +67,24 @@ TEST_GROUP(CoreCommand)
             FAIL("Buffer not found");
         }
         record_start ();
-        input_data (buffer, command, NULL);
+        input_data (buffer, command, NULL, 0, 0);
         record_stop ();
     }
 
-    char **command_build_error (const char *message)
+    char **command_build_error (const char *buffer_name, const char *prefix,
+                                const char *message)
     {
         char **msg;
 
         msg = string_dyn_alloc (1024);
+        string_dyn_concat (msg, "Message not displayed on buffer ", -1);
+        string_dyn_concat (msg, buffer_name, -1);
+        string_dyn_concat (msg, ": prefix=\"", -1);
+        string_dyn_concat (msg, prefix, -1);
+        string_dyn_concat (msg, "\", message=\"", -1);
         string_dyn_concat (msg, message, -1);
+        string_dyn_concat (msg, "\"\n", -1);
+        string_dyn_concat (msg, "All messages displayed:\n", -1);
         return msg;
     }
 };
@@ -214,9 +221,9 @@ TEST(CoreCommand, Debug)
 
     /* test command "/debug unicode" */
     WEE_CMD_CORE(command_debug_unicode);
-    WEE_CHECK_MSG_CORE("  \"\u00E9\u26C4\": 5 / 2, 2 / 3, 3, 3");
-    WEE_CHECK_MSG_CORE("  \"\u00E9\" (U+00E9, 233, 0xC3 0xA9): 2 / 1, 1 / 1, 1, 1, 1");
-    WEE_CHECK_MSG_CORE("  \"\u26C4\" (U+26C4, 9924, 0xE2 0x9B 0x84): 3 / 1, 1 / 2, 2, 2, 2");
+    WEE_CHECK_MSG_CORE("", "  \"\u00E9\u26C4\": 5 / 2, 2 / 3, 3, 3");
+    WEE_CHECK_MSG_CORE("", "  \"\u00E9\" (U+00E9, 233, 0xC3 0xA9): 2 / 1, 1 / 1, 1, 1, 1");
+    WEE_CHECK_MSG_CORE("", "  \"\u26C4\" (U+26C4, 9924, 0xE2 0x9B 0x84): 3 / 1, 1 / 2, 2, 2, 2");
 
     /* test command "/debug windows" */
     /* TODO: write tests */
@@ -369,7 +376,12 @@ TEST(CoreCommand, Quit)
 
 TEST(CoreCommand, Reload)
 {
-    /* TODO: write tests */
+    WEE_CMD_CORE("/save");
+    WEE_CMD_CORE("/reload");
+    WEE_CHECK_MSG_CORE("", "Options reloaded from sec.conf");
+    WEE_CHECK_MSG_CORE("", "Options reloaded from weechat.conf");
+    WEE_CHECK_MSG_CORE("", "Options reloaded from plugins.conf");
+    WEE_CHECK_MSG_CORE("", "Options reloaded from charset.conf");
 }
 
 /*
@@ -378,6 +390,16 @@ TEST(CoreCommand, Reload)
  */
 
 TEST(CoreCommand, Repeat)
+{
+    /* TODO: write tests */
+}
+
+/*
+ * Tests functions:
+ *   command_reset
+ */
+
+TEST(CoreCommand, Reset)
 {
     /* TODO: write tests */
 }

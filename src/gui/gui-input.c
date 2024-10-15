@@ -1,7 +1,7 @@
 /*
  * gui-input.c - input functions (used by all GUI)
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -27,11 +27,11 @@
 #include <string.h>
 
 #include "../core/weechat.h"
-#include "../core/wee-config.h"
-#include "../core/wee-hook.h"
-#include "../core/wee-input.h"
-#include "../core/wee-string.h"
-#include "../core/wee-utf8.h"
+#include "../core/core-config.h"
+#include "../core/core-hook.h"
+#include "../core/core-input.h"
+#include "../core/core-string.h"
+#include "../core/core-utf8.h"
 #include "../plugins/plugin.h"
 #include "gui-input.h"
 #include "gui-buffer.h"
@@ -214,7 +214,6 @@ gui_input_search_signal (struct t_gui_buffer *buffer)
     {
         gui_window_bare_display_toggle (NULL);
     }
-
     (void) hook_signal_send ("input_search",
                              WEECHAT_HOOK_SIGNAL_POINTER, buffer);
 }
@@ -226,13 +225,13 @@ gui_input_search_signal (struct t_gui_buffer *buffer)
 void
 gui_input_set_pos (struct t_gui_buffer *buffer, int pos)
 {
-    if ((pos >= 0) && (buffer->input_buffer_pos != pos))
-    {
-        buffer->input_buffer_pos = pos;
-        if (buffer->input_buffer_pos > buffer->input_buffer_length)
-            buffer->input_buffer_pos = buffer->input_buffer_length;
-        gui_input_text_cursor_moved_signal (buffer);
-    }
+    if (!buffer || (pos < 0) || (buffer->input_buffer_pos == pos))
+        return;
+
+    buffer->input_buffer_pos = pos;
+    if (buffer->input_buffer_pos > buffer->input_buffer_length)
+        buffer->input_buffer_pos = buffer->input_buffer_length;
+    gui_input_text_cursor_moved_signal (buffer);
 }
 
 /*
@@ -277,81 +276,13 @@ gui_input_insert_string (struct t_gui_buffer *buffer, const char *string)
 }
 
 /*
- * Moves input content and undo data from a buffer to another buffer.
- */
-
-void
-gui_input_move_to_buffer (struct t_gui_buffer *from_buffer,
-                          struct t_gui_buffer *to_buffer)
-{
-    int is_command;
-
-    /*
-     * move of input is allowed if:
-     * - 2 buffers are different
-     * - input_share is not set to "none"
-     * - input buffer in first buffer is not empty
-     */
-    if (!from_buffer || !to_buffer || (from_buffer == to_buffer)
-        || (CONFIG_INTEGER(config_look_input_share) == CONFIG_LOOK_INPUT_SHARE_NONE)
-        || !from_buffer->input_buffer || !from_buffer->input_buffer[0])
-        return;
-
-    /*
-     * if input is command and that only text is allowed,
-     * or if input is text and that only command is allowed,
-     * then do nothing
-     */
-    is_command = (string_input_for_buffer (from_buffer->input_buffer) == NULL) ? 1 : 0;
-    if ((is_command && (CONFIG_INTEGER(config_look_input_share) == CONFIG_LOOK_INPUT_SHARE_TEXT))
-        || (!is_command && (CONFIG_INTEGER(config_look_input_share) == CONFIG_LOOK_INPUT_SHARE_COMMANDS)))
-        return;
-
-    /*
-     * if overwrite is off and that input of target buffer is not empty,
-     * then do nothing
-     */
-    if ((!CONFIG_BOOLEAN(config_look_input_share_overwrite))
-        && to_buffer->input_buffer && to_buffer->input_buffer[0])
-        return;
-
-    /* move input_buffer */
-    if (to_buffer->input_buffer)
-        free (to_buffer->input_buffer);
-    to_buffer->input_buffer = from_buffer->input_buffer;
-    to_buffer->input_buffer_alloc = from_buffer->input_buffer_alloc;
-    to_buffer->input_buffer_size = from_buffer->input_buffer_size;
-    to_buffer->input_buffer_length = from_buffer->input_buffer_length;
-    to_buffer->input_buffer_pos = from_buffer->input_buffer_pos;
-    to_buffer->input_buffer_1st_display = from_buffer->input_buffer_1st_display;
-    gui_buffer_input_buffer_init (from_buffer);
-
-    /* move undo data */
-    gui_buffer_undo_free_all (to_buffer);
-    (to_buffer->input_undo_snap)->data = (from_buffer->input_undo_snap)->data;
-    (to_buffer->input_undo_snap)->pos = (from_buffer->input_undo_snap)->pos;
-    to_buffer->input_undo = from_buffer->input_undo;
-    to_buffer->last_input_undo = from_buffer->last_input_undo;
-    to_buffer->ptr_input_undo = from_buffer->ptr_input_undo;
-    to_buffer->input_undo_count = from_buffer->input_undo_count;
-    (from_buffer->input_undo_snap)->data = NULL;
-    (from_buffer->input_undo_snap)->pos = 0;
-    from_buffer->input_undo = NULL;
-    from_buffer->last_input_undo = NULL;
-    from_buffer->ptr_input_undo = NULL;
-    from_buffer->input_undo_count = 0;
-
-    gui_completion_stop (from_buffer->completion);
-}
-
-/*
  * Copies string into the internal clipboard.
  */
 
 void
 gui_input_clipboard_copy (const char *buffer, int size)
 {
-    if (size <= 0)
+    if (!buffer || (size <= 0))
         return;
 
     if (gui_input_clipboard != NULL)
@@ -368,7 +299,7 @@ gui_input_clipboard_copy (const char *buffer, int size)
 
 /*
  * Pastes the internal clipboard at cursor pos in input line
- * (default key: ctrl-Y).
+ * (default key: ctrl-y).
  */
 
 void
@@ -385,7 +316,7 @@ gui_input_clipboard_paste (struct t_gui_buffer *buffer)
 }
 
 /*
- * Terminates line:
+ * Sends data to buffer:
  *   - saves text in history
  *   - stops completion
  *   - frees all undos
@@ -394,9 +325,26 @@ gui_input_clipboard_paste (struct t_gui_buffer *buffer)
  */
 
 void
+gui_input_send_data_to_buffer (struct t_gui_buffer *buffer, char *data)
+{
+    gui_history_add (buffer, data);
+    gui_buffer_undo_free_all (buffer);
+    buffer->ptr_history = NULL;
+    gui_history_ptr = NULL;
+    gui_input_text_changed_modifier_and_signal (buffer,
+                                                0, /* save undo */
+                                                1); /* stop completion */
+    (void) input_data (buffer, data, NULL, 1, 1);
+}
+
+/*
+ * Sends current input to buffer.
+ */
+
+void
 gui_input_return (struct t_gui_buffer *buffer)
 {
-    char *command;
+    char *data;
 
     if (CONFIG_BOOLEAN(config_look_bare_display_exit_on_input)
         && gui_window_bare_display)
@@ -408,24 +356,49 @@ gui_input_return (struct t_gui_buffer *buffer)
         && (buffer->input_get_empty || (buffer->input_buffer_size > 0)))
     {
         buffer->input_buffer[buffer->input_buffer_size] = '\0';
-        command = strdup (buffer->input_buffer);
-        if (command)
+        data = strdup (buffer->input_buffer);
+        if (gui_input_optimize_size (buffer, 0, 0))
         {
-            gui_history_add (buffer, buffer->input_buffer);
-            if (gui_input_optimize_size (buffer, 0, 0))
+            buffer->input_buffer[0] = '\0';
+            buffer->input_buffer_pos = 0;
+            buffer->input_buffer_1st_display = 0;
+        }
+        if (data)
+        {
+            gui_input_send_data_to_buffer (buffer, data);
+            free (data);
+        }
+    }
+}
+
+/*
+ * Splits input on newlines then sends each line to buffer.
+ */
+
+void
+gui_input_split_return (struct t_gui_buffer *buffer)
+{
+    char **lines;
+    int i, num_lines;
+
+    if (buffer->input
+        && (buffer->input_get_empty || (buffer->input_buffer_size > 0)))
+    {
+        buffer->input_buffer[buffer->input_buffer_size] = '\0';
+        lines = string_split (buffer->input_buffer, "\n", NULL, 0, 0, &num_lines);
+        if (gui_input_optimize_size (buffer, 0, 0))
+        {
+            buffer->input_buffer[0] = '\0';
+            buffer->input_buffer_pos = 0;
+            buffer->input_buffer_1st_display = 0;
+        }
+        if (lines)
+        {
+            for (i = 0; i < num_lines; i++)
             {
-                buffer->input_buffer[0] = '\0';
-                buffer->input_buffer_pos = 0;
-                buffer->input_buffer_1st_display = 0;
+                gui_input_send_data_to_buffer (buffer, lines[i]);
             }
-            gui_buffer_undo_free_all (buffer);
-            buffer->ptr_history = NULL;
-            gui_history_ptr = NULL;
-            gui_input_text_changed_modifier_and_signal (buffer,
-                                                        0, /* save undo */
-                                                        1); /* stop completion */
-            (void) input_data (buffer, command, NULL);
-            free (command);
+            string_free_split (lines);
         }
     }
 }
@@ -440,6 +413,14 @@ gui_input_complete (struct t_gui_buffer *buffer)
     int i;
 
     if (!buffer->completion || !buffer->completion->word_found)
+        return;
+
+    /*
+     * in case the word found is empty, we keep the word in input as-is
+     * (this can happen with partial completion when the common prefix found
+     * is empty)
+     */
+    if (!buffer->completion->word_found[0])
         return;
 
     /* replace word with new completed word into input buffer */
@@ -516,7 +497,7 @@ gui_input_complete (struct t_gui_buffer *buffer)
 void
 gui_input_complete_next (struct t_gui_buffer *buffer)
 {
-    if (!buffer->input ||(buffer->text_search != GUI_TEXT_SEARCH_DISABLED))
+    if (!buffer->input || (buffer->text_search != GUI_BUFFER_SEARCH_DISABLED))
         return;
 
     gui_buffer_undo_snap (buffer);
@@ -540,7 +521,7 @@ gui_input_complete_next (struct t_gui_buffer *buffer)
 void
 gui_input_complete_previous (struct t_gui_buffer *buffer)
 {
-    if (!buffer->input || (buffer->text_search != GUI_TEXT_SEARCH_DISABLED))
+    if (!buffer->input || (buffer->text_search != GUI_BUFFER_SEARCH_DISABLED))
         return;
 
     gui_buffer_undo_snap (buffer);
@@ -558,7 +539,7 @@ gui_input_complete_previous (struct t_gui_buffer *buffer)
 }
 
 /*
- * Searches for text in buffer at current position (default key: ctrl-R).
+ * Searches for text in buffer at current position (default key: ctrl-r).
  */
 
 void
@@ -567,9 +548,10 @@ gui_input_search_text_here (struct t_gui_buffer *buffer)
     struct t_gui_window *window;
 
     window = gui_window_search_with_buffer (buffer);
-    if (window && (window->buffer->text_search == GUI_TEXT_SEARCH_DISABLED))
+    if (window && (window->buffer->text_search == GUI_BUFFER_SEARCH_DISABLED))
     {
-        gui_window_search_start (window, window->scroll->start_line);
+        gui_window_search_start (window, GUI_BUFFER_SEARCH_LINES,
+                                 window->scroll->start_line);
         gui_input_search_signal (buffer);
     }
 }
@@ -584,9 +566,26 @@ gui_input_search_text (struct t_gui_buffer *buffer)
     struct t_gui_window *window;
 
     window = gui_window_search_with_buffer (buffer);
-    if (window && (window->buffer->text_search == GUI_TEXT_SEARCH_DISABLED))
+    if (window && (window->buffer->text_search == GUI_BUFFER_SEARCH_DISABLED))
     {
-        gui_window_search_start (window, NULL);
+        gui_window_search_start (window, GUI_BUFFER_SEARCH_LINES, NULL);
+        gui_input_search_signal (buffer);
+    }
+}
+
+/*
+ * Searches for text in buffer/global command line history.
+ */
+
+void
+gui_input_search_history (struct t_gui_buffer *buffer)
+{
+    struct t_gui_window *window;
+
+    window = gui_window_search_with_buffer (buffer);
+    if (window && (window->buffer->text_search == GUI_BUFFER_SEARCH_DISABLED))
+    {
+        gui_window_search_start (window, GUI_BUFFER_SEARCH_HISTORY, NULL);
         gui_input_search_signal (buffer);
     }
 }
@@ -637,7 +636,7 @@ gui_input_search_switch_case (struct t_gui_buffer *buffer)
     struct t_gui_window *window;
 
     window = gui_window_search_with_buffer (buffer);
-    if (window && (window->buffer->text_search != GUI_TEXT_SEARCH_DISABLED))
+    if (window && (window->buffer->text_search != GUI_BUFFER_SEARCH_DISABLED))
     {
         window->buffer->text_search_exact ^= 1;
         gui_window_search_restart (window);
@@ -646,7 +645,7 @@ gui_input_search_switch_case (struct t_gui_buffer *buffer)
 }
 
 /*
- * Switches string/regex for search in buffer (default key: ctrl-R during
+ * Switches string/regex for search in buffer (default key: ctrl-r during
  * search).
  */
 
@@ -656,7 +655,7 @@ gui_input_search_switch_regex (struct t_gui_buffer *buffer)
     struct t_gui_window *window;
 
     window = gui_window_search_with_buffer (buffer);
-    if (window && (window->buffer->text_search != GUI_TEXT_SEARCH_DISABLED))
+    if (window && (window->buffer->text_search != GUI_BUFFER_SEARCH_DISABLED))
     {
         window->buffer->text_search_regex ^= 1;
         gui_window_search_restart (window);
@@ -674,20 +673,35 @@ gui_input_search_switch_where (struct t_gui_buffer *buffer)
     struct t_gui_window *window;
 
     window = gui_window_search_with_buffer (buffer);
-    if (window && (window->buffer->text_search != GUI_TEXT_SEARCH_DISABLED))
-    {
-        /* it's not possible to change that in a buffer not "formatted" */
-        if (window->buffer->type != GUI_BUFFER_TYPE_FORMATTED)
-            return;
+    if (!window)
+        return;
 
-        if (window->buffer->text_search_where == GUI_TEXT_SEARCH_IN_MESSAGE)
-            window->buffer->text_search_where = GUI_TEXT_SEARCH_IN_PREFIX;
-        else if (window->buffer->text_search_where == GUI_TEXT_SEARCH_IN_PREFIX)
-            window->buffer->text_search_where = GUI_TEXT_SEARCH_IN_MESSAGE | GUI_TEXT_SEARCH_IN_PREFIX;
-        else
-            window->buffer->text_search_where = GUI_TEXT_SEARCH_IN_MESSAGE;
-        gui_window_search_restart (window);
-        gui_input_search_signal (buffer);
+    switch (window->buffer->text_search)
+    {
+        case GUI_BUFFER_SEARCH_DISABLED:
+            break;
+        case GUI_BUFFER_SEARCH_LINES:
+            /* it's not possible to change that in a buffer not "formatted" */
+            if (window->buffer->type != GUI_BUFFER_TYPE_FORMATTED)
+                return;
+            if (window->buffer->text_search_where == GUI_BUFFER_SEARCH_IN_MESSAGE)
+                window->buffer->text_search_where = GUI_BUFFER_SEARCH_IN_PREFIX;
+            else if (window->buffer->text_search_where == GUI_BUFFER_SEARCH_IN_PREFIX)
+                window->buffer->text_search_where = GUI_BUFFER_SEARCH_IN_MESSAGE | GUI_BUFFER_SEARCH_IN_PREFIX;
+            else
+                window->buffer->text_search_where = GUI_BUFFER_SEARCH_IN_MESSAGE;
+            gui_window_search_restart (window);
+            gui_input_search_signal (buffer);
+            break;
+        case GUI_BUFFER_SEARCH_HISTORY:
+            window->buffer->text_search_history =
+                (window->buffer->text_search_history == GUI_BUFFER_SEARCH_HISTORY_LOCAL) ?
+                GUI_BUFFER_SEARCH_HISTORY_GLOBAL : GUI_BUFFER_SEARCH_HISTORY_LOCAL;
+            gui_window_search_restart (window);
+            gui_input_search_signal (buffer);
+            break;
+        case GUI_BUFFER_NUM_SEARCH:
+            break;
     }
 }
 
@@ -701,10 +715,24 @@ gui_input_search_previous (struct t_gui_buffer *buffer)
     struct t_gui_window *window;
 
     window = gui_window_search_with_buffer (buffer);
-    if (window && (window->buffer->text_search != GUI_TEXT_SEARCH_DISABLED))
+    if (!window)
+        return;
+
+    switch (window->buffer->text_search)
     {
-        window->buffer->text_search = GUI_TEXT_SEARCH_BACKWARD;
-        (void) gui_window_search_text (window);
+        case GUI_BUFFER_SEARCH_DISABLED:
+            break;
+        case GUI_BUFFER_SEARCH_LINES:
+            window->buffer->text_search_direction = GUI_BUFFER_SEARCH_DIR_BACKWARD;
+            (void) gui_window_search_text (window);
+            break;
+        case GUI_BUFFER_SEARCH_HISTORY:
+            window->buffer->text_search_direction = GUI_BUFFER_SEARCH_DIR_BACKWARD;
+            if (gui_window_search_text (window))
+                gui_input_search_signal (buffer);
+            break;
+        case GUI_BUFFER_NUM_SEARCH:
+            break;
     }
 }
 
@@ -718,10 +746,24 @@ gui_input_search_next (struct t_gui_buffer *buffer)
     struct t_gui_window *window;
 
     window = gui_window_search_with_buffer (buffer);
-    if (window && (window->buffer->text_search != GUI_TEXT_SEARCH_DISABLED))
+    if (!window)
+        return;
+
+    switch (window->buffer->text_search)
     {
-        window->buffer->text_search = GUI_TEXT_SEARCH_FORWARD;
-        (void) gui_window_search_text (window);
+        case GUI_BUFFER_SEARCH_DISABLED:
+            break;
+        case GUI_BUFFER_SEARCH_LINES:
+            window->buffer->text_search_direction = GUI_BUFFER_SEARCH_DIR_FORWARD;
+            (void) gui_window_search_text (window);
+            break;
+        case GUI_BUFFER_SEARCH_HISTORY:
+            window->buffer->text_search_direction = GUI_BUFFER_SEARCH_DIR_FORWARD;
+            if (gui_window_search_text (window))
+                gui_input_search_signal (buffer);
+            break;
+        case GUI_BUFFER_NUM_SEARCH:
+            break;
     }
 }
 
@@ -735,15 +777,25 @@ gui_input_search_stop_here (struct t_gui_buffer *buffer)
     struct t_gui_window *window;
 
     window = gui_window_search_with_buffer (buffer);
-    if (window && (window->buffer->text_search != GUI_TEXT_SEARCH_DISABLED))
+    if (!window)
+        return;
+
+    switch (window->buffer->text_search)
     {
-        gui_window_search_stop_here (window);
-        gui_input_search_signal (buffer);
+        case GUI_BUFFER_SEARCH_DISABLED:
+            break;
+        case GUI_BUFFER_SEARCH_LINES:
+        case GUI_BUFFER_SEARCH_HISTORY:
+            gui_window_search_stop (window, 1);
+            gui_input_search_signal (buffer);
+            break;
+        case GUI_BUFFER_NUM_SEARCH:
+            break;
     }
 }
 
 /*
- * Stops text search (default key: ctrl-Q during search).
+ * Stops text search (default key: ctrl-q during search).
  */
 
 void
@@ -752,10 +804,20 @@ gui_input_search_stop (struct t_gui_buffer *buffer)
     struct t_gui_window *window;
 
     window = gui_window_search_with_buffer (buffer);
-    if (window && (window->buffer->text_search != GUI_TEXT_SEARCH_DISABLED))
+    if (!window)
+        return;
+
+    switch (window->buffer->text_search)
     {
-        gui_window_search_stop (window);
-        gui_input_search_signal (buffer);
+        case GUI_BUFFER_SEARCH_DISABLED:
+            break;
+        case GUI_BUFFER_SEARCH_LINES:
+        case GUI_BUFFER_SEARCH_HISTORY:
+            gui_window_search_stop (window, 0);
+            gui_input_search_signal (buffer);
+            break;
+        case GUI_BUFFER_NUM_SEARCH:
+            break;
     }
 }
 
@@ -896,7 +958,7 @@ gui_input_delete_previous_word (struct t_gui_buffer *buffer)
 }
 
 /*
- * Deletes previous word until whitespace (default key: ctrl-W).
+ * Deletes previous word until whitespace (default key: ctrl-w).
  */
 
 void
@@ -981,13 +1043,106 @@ gui_input_delete_next_word (struct t_gui_buffer *buffer)
                                                 1); /* stop completion */
 }
 
-
 /*
- * Deletes all from cursor pos to beginning of line (default key: ctrl-U).
+ * Deletes all from cursor pos to beginning of line (default key: ctrl-u).
+ *
+ * If cursor is at beginning of line, deletes to beginning of previous line.
  */
 
 void
 gui_input_delete_beginning_of_line (struct t_gui_buffer *buffer)
+{
+    int length_deleted, size_deleted;
+    char *start, *beginning_of_line;
+
+    if (!buffer->input || (buffer->input_buffer_pos <= 0))
+        return;
+
+    gui_buffer_undo_snap (buffer);
+    start = (char *)utf8_add_offset (buffer->input_buffer,
+                                     buffer->input_buffer_pos);
+
+    beginning_of_line = (char *)utf8_beginning_of_line (buffer->input_buffer,
+                                                        start);
+    if (beginning_of_line == start)
+    {
+        beginning_of_line = (char *)utf8_prev_char (buffer->input_buffer,
+                                                    beginning_of_line);
+        beginning_of_line = (char *)utf8_beginning_of_line (buffer->input_buffer,
+                                                            beginning_of_line);
+    }
+
+    size_deleted = start - beginning_of_line;
+    length_deleted = utf8_strnlen (beginning_of_line, size_deleted);
+    gui_input_clipboard_copy (beginning_of_line, size_deleted);
+
+    memmove (beginning_of_line, start, strlen (start));
+
+    if (gui_input_optimize_size (buffer,
+                                 buffer->input_buffer_size - size_deleted,
+                                 buffer->input_buffer_length - length_deleted))
+    {
+        buffer->input_buffer[buffer->input_buffer_size] = '\0';
+        buffer->input_buffer_pos = utf8_pos (
+            buffer->input_buffer,
+            beginning_of_line - buffer->input_buffer);
+    }
+    gui_input_text_changed_modifier_and_signal (buffer,
+                                                1, /* save undo */
+                                                1); /* stop completion */
+}
+
+/*
+ * Deletes all from cursor pos to end of line (default key: ctrl-k).
+ *
+ * If cursor is at end of line, deletes to end of next line.
+ */
+
+void
+gui_input_delete_end_of_line (struct t_gui_buffer *buffer)
+{
+    int length_deleted, size_deleted;
+    char *start, *end_of_line;
+
+    if (!buffer->input)
+        return;
+
+    gui_buffer_undo_snap (buffer);
+    start = (char *)utf8_add_offset (buffer->input_buffer,
+                                     buffer->input_buffer_pos);
+
+    if (start[0] && (start[0] == '\n'))
+        end_of_line = (char *)utf8_next_char (start);
+    else
+        end_of_line = start;
+    end_of_line = (char *)utf8_end_of_line (end_of_line);
+
+    size_deleted = end_of_line - start;
+    length_deleted = utf8_strnlen (start, size_deleted);
+    gui_input_clipboard_copy (start, size_deleted);
+
+    memmove (start, end_of_line, strlen (end_of_line));
+
+    if (gui_input_optimize_size (buffer,
+                                 buffer->input_buffer_size - size_deleted,
+                                 buffer->input_buffer_length - length_deleted))
+    {
+        buffer->input_buffer[buffer->input_buffer_size] = '\0';
+        buffer->input_buffer_pos = utf8_pos (buffer->input_buffer,
+                                             start - buffer->input_buffer);
+    }
+
+    gui_input_text_changed_modifier_and_signal (buffer,
+                                                1, /* save undo */
+                                                1); /* stop completion */
+}
+
+/*
+ * Deletes all from cursor pos to beginning of input (default key: alt-ctrl-u).
+ */
+
+void
+gui_input_delete_beginning_of_input (struct t_gui_buffer *buffer)
 {
     int length_deleted, size_deleted;
     char *start;
@@ -1019,11 +1174,11 @@ gui_input_delete_beginning_of_line (struct t_gui_buffer *buffer)
 }
 
 /*
- * Deletes all from cursor pos to end of line (default key: ctrl-K).
+ * Deletes all from cursor pos to end of input (default key: alt-ctrl-k).
  */
 
 void
-gui_input_delete_end_of_line (struct t_gui_buffer *buffer)
+gui_input_delete_end_of_input (struct t_gui_buffer *buffer)
 {
     char *start;
     int size_deleted;
@@ -1046,11 +1201,52 @@ gui_input_delete_end_of_line (struct t_gui_buffer *buffer)
 }
 
 /*
- * Deletes entire line (default key: alt-r).
+ * Deletes current line (default key: alt-r).
  */
 
 void
 gui_input_delete_line (struct t_gui_buffer *buffer)
+{
+    int length_deleted, size_deleted;
+    char *start, *beginning_of_line, *end_of_line;
+
+    if (!buffer->input)
+        return;
+
+    gui_buffer_undo_snap (buffer);
+    start = (char *)utf8_add_offset (buffer->input_buffer,
+                                     buffer->input_buffer_pos);
+
+    beginning_of_line = (char *)utf8_beginning_of_line (buffer->input_buffer,
+                                                        start);
+    end_of_line = (char *)utf8_end_of_line (start);
+
+    size_deleted = end_of_line - beginning_of_line;
+    length_deleted = utf8_strnlen (beginning_of_line, size_deleted);
+
+    memmove (beginning_of_line, end_of_line, strlen (end_of_line));
+
+    if (gui_input_optimize_size (buffer,
+                                 buffer->input_buffer_size - size_deleted,
+                                 buffer->input_buffer_length - length_deleted))
+    {
+        buffer->input_buffer[buffer->input_buffer_size] = '\0';
+        buffer->input_buffer_pos = utf8_pos (
+            buffer->input_buffer,
+            beginning_of_line - buffer->input_buffer);
+    }
+
+    gui_input_text_changed_modifier_and_signal (buffer,
+                                                1, /* save undo */
+                                                1); /* stop completion */
+}
+
+/*
+ * Deletes entire input (default key: alt-R).
+ */
+
+void
+gui_input_delete_input (struct t_gui_buffer *buffer)
 {
     if (!buffer->input)
         return;
@@ -1067,7 +1263,7 @@ gui_input_delete_line (struct t_gui_buffer *buffer)
 }
 
 /*
- * Transposes chars at cursor pos (default key: ctrl-T).
+ * Transposes chars at cursor pos (default key: ctrl-t).
  */
 
 void
@@ -1107,10 +1303,78 @@ gui_input_transpose_chars (struct t_gui_buffer *buffer)
 
 /*
  * Moves cursor to beginning of line (default key: home).
+ *
+ * If cursor is at beginning of line, moves to beginning of previous line.
  */
 
 void
 gui_input_move_beginning_of_line (struct t_gui_buffer *buffer)
+{
+    char *pos, *original_pos;
+
+    if (!buffer->input || (buffer->input_buffer_pos <= 0))
+        return;
+
+    pos = (char *)utf8_add_offset (buffer->input_buffer,
+                                   buffer->input_buffer_pos);
+    original_pos = pos;
+    pos = (char *)utf8_beginning_of_line (buffer->input_buffer, pos);
+
+    if (pos == original_pos)
+    {
+        pos = (char *)utf8_prev_char (buffer->input_buffer, pos);
+        pos = (char *)utf8_beginning_of_line (buffer->input_buffer, pos);
+    }
+
+    buffer->input_buffer_pos = utf8_pos (buffer->input_buffer,
+                                         pos - buffer->input_buffer);
+
+    gui_input_text_cursor_moved_signal (buffer);
+}
+
+/*
+ * Moves cursor to end of line (default key: end).
+ *
+ * If cursor is at end of line, moves to end of next line.
+ */
+
+void
+gui_input_move_end_of_line (struct t_gui_buffer *buffer)
+{
+    char *pos;
+
+    if (!buffer->input
+        || (buffer->input_buffer_pos >= buffer->input_buffer_length))
+    {
+        return;
+    }
+
+    pos = (char *)utf8_add_offset (buffer->input_buffer,
+                                   buffer->input_buffer_pos);
+    if (pos[0] && pos[0] == '\n')
+    {
+        pos = (char *)utf8_next_char (pos);
+    }
+    pos = (char *)utf8_end_of_line (pos);
+    if (pos[0])
+    {
+        buffer->input_buffer_pos = utf8_pos (buffer->input_buffer,
+                                             pos - buffer->input_buffer);
+    }
+    else
+    {
+        buffer->input_buffer_pos = buffer->input_buffer_length;
+    }
+
+    gui_input_text_cursor_moved_signal (buffer);
+}
+
+/*
+ * Moves cursor to beginning of input (default key: shift-home).
+ */
+
+void
+gui_input_move_beginning_of_input (struct t_gui_buffer *buffer)
 {
     if (!buffer->input || (buffer->input_buffer_pos <= 0))
         return;
@@ -1120,11 +1384,11 @@ gui_input_move_beginning_of_line (struct t_gui_buffer *buffer)
 }
 
 /*
- * Moves cursor to end of line (default key: end).
+ * Moves cursor to end of input (default key: shift-end).
  */
 
 void
-gui_input_move_end_of_line (struct t_gui_buffer *buffer)
+gui_input_move_end_of_input (struct t_gui_buffer *buffer)
 {
     if (!buffer->input
         || (buffer->input_buffer_pos >= buffer->input_buffer_length))
@@ -1243,13 +1507,92 @@ gui_input_move_next_word (struct t_gui_buffer *buffer)
             buffer->input_buffer_pos = buffer->input_buffer_length;
     }
     else
-    {
-        buffer->input_buffer_pos =
-            utf8_pos (buffer->input_buffer,
-                      utf8_prev_char (buffer->input_buffer, pos) - buffer->input_buffer);
-    }
+        buffer->input_buffer_pos = buffer->input_buffer_length;
 
     gui_input_text_cursor_moved_signal (buffer);
+}
+
+/*
+ * Moves cursor to previous line (default key: shift-up).
+ */
+
+void
+gui_input_move_previous_line (struct t_gui_buffer *buffer)
+{
+    int beginning_of_line_pos, length_from_beginning, i;
+    char *pos;
+
+    if (!buffer->input || (buffer->input_buffer_pos <= 0))
+        return;
+
+    pos = (char *)utf8_add_offset (buffer->input_buffer,
+                                   buffer->input_buffer_pos);
+    pos = (char *)utf8_beginning_of_line (buffer->input_buffer, pos);
+
+    if (pos != buffer->input_buffer)
+    {
+        beginning_of_line_pos = utf8_pos (buffer->input_buffer,
+                                          pos - buffer->input_buffer);
+        length_from_beginning = buffer->input_buffer_pos - beginning_of_line_pos;
+
+        pos = (char *)utf8_prev_char (buffer->input_buffer, pos);
+        pos = (char *)utf8_beginning_of_line (buffer->input_buffer, pos);
+
+        for (i = 0;
+             pos[0] && (pos[0] != '\n') && (i < length_from_beginning);
+             i++)
+        {
+            pos = (char *)utf8_next_char (pos);
+        }
+
+        buffer->input_buffer_pos = utf8_pos (buffer->input_buffer,
+                                             pos - buffer->input_buffer);
+
+        gui_input_text_cursor_moved_signal (buffer);
+    }
+}
+
+/*
+ * Moves cursor to next line (default key: shift-down).
+ */
+
+void
+gui_input_move_next_line (struct t_gui_buffer *buffer)
+{
+    int beginning_of_line_pos, length_from_beginning, i;
+    char *pos;
+
+    if (!buffer->input
+        || (buffer->input_buffer_pos >= buffer->input_buffer_length))
+    {
+        return;
+    }
+
+    pos = (char *)utf8_add_offset (buffer->input_buffer,
+                                   buffer->input_buffer_pos);
+    pos = (char *)utf8_beginning_of_line (buffer->input_buffer, pos);
+
+    beginning_of_line_pos = utf8_pos (buffer->input_buffer,
+                                      pos - buffer->input_buffer);
+    length_from_beginning = buffer->input_buffer_pos - beginning_of_line_pos;
+
+    pos = (char *)utf8_end_of_line (pos);
+    if (pos[0])
+    {
+        pos = (char *)utf8_next_char (pos);
+
+        for (i = 0;
+             pos[0] && (pos[0] != '\n') && (i < length_from_beginning);
+             i++)
+        {
+            pos = (char *)utf8_next_char (pos);
+        }
+
+        buffer->input_buffer_pos = utf8_pos (buffer->input_buffer,
+                                             pos - buffer->input_buffer);
+
+        gui_input_text_cursor_moved_signal (buffer);
+    }
 }
 
 /*
@@ -1283,8 +1626,7 @@ gui_input_history_previous (struct t_gui_window *window,
         {
             /* replace text in history with current input */
             window->buffer->input_buffer[window->buffer->input_buffer_size] = '\0';
-            if ((*ptr_history)->prev_history->text)
-                free ((*ptr_history)->prev_history->text);
+            free ((*ptr_history)->prev_history->text);
             (*ptr_history)->prev_history->text =
                 strdup (window->buffer->input_buffer);
         }
@@ -1333,8 +1675,7 @@ gui_input_history_next (struct t_gui_window *window,
     {
         /* replace text in history with current input */
         window->buffer->input_buffer[window->buffer->input_buffer_size] = '\0';
-        if ((*ptr_history)->text)
-            free ((*ptr_history)->text);
+        free ((*ptr_history)->text);
         (*ptr_history)->text = strdup (window->buffer->input_buffer);
 
         *ptr_history = (*ptr_history)->prev_history;
@@ -1461,246 +1802,50 @@ gui_input_history_global_next (struct t_gui_buffer *buffer)
 }
 
 /*
- * Jumps to buffer with activity (default key: alt-a).
+ * Sends the current history entry (found with search or recalled with
+ * "up" key) and inserts the next one in the command line without sending it
+ * (default key: ctrl-o, in contexts "default" and "histsearch").
  */
 
 void
-gui_input_jump_smart (struct t_gui_buffer *buffer)
+gui_input_history_use_get_next (struct t_gui_buffer *buffer)
 {
     struct t_gui_window *window;
-    int scroll_to_bottom;
-
-    scroll_to_bottom = 0;
-    window = gui_window_search_with_buffer (buffer);
-    if (window
-        && (window->buffer->text_search == GUI_TEXT_SEARCH_DISABLED))
-    {
-        if (gui_hotlist)
-        {
-            if (!gui_hotlist_initial_buffer)
-                gui_hotlist_initial_buffer = window->buffer;
-            gui_window_switch_to_buffer (window, gui_hotlist->buffer, 1);
-            gui_hotlist_remove_buffer (window->buffer, 0);
-            scroll_to_bottom = 1;
-        }
-        else
-        {
-            if (gui_hotlist_initial_buffer)
-            {
-                if (CONFIG_BOOLEAN(config_look_jump_smart_back_to_buffer))
-                {
-                    gui_window_switch_to_buffer (window,
-                                                 gui_hotlist_initial_buffer, 1);
-                    scroll_to_bottom = 1;
-                }
-                gui_hotlist_initial_buffer = NULL;
-            }
-            else
-            {
-                gui_hotlist_initial_buffer = NULL;
-            }
-        }
-
-        /*
-         * scroll to bottom if window was scrolled (except if scrolled
-         * beyond the end)
-         */
-        if (scroll_to_bottom
-            && window->scroll
-            && window->scroll->start_line
-            && (window->scroll->start_line_pos >= 0))
-        {
-            gui_window_scroll_bottom (window);
-        }
-    }
-}
-
-/*
- * Jumps to last buffer displayed (before last jump to a buffer) (default key:
- * alt-/).
- */
-
-void
-gui_input_jump_last_buffer_displayed (struct t_gui_buffer *buffer)
-{
-    struct t_gui_window *window;
+    struct t_gui_history *ptr_history, **ptr_ptr_history;;
 
     window = gui_window_search_with_buffer (buffer);
-    if (window
-        && (window->buffer->text_search == GUI_TEXT_SEARCH_DISABLED))
+    if (!window)
+        return;
+
+    ptr_history = NULL;
+    ptr_ptr_history = NULL;
+    if (window->buffer->text_search == GUI_BUFFER_SEARCH_HISTORY)
     {
-        if (gui_buffer_last_displayed)
-            gui_buffer_switch_by_number (window,
-                                         gui_buffer_last_displayed->number);
+        ptr_history = window->buffer->text_search_ptr_history;
+        if (!ptr_history)
+            return;
+        ptr_ptr_history = (window->buffer->text_search_history == GUI_BUFFER_SEARCH_HISTORY_LOCAL) ?
+            &(window->buffer->ptr_history) : &gui_history_ptr;
+        gui_window_search_stop (window, 1);
     }
-}
-
-/*
- * Jumps to previously visited buffer (buffer displayed before current one)
- * (default key: alt-<).
- */
-
-void
-gui_input_jump_previously_visited_buffer (struct t_gui_buffer *buffer)
-{
-    struct t_gui_window *window;
-    int index;
-    struct t_gui_buffer_visited *ptr_buffer_visited;
-
-    window = gui_window_search_with_buffer (buffer);
-    if (window
-        && (window->buffer->text_search == GUI_TEXT_SEARCH_DISABLED))
+    else if (window->buffer->ptr_history)
     {
-        index = gui_buffer_visited_get_index_previous ();
-        if (index >= 0)
-        {
-            gui_buffers_visited_index = index;
-
-            ptr_buffer_visited =
-                gui_buffer_visited_search_by_number (gui_buffers_visited_index);
-            if (ptr_buffer_visited)
-            {
-                gui_buffers_visited_frozen = 1;
-                gui_buffer_switch_by_number (window,
-                                             ptr_buffer_visited->buffer->number);
-                gui_buffers_visited_frozen = 0;
-            }
-        }
+        ptr_history = window->buffer->ptr_history;
+        ptr_ptr_history = &(window->buffer->ptr_history);
     }
-}
-
-/*
- * Jumps to next visited buffer (buffer displayed after current one) (default
- * key: alt->).
- */
-
-void
-gui_input_jump_next_visited_buffer (struct t_gui_buffer *buffer)
-{
-    struct t_gui_window *window;
-    int index;
-    struct t_gui_buffer_visited *ptr_buffer_visited;
-
-    window = gui_window_search_with_buffer (buffer);
-    if (window
-        && (window->buffer->text_search == GUI_TEXT_SEARCH_DISABLED))
+    else if (gui_history_ptr)
     {
-        index = gui_buffer_visited_get_index_next ();
-        if (index >= 0)
-        {
-            gui_buffers_visited_index = index;
-
-            ptr_buffer_visited = gui_buffer_visited_search_by_number (gui_buffers_visited_index);
-            if (ptr_buffer_visited)
-            {
-                gui_buffers_visited_frozen = 1;
-                gui_buffer_switch_by_number (window,
-                                             ptr_buffer_visited->buffer->number);
-                gui_buffers_visited_frozen = 0;
-            }
-        }
+        ptr_history = gui_history_ptr;
+        ptr_ptr_history = &gui_history_ptr;
     }
-}
 
-/*
- * Clears hotlist (default key: alt-h, alt-c).
- */
+    gui_input_return (buffer);
 
-void
-gui_input_hotlist_clear (struct t_gui_buffer *buffer,
-                         const char *str_level_mask)
-{
-    long level_mask;
-    char *error;
-    struct t_gui_hotlist *ptr_hotlist;
-    int priority;
-
-    if (str_level_mask)
+    if (ptr_history && ptr_history->prev_history)
     {
-        if (strcmp (str_level_mask, "lowest") == 0)
-        {
-            /* clear only lowest priority currently in hotlist */
-            priority = GUI_HOTLIST_MAX + 1;
-            for (ptr_hotlist = gui_hotlist; ptr_hotlist;
-                 ptr_hotlist = ptr_hotlist->next_hotlist)
-            {
-                if ((int)ptr_hotlist->priority < priority)
-                    priority = ptr_hotlist->priority;
-            }
-            if (priority <= GUI_HOTLIST_MAX)
-            {
-                gui_hotlist_clear (1 << priority);
-                gui_hotlist_initial_buffer = buffer;
-            }
-        }
-        else if (strcmp (str_level_mask, "highest") == 0)
-        {
-            /* clear only highest priority currently in hotlist */
-            priority = GUI_HOTLIST_MIN - 1;
-            for (ptr_hotlist = gui_hotlist; ptr_hotlist;
-                 ptr_hotlist = ptr_hotlist->next_hotlist)
-            {
-                if ((int)ptr_hotlist->priority > priority)
-                    priority = ptr_hotlist->priority;
-            }
-            if (priority >= GUI_HOTLIST_MIN)
-            {
-                gui_hotlist_clear (1 << priority);
-                gui_hotlist_initial_buffer = buffer;
-            }
-        }
-        else
-        {
-            /* clear hotlist using a mask of levels */
-            error = NULL;
-            level_mask = strtol (str_level_mask, &error, 10);
-            if (error && !error[0] && (level_mask > 0))
-            {
-                gui_hotlist_clear ((int)level_mask);
-                gui_hotlist_initial_buffer = buffer;
-            }
-        }
-    }
-    else
-    {
-        gui_hotlist_clear (GUI_HOTLIST_MASK_MAX);
-        gui_hotlist_initial_buffer = buffer;
-    }
-}
-
-/*
- * Removes buffer from hotlist (default key: alt-h, alt-m).
- */
-
-void
-gui_input_hotlist_remove_buffer (struct t_gui_buffer *buffer)
-{
-    gui_hotlist_remove_buffer (buffer, 1);
-}
-
-/*
- * Restores latest hotlist removed in a buffer (default key: alt-h, alt-r).
- */
-
-void
-gui_input_hotlist_restore_buffer (struct t_gui_buffer *buffer)
-{
-    gui_hotlist_restore_buffer (buffer);
-}
-
-/*
- * Restores latest hotlist removed in all buffers (default key: alt-h, alt-R).
- */
-
-void
-gui_input_hotlist_restore_all ()
-{
-    struct t_gui_buffer *ptr_buffer;
-
-    for (ptr_buffer = gui_buffers; ptr_buffer;
-         ptr_buffer = ptr_buffer->next_buffer)
-    {
-        gui_hotlist_restore_buffer (ptr_buffer);
+        gui_input_insert_string (buffer, ptr_history->prev_history->text);
+        if (ptr_ptr_history)
+            *ptr_ptr_history = ptr_history->prev_history;
     }
 }
 
@@ -1729,148 +1874,6 @@ gui_input_grab_mouse (struct t_gui_buffer *buffer, int area)
 }
 
 /*
- * Sets unread marker for all buffers (default key: ctrl-S, ctrl-U).
- */
-
-void
-gui_input_set_unread ()
-{
-    struct t_gui_buffer *ptr_buffer;
-
-    /* set read marker for all standard buffers */
-    for (ptr_buffer = gui_buffers; ptr_buffer;
-         ptr_buffer = ptr_buffer->next_buffer)
-    {
-        gui_buffer_set_unread (ptr_buffer);
-    }
-}
-
-/*
- * Sets unread marker for a buffer.
- */
-
-void
-gui_input_set_unread_current (struct t_gui_buffer *buffer)
-{
-    gui_buffer_set_unread (buffer);
-}
-
-/*
- * Switches active buffer to next buffer (when many buffers are merged) (default
- * key: ctrl-X).
- */
-
-void
-gui_input_switch_active_buffer (struct t_gui_buffer *buffer)
-{
-    struct t_gui_buffer *ptr_buffer;
-    struct t_gui_window *window;
-
-    ptr_buffer = gui_buffer_get_next_active_buffer (buffer, 0);
-    if (ptr_buffer)
-    {
-        gui_buffer_set_active_buffer (ptr_buffer);
-        window = gui_window_search_with_buffer (buffer);
-        if (window)
-            gui_window_switch_to_buffer (window, ptr_buffer, 1);
-    }
-}
-
-/*
- * Switches active buffer to previous buffer (when many buffers are merged).
- */
-
-void
-gui_input_switch_active_buffer_previous (struct t_gui_buffer *buffer)
-{
-    struct t_gui_buffer *ptr_buffer;
-    struct t_gui_window *window;
-
-    ptr_buffer = gui_buffer_get_previous_active_buffer (buffer, 0);
-    if (ptr_buffer)
-    {
-        gui_buffer_set_active_buffer (ptr_buffer);
-        window = gui_window_search_with_buffer (buffer);
-        if (window)
-            gui_window_switch_to_buffer (window, ptr_buffer, 1);
-    }
-}
-
-/*
- * Zooms on current active merged buffer, or display all merged buffers if zoom
- * was active (default key: alt-x).
- */
-
-void
-gui_input_zoom_merged_buffer (struct t_gui_buffer *buffer)
-{
-    struct t_gui_window *ptr_window;
-    struct t_gui_buffer *ptr_buffer;
-    int buffer_was_zoomed;
-
-    /* do nothing if current buffer is not merged with another buffer */
-    if (gui_buffer_count_merged_buffers (buffer->number) < 2)
-        return;
-
-    buffer_was_zoomed = (buffer->active == 2);
-
-    /* reset scroll in all windows displaying this buffer number */
-    for (ptr_window = gui_windows; ptr_window;
-         ptr_window = ptr_window->next_window)
-    {
-        if ((ptr_window->buffer->number == buffer->number)
-            && ptr_window->scroll && ptr_window->scroll->start_line)
-        {
-            gui_window_scroll_bottom (ptr_window);
-        }
-    }
-
-    /* first make buffer active if it is not */
-    if (!buffer->active)
-    {
-        gui_buffer_set_active_buffer (buffer);
-        ptr_window = gui_window_search_with_buffer (buffer);
-        if (ptr_window)
-            gui_window_switch_to_buffer (ptr_window, buffer, 1);
-    }
-
-    /*
-     * toggle active flag between 1 and 2
-     * (1 = active with other merged buffers displayed, 2 = the only active)
-     */
-    if (buffer->active == 1)
-    {
-        buffer->active = 2;
-        buffer->lines = buffer->own_lines;
-    }
-    else if (buffer->active == 2)
-    {
-        buffer->active = 1;
-        buffer->lines = buffer->mixed_lines;
-    }
-
-    /* set "zoomed" in merged buffers */
-    for (ptr_buffer = gui_buffers; ptr_buffer;
-         ptr_buffer = ptr_buffer->next_buffer)
-    {
-        if (ptr_buffer->number > buffer->number)
-            break;
-        if (ptr_buffer->number == buffer->number)
-        {
-            ptr_buffer->zoomed = (buffer->active == 2) ? 1 : 0;
-        }
-    }
-
-    gui_buffer_compute_num_displayed ();
-
-    gui_buffer_ask_chat_refresh (buffer, 2);
-
-    (void) hook_signal_send ((buffer_was_zoomed) ?
-                             "buffer_unzoomed" : "buffer_zoomed",
-                             WEECHAT_HOOK_SIGNAL_POINTER, buffer);
-}
-
-/*
  * Inserts a string in command line.
  */
 
@@ -1888,8 +1891,7 @@ gui_input_insert (struct t_gui_buffer *buffer, const char *args)
     gui_input_text_changed_modifier_and_signal (buffer,
                                                 1, /* save undo */
                                                 1); /* stop completion */
-    if (args2)
-        free (args2);
+    free (args2);
 }
 
 /*

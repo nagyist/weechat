@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -34,7 +34,7 @@ set_target_properties(xfer PROPERTIES PREFIX "")
 
 set(LINK_LIBS)
 
-list(APPEND LINK_LIBS ${GCRYPT_LDFLAGS})
+list(APPEND LINK_LIBS ${LIBGCRYPT_LDFLAGS})
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   # link with resolv lib on macOS
@@ -43,4 +43,4 @@ endif()
 
 target_link_libraries(xfer ${LINK_LIBS} coverage_config)
 
-install(TARGETS xfer LIBRARY DESTINATION ${WEECHAT_LIBDIR}/plugins)
+install(TARGETS xfer LIBRARY DESTINATION "${WEECHAT_LIBDIR}/plugins")

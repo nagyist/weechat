@@ -2,25 +2,17 @@
 :author: Sébastien Helleu
 :email: flashcode@flashtux.org
 :lang: ja-jp
-:toc: left
-:toclevels: 4
 :toc-title: 目次
-:sectnums:
-:sectnumlevels: 3
-:docinfo1:
-
 
 翻訳者:
 
 * Ryuunosuke Ayanokouzi <i38w7i3@yahoo.co.jp>, 2014-2019
 
-
 このマニュアルは WeeChat チャットクライアントについての文書で、WeeChat の一部です。
 
 // TRANSLATION MISSING
 Latest version of this document can be found on
-https://weechat.org/doc/[this page ^↗^,window=_blank].
-
+https://weechat.org/doc/[this page ^↗^^].
 
 [[introduction]]
 == はじめに
@@ -152,7 +144,7 @@ the plugin:
 
 WeeChat のデフォルトプラグインは以下の順番で初期化されます:
 
-include::includes/autogen_api_plugins_priority.ja.adoc[tag=plugins_priority]
+include::{autogendir}/autogen_api_plugins_priority.ja.adoc[tag=plugins_priority]
 
 ==== weechat_plugin_end
 
@@ -182,9 +174,10 @@ int weechat_plugin_end (struct t_weechat_plugin *plugin);
 
 1 つのファイル "toto.c" からなるプラグインは以下のようにコンパイルします (GNU/Linux の場合):
 
+[source,shell]
 ----
-$ gcc -fPIC -Wall -c toto.c
-$ gcc -shared -fPIC -o toto.so toto.o
+gcc -fPIC -Wall -c toto.c
+gcc -shared -fPIC -o toto.so toto.o
 ----
 
 [[load_plugin]]
@@ -297,7 +290,7 @@ Functions to register a script: used only by scripting API, not the C API.
 Register the script.
 
 For more information, see the
-link:weechat_scripting.ja.html#register_function[WeeChat scripting guide ^↗^,window=_blank].
+link:weechat_scripting.ja.html#register_function[WeeChat scripting guide ^↗^^].
 
 スクリプト (Python) での使用例:
 
@@ -555,6 +548,60 @@ num_files = 2
 str = weechat.ngettext("file", "files", num_files)
 ----
 
+==== asprintf
+
+_WeeChat ≥ 4.3.0._
+
+// TRANSLATION MISSING
+Format a message in a string allocated by the function.
+
+// TRANSLATION MISSING
+[NOTE]
+This function is defined for systems where the GNU function `asprintf()`
+is not available. +
+The behavior is almost the same except that `*result` is set to NULL on error.
+
+プロトタイプ:
+
+[source,c]
+----
+int weechat_asprintf (char **result, const char *fmt, ...);
+----
+
+引数:
+
+// TRANSLATION MISSING
+* _result_: pointer to a string pointer
+// TRANSLATION MISSING
+* _fmt_: format string
+
+戻り値:
+
+// TRANSLATION MISSING
+* number of bytes written in `*result` (excluding the final null byte),
+  a negative value in case of error.
+
+C 言語での使用例:
+
+[source,c]
+----
+char *str;
+
+if (weechat_asprintf (&str, "%s, %d", "test", 42) >= 0)
+{
+    /* *str == "test, 42" */
+    /* ... */
+    free (str);
+}
+else
+{
+    /* error: *str == NULL */
+}
+----
+
+[NOTE]
+スクリプト API ではこの関数を利用できません。
+
 ==== strndup
 
 // TRANSLATION MISSING
@@ -608,7 +655,7 @@ char *weechat_string_cut (const char *string, int length, int count_suffix, int 
 
 * _string_: string to cut
 * _length_: max chars
-* _count_suffix_: if 1, the length of suffix is counter in the max length
+* _count_suffix_: if 1, the length of suffix is counted in the max length
 * _screen_: if 1, the cut is based on width of chars displayed
 * _cut_suffix_: the suffix added after the string if it is cut
 
@@ -633,9 +680,13 @@ free (str);
 _WeeChat バージョン 3.8 で更新。_
 
 // TRANSLATION MISSING
-Return a string with uppercase letters converted to lowercase. +
-This function is locale independent: only letters `A` to `Z` without accents
-are converted to lowercase. All other chars are kept as-is.
+Return a string with uppercase letters converted to lowercase.
+
+[NOTE]
+Behavior has changed in version 3.8: now all uppercase letters are properly
+converted to lowercase (by calling function `towlower`), in addition to the
+range `A` to `Z`. +
+Moreover, a newly allocated string is returned and must be freed after use.
 
 プロトタイプ:
 
@@ -657,7 +708,7 @@ C 言語での使用例:
 
 [source,c]
 ----
-char *str = weechat_string_tolower ("ABCD_É");  /* result: "abcd_É" */
+char *str = weechat_string_tolower ("ABCD_É");  /* result: "abcd_é" */
 /* ... */
 free (str);
 ----
@@ -670,9 +721,13 @@ free (str);
 _WeeChat バージョン 3.8 で更新。_
 
 // TRANSLATION MISSING
-Return a string with lowercase letters converted to uppercase. +
-This function is locale independent: only letters `a` to `z` without accents
-are converted to uppercase. All other chars are kept as-is.
+Return a string with lowercase letters converted to uppercase.
+
+[NOTE]
+Behavior has changed in version 3.8: now all lowercase letters are properly
+converted to uppercase (by calling function `towupper`), in addition to the
+range `a` to `z`. +
+Moreover, a newly allocated string is returned and must be freed after use.
 
 プロトタイプ:
 
@@ -694,7 +749,7 @@ C 言語での使用例:
 
 [source,c]
 ----
-char *str = weechat_string_toupper ("abcd_é");  /* result: "ABCD_é" */
+char *str = weechat_string_toupper ("abcd_é");  /* result: "ABCD_É" */
 /* ... */
 free (str);
 ----
@@ -702,11 +757,180 @@ free (str);
 [NOTE]
 スクリプト API ではこの関数を利用できません。
 
+==== string_charcmp
+
+_WeeChat バージョン 1.0, 3.8 で更新。_
+
+2 つの 文字を比較。
+
+プロトタイプ:
+
+[source,c]
+----
+int weechat_string_charcmp (const char *string1, const char *string2);
+----
+
+引数:
+
+* _string1_: 1 番目の比較文字列
+* _string2_: 2 番目の比較文字列
+
+// TRANSLATION MISSING
+Return value:
+
+* arithmetic result of subtracting the first UTF-8 char in _string2_
+  from the first UTF-8 char in _string1_:
+// TRANSLATION MISSING
+** < 0 if char1 < char2
+** 0 if char1 == char2
+** > 0 if char1 > char2
+
+C 言語での使用例:
+
+[source,c]
+----
+int diff = weechat_string_charcmp ("aaa", "ccc");  /* == -2 */
+----
+
+[NOTE]
+スクリプト API ではこの関数を利用できません。
+
+==== string_charcasecmp
+
+_WeeChat バージョン 1.0, 3.8 で更新。_
+
+大文字小文字の違いを無視して、2 つの 文字を比較。
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8: now all uppercase letters are properly
+converted to lowercase (by calling function `towlower`), in addition to the
+range `A` to `Z`.
+
+プロトタイプ:
+
+[source,c]
+----
+int weechat_string_charcasecmp (const char *string1, const char *string2);
+----
+
+引数:
+
+* _string1_: 1 番目の比較文字列
+* _string2_: 2 番目の比較文字列
+
+// TRANSLATION MISSING
+Return value:
+
+* arithmetic result of subtracting the first UTF-8 char in _string2_
+  (converted to lowercase) from the first UTF-8 char in _string1_ (converted to
+  lowercase):
+// TRANSLATION MISSING
+** < 0 if char1 < char2
+** 0 if char1 == char2
+** > 0 if char1 > char2
+
+C 言語での使用例:
+
+[source,c]
+----
+int diff = weechat_string_charcasecmp ("aaa", "CCC");  /* == -2 */
+----
+
+[NOTE]
+スクリプト API ではこの関数を利用できません。
+
+==== strcmp
+
+_WeeChat ≥ 3.8_
+
+// TRANSLATION MISSING
+Case-sensitive string comparison.
+
+プロトタイプ:
+
+[source,c]
+----
+int weechat_strcmp (const char *string1, const char *string2);
+----
+
+引数:
+
+* _string1_: 1 番目の比較対象の文字列
+* _string2_: 2 番目の比較対象の文字列
+
+// TRANSLATION MISSING
+Return value:
+
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ from the last compared UTF-8 char in _string1_:
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
+
+C 言語での使用例:
+
+[source,c]
+----
+int diff = weechat_strcmp ("aaa", "ccc");  /* == -2 */
+----
+
+[NOTE]
+スクリプト API ではこの関数を利用できません。
+
+==== strncmp
+
+_WeeChat ≥ 3.8_
+
+// TRANSLATION MISSING
+Case-sensitive string comparison, for _max_ chars.
+
+プロトタイプ:
+
+[source,c]
+----
+int weechat_strncmp (const char *string1, const char *string2, int max);
+----
+
+引数:
+
+* _string1_: 1 番目の比較対象の文字列
+* _string2_: 2 番目の比較対象の文字列
+* _max_: 比較する文字数の最大値
+
+// TRANSLATION MISSING
+Return value:
+
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ from the last compared UTF-8 char in _string1_:
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
+
+C 言語での使用例:
+
+[source,c]
+----
+int diff = weechat_strncmp ("aabb", "aacc", 2);  /* == 0 */
+----
+
+[NOTE]
+スクリプト API ではこの関数を利用できません。
+
 ==== strcasecmp
 
-_WeeChat バージョン 1.0 で更新。_
+_WeeChat バージョン 1.0, 3.8 で更新。_
 
-ロケールと大文字小文字を無視して文字列を比較。
+// TRANSLATION MISSING
+Case-insensitive string comparison.
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8: now all uppercase letters are properly
+converted to lowercase (by calling function `towlower`), in addition to the
+range `A` to `Z`.
 
 プロトタイプ:
 
@@ -720,17 +944,24 @@ int weechat_strcasecmp (const char *string1, const char *string2);
 * _string1_: 1 番目の比較対象の文字列
 * _string2_: 2 番目の比較対象の文字列
 
-戻り値:
+// TRANSLATION MISSING
+Return value:
 
-* string1 < string2 の場合は -1
-* string1 == string2 の場合は 0
-* string1 > string2 の場合は 1
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ (converted to lowercase) from the last compared UTF-8 char in _string1_
+  (converted to lowercase):
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
 
 C 言語での使用例:
 
 [source,c]
 ----
-int diff = weechat_strcasecmp ("aaa", "CCC");  /* == -2 */
+int diff;
+diff = weechat_strcasecmp ("aaa", "CCC");    /* == -2 */
+diff = weechat_strcasecmp ("noël", "NOËL");  /* == 0  */
 ----
 
 [NOTE]
@@ -738,7 +969,7 @@ int diff = weechat_strcasecmp ("aaa", "CCC");  /* == -2 */
 
 ==== strcasecmp_range
 
-_WeeChat バージョン 0.3.7 以上で利用可、バージョン 1.0 で更新。_
+_WeeChat バージョン 0.3.7 以上で利用可、バージョン 1.0, 3.8 で更新。_
 
 大文字小文字を無視する文字範囲の幅を使い、ロケールと大文字小文字を無視して文字列を比較。
 
@@ -761,11 +992,16 @@ int weechat_strcasecmp_range (const char *string1, const char *string2, int rang
 [NOTE]
 29 と 30 は IRC など一部のプロトコルで使います。
 
-戻り値:
+// TRANSLATION MISSING
+Return value:
 
-* string1 < string2 の場合は -1
-* string1 == string2 の場合は 0
-* string1 > string2 の場合は 1
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ (converted to lowercase) from the last compared UTF-8 char in _string1_
+  (converted to lowercase):
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
 
 C 言語での使用例:
 
@@ -779,9 +1015,16 @@ int diff = weechat_strcasecmp_range ("nick{away}", "NICK[away]", 29);  /* == 0 *
 
 ==== strncasecmp
 
-_WeeChat バージョン 1.0 で更新。_
+_WeeChat バージョン 1.0, 3.8 で更新。_
 
-ロケールと大文字小文字を無視して _max_ 文字だけ文字列を比較。
+// TRANSLATION MISSING
+Case-insensitive string comparison, for _max_ chars.
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8: now all uppercase letters are properly
+converted to lowercase (by calling function `towlower`), in addition to the
+range `A` to `Z`.
 
 プロトタイプ:
 
@@ -796,17 +1039,22 @@ int weechat_strncasecmp (const char *string1, const char *string2, int max);
 * _string2_: 2 番目の比較対象の文字列
 * _max_: 比較する文字数の最大値
 
-戻り値:
+// TRANSLATION MISSING
+Return value:
 
-* string1 < string2 の場合は -1
-* string1 == string2 の場合は 0
-* string1 > string2 の場合は 1
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ (converted to lowercase) from the last compared UTF-8 char in _string1_
+  (converted to lowercase):
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
 
 C 言語での使用例:
 
 [source,c]
 ----
-int diff = weechat_strncasecmp ("aabb", "aacc", 2);  /* == 0 */
+int diff = weechat_strncasecmp ("aabb", "AACC", 2);  /* == 0 */
 ----
 
 [NOTE]
@@ -814,7 +1062,7 @@ int diff = weechat_strncasecmp ("aabb", "aacc", 2);  /* == 0 */
 
 ==== strncasecmp_range
 
-_WeeChat バージョン 0.3.7 以上で利用可、バージョン 1.0 で更新。_
+_WeeChat バージョン 0.3.7 以上で利用可、バージョン 1.0, 3.8 で更新。_
 
 大文字小文字を無視する文字範囲の幅を使い、ロケールと大文字小文字を無視して
 _max_ 文字だけ文字列を比較。
@@ -839,11 +1087,16 @@ int weechat_strncasecmp_range (const char *string1, const char *string2, int max
 [NOTE]
 29 と 30 は IRC など一部のプロトコルで使います。
 
-戻り値:
+// TRANSLATION MISSING
+Return value:
 
-* string1 < string2 の場合は -1
-* string1 == string2 の場合は 0
-* string1 > string2 の場合は 1
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ (converted to lowercase) from the last compared UTF-8 char in _string1_
+  (converted to lowercase):
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
 
 C 言語での使用例:
 
@@ -857,10 +1110,10 @@ int diff = weechat_strncasecmp_range ("nick{away}", "NICK[away]", 6, 29);  /* ==
 
 ==== strcmp_ignore_chars
 
-_WeeChat バージョン 1.0 で更新。_
+_WeeChat バージョン 1.0, 3.8 で更新。_
 
-一部の文字列を無視して、ロケールに依存して
-(オプションで大文字小文字の区別をしない) 文字列を比較。
+// TRANSLATION MISSING
+String comparison ignoring some chars.
 
 プロトタイプ:
 
@@ -878,11 +1131,23 @@ int weechat_strcmp_ignore_chars (const char *string1, const char *string2,
 * _chars_ignored_: 無視する文字
 * _case_sensitive_: 大文字小文字を区別して比較する場合は 1、区別しない場合は 0
 
-戻り値:
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8 when _case_sensitive_ is set to 0: now all
+uppercase letters are properly converted to lowercase (by calling function
+`towlower`), in addition to the range `A` to `Z`.
 
-* string1 < string2 の場合は -1
-* string1 == string2 の場合は 0
-* string1 > string2 の場合は 1
+// TRANSLATION MISSING
+Return value:
+
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ (converted to lowercase if _case_sensitive_ is set to 0) from the last
+  compared UTF-8 char in _string1_ (converted to lowercase if _case_sensitive_ is
+  set to 0):
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
 
 C 言語での使用例:
 
@@ -896,9 +1161,16 @@ int diff = weechat_strcmp_ignore_chars ("a-b", "--a-e", "-", 1);  /* == -3 */
 
 ==== strcasestr
 
-_WeeChat バージョン 1.3 で更新。_
+_WeeChat バージョン 1.3, 3.8 で更新。_
 
-ロケールと大文字小文字を区別して文字列を検索。
+// TRANSLATION MISSING
+Case-insensitive string search.
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8: now all uppercase letters are properly
+converted to lowercase (by calling function `towlower`), in addition to the
+range `A` to `Z`.
 
 プロトタイプ:
 
@@ -974,7 +1246,7 @@ length = weechat.strlen_screen("é")  # 1
 
 ==== string_match
 
-_WeeChat バージョン 1.0 で更新。_
+_WeeChat バージョン 1.0, 3.8 で更新。_
 
 文字列がマスクにマッチするか確認。
 
@@ -996,6 +1268,12 @@ int weechat_string_match (const char *string, const char *mask,
 [NOTE]
 WeeChat バージョン 1.0 以上の場合、ワイルドカードをマスクの内部で使うことが可能です
 (マスクの最初および最後だけではありません)。
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8 when _case_sensitive_ is set to 0: now all
+uppercase letters are properly converted to lowercase (by calling function
+`towlower`), in addition to the range `A` to `Z`.
 
 戻り値:
 
@@ -1029,7 +1307,8 @@ match5 = weechat.string_match("abcdef", "*b*d*", 0)  # == 1
 
 ==== string_match_list
 
-_WeeChat バージョン 2.5 以上で利用可。_
+// TRANSLATION MISSING
+_WeeChat ≥ 2.5, updated in 3.8._
 
 文字列が否定マスク
 (書式: "!word")
@@ -1049,6 +1328,12 @@ int weechat_string_match_list (const char *string, const char **masks,
 * _masks_: マスクリスト、リストの最後には NULL をつけてください;
   各マスクは関数 <<_string_match,string_match>> で文字列と比較されます
 * _case_sensitive_: 大文字と小文字を区別する場合は 1、区別しない場合は 0
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8 when _case_sensitive_ is set to 0: now all
+uppercase letters are properly converted to lowercase (by calling function
+`towlower`), in addition to the range `A` to `Z`.
 
 戻り値:
 
@@ -1808,7 +2093,7 @@ _WeeChat バージョン 1.0 以上で利用可。_
 // TRANSLATION MISSING
 This function is a C conversion of Python class "shlex" (file: Lib/shlex.py in
 Python repository), see
-https://docs.python.org/3/library/shlex.html[this page ^↗^,window=_blank].
+https://docs.python.org/3/library/shlex.html[this page ^↗^^].
 
 プロトタイプ:
 
@@ -2147,22 +2432,24 @@ size = weechat.string_color_code_size(weechat.color("yellow,red"))  # size == 7
 
 ==== string_remove_color
 
+_WeeChat バージョン 4.3.0 で更新。_
+
 文字列から WeeChat 色コードを削除。
 
 プロトタイプ:
 
 [source,c]
 ----
-char *weechat_string_remove_color (const char *string,
-                                   const char *replacement);
+char *weechat_string_remove_color (const char *string, const char *replacement);
 ----
 
 引数:
 
 * _string_: 文字列
-* _replacement_: NULL または空文字列でなければ、WeeChat
-  色コードを指定した文字列の 1 文字目で置換、そうでなければ WeeChat
-  色コードとそれに続く (色に関連する) 文字を文字列から削除
+// TRANSLATION MISSING
+* _replacement_: if not NULL and not empty, WeeChat color codes are replaced by
+  this string, otherwise WeeChat color codes and following chars (if related
+  to color) are removed from string
 
 戻り値:
 
@@ -2178,7 +2465,7 @@ char *str = weechat_string_remove_color (my_string1, NULL);
 free (str);
 
 /* replace color codes by "?" */
-char *str = weechat_string_remove_color (my_string2, "?");
+char *str = weechat_string_remove_color (my_string2, "[color]");
 /* ... */
 free (str);
 ----
@@ -2191,26 +2478,27 @@ free (str);
 def string_remove_color(string: str, replacement: str) -> str: ...
 
 # 例
-str = weechat.string_remove_color(my_string, "?")
+str = weechat.string_remove_color(my_string, "[color]")
 ----
 
 ==== string_base_encode
 
-_WeeChat バージョン 2.4 以上で利用可。_
+// TRANSLATION MISSING
+_WeeChat ≥ 2.4, updated in 4.3.0._
 
 base 16、32、64 で文字列をエンコード。
-
 
 プロトタイプ:
 
 [source,c]
 ----
-int weechat_string_base_encode (int base, const char *from, int length, char *to);
+int weechat_string_base_encode (const char *base, const char *from, int length, char *to);
 ----
 
 引数:
 
-* _base_: 16、32、64
+// TRANSLATION MISSING
+* _base_: "16"、"32"、"64"、"64url"
 * _from_: エンコード元文字列
 * _length_: エンコードする文字列の長さ (例えば `strlen(from)`)
 * _to_: エンコード結果を保存する文字列へのポインタ
@@ -2226,11 +2514,11 @@ C 言語での使用例:
 ----
 char *string = "abcdefgh", result[128];
 int length;
-length = weechat_string_base_encode (16, string, strlen (string), result);
+length = weechat_string_base_encode ("16", string, strlen (string), result);
 /* length == 16, result == "6162636465666768" */
-length = weechat_string_base_encode (32, string, strlen (string), result);
+length = weechat_string_base_encode ("32", string, strlen (string), result);
 /* length == 16, result == "MFRGGZDFMZTWQ===" */
-length = weechat_string_base_encode (64, string, strlen (string), result);
+length = weechat_string_base_encode ("64", string, strlen (string), result);
 /* length == 12, result == "YWJjZGVmZ2g=" */
 ----
 
@@ -2239,7 +2527,8 @@ length = weechat_string_base_encode (64, string, strlen (string), result);
 
 ==== string_base_decode
 
-_WeeChat バージョン 2.4 以上で利用可。_
+// TRANSLATION MISSING
+_WeeChat ≥ 2.4, updated in 4.3.0._
 
 base 16、32、64 でエンコードされた文字列をデコード。
 
@@ -2247,12 +2536,13 @@ base 16、32、64 でエンコードされた文字列をデコード。
 
 [source,c]
 ----
-int weechat_string_base_decode (int base, const char *from, char *to);
+int weechat_string_base_decode (const char *base, const char *from, char *to);
 ----
 
 引数:
 
-* _base_: 16、32、64
+// TRANSLATION MISSING
+* _base_: "16"、"32"、"64"、"64url"
 * _from_: デコード元文字列
 * _to_: デコード結果を保存する文字列へのポインタ
   (十分な領域を確保してください、結果はデコード元文字列よりも短くなります)
@@ -2267,11 +2557,11 @@ C 言語での使用例:
 ----
 char result[128];
 int length;
-length = weechat_string_base_decode (16, "6162636465666768", result);
+length = weechat_string_base_decode ("16", "6162636465666768", result);
 /* length == 8, result == "abcdefgh" */
-length = weechat_string_base_decode (32, "MFRGGZDFMZTWQ===", result);
+length = weechat_string_base_decode ("32", "MFRGGZDFMZTWQ===", result);
 /* length == 8, result == "abcdefgh" */
-length = weechat_string_base_decode (64, "YWJjZGVmZ2g=", result);
+length = weechat_string_base_decode ("64", "YWJjZGVmZ2g=", result);
 /* length == 8, result == "abcdefgh" */
 ----
 
@@ -2407,8 +2697,7 @@ str3 = weechat.string_input_for_buffer("//test")  # "/test"
 ==== string_eval_expression
 
 // TRANSLATION MISSING
-_WeeChat ≥ 0.4.0, updated in 0.4.2, 0.4.3, 1.0, 1.1, 1.2, 1.3, 1.6, 1.8, 2.0,
-2.2, 2.3, 2.7, 2.9, 3.1, 3.2, 3.3, 3.4, 3.6, 3.8._
+_WeeChat ≥ 0.4.0, updated in 0.4.2, 0.4.3, 1.0, 1.1, 1.2, 1.3, 1.6, 1.8, 2.0, 2.2, 2.3, 2.7, 2.9, 3.1, 3.2, 3.3, 3.4, 3.6, 3.8, 4.0.0, 4.2.0, 4.3.0, 4.4.0._
 
 式を評価して文字列として返す。`+${variable}+`
 という書式で書かれた特殊変数は展開されます (以下の表を参照)。
@@ -2586,7 +2875,7 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 
 // TRANSLATION MISSING
 | `+==*+` | 2.9
-| Is matching mask where "*" is allowed, case sensitive (see function <<_string_match,string_match>>)
+| Is matching mask where "*" is allowed, case-sensitive (see function <<_string_match,string_match>>)
 | >> `+abc def ==* a*f+` +
   == `+1+` +
   +
@@ -2595,7 +2884,7 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 
 // TRANSLATION MISSING
 | `+!!*+` | 2.9
-| Is NOT wildcard mask where "*" is allowed, case sensitive (see function <<_string_match,string_match>>)
+| Is NOT wildcard mask where "*" is allowed, case-sensitive (see function <<_string_match,string_match>>)
 | >> `+abc def !!* a*f+` +
   == `+0+` +
   +
@@ -2604,7 +2893,7 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 
 // TRANSLATION MISSING
 | `+=*+` | 1.8
-| Is matching mask where "*" is allowed, case insensitive (see function <<_string_match,string_match>>)
+| Is matching mask where "*" is allowed, case-insensitive (see function <<_string_match,string_match>>)
 | >> `+abc def =* A*F+` +
   == `+1+` +
   +
@@ -2613,7 +2902,7 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 
 // TRANSLATION MISSING
 | `+!*+` | 1.8
-| Is NOT wildcard mask where "*" is allowed, case insensitive (see function <<_string_match,string_match>>)
+| Is NOT wildcard mask where "*" is allowed, case-insensitive (see function <<_string_match,string_match>>)
 | >> `+abc def !* A*F+` +
   == `+0+` +
   +
@@ -2622,7 +2911,7 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 
 // TRANSLATION MISSING
 | `+==-+` | 2.9
-| Is included, case sensitive
+| Is included, case-sensitive
 | >> `+abc def ==- bc+` +
   == `+1+` +
   +
@@ -2631,7 +2920,7 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 
 // TRANSLATION MISSING
 | `+!!-+` | 2.9
-| Is NOT included, case sensitive
+| Is NOT included, case-sensitive
 | >> `+abc def !!- bc+` +
   == `+0+` +
   +
@@ -2640,7 +2929,7 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 
 // TRANSLATION MISSING
 | `+=-+` | 2.9
-| Is included, case insensitive
+| Is included, case-insensitive
 | >> `+abc def =- BC+` +
   == `+1+` +
   +
@@ -2649,7 +2938,7 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 
 // TRANSLATION MISSING
 | `+!-+` | 2.9
-| Is NOT included, case insensitive
+| Is NOT included, case-insensitive
 | >> `+abc def !- BC+` +
   ==   `+0+` +
   +
@@ -2751,11 +3040,23 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 // TRANSLATION MISSING
 | 書式 | Min WeeChat | 説明 | 例
 
+// TRANLSATION MISSING
+| `+${raw_hl:xxx}+` | 4.2.0
+| Raw string (not evaluated), with syntax highlighting (using colors).
+| >> `+${raw_hl:${cut:1,,${rev:hello}}}+` +
+  == `+${cut:1,,${rev:hello}}+` (with colors)
+
 // TRANSLATION MISSING
 | `+${raw:xxx}+` | 3.1
 | Raw string (not evaluated).
 | >> `+${raw:${info:version}}+` +
   == `+${info:version}+`
+
+// TRANSLATION MISSING
+| `+${hl:xxx}+` | 4.2.0
+| String with syntax highlighting (using colors).
+| >> `+${hl:${file.section.option}}+` +
+  == `+test ${variable}+` (with colors)
 
 // TRANSLATION MISSING
 | `+${name}+` | 3.4
@@ -2771,12 +3072,15 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 // TRANSLATION MISSING
 | `+${weechat_xxx_dir}+` | 3.2
 | A WeeChat directory: `+${weechat_config_dir}+`, `+${weechat_data_dir}+`,
-  `+${weechat_cache_dir}+` or `+${weechat_runtime_dir}+`.
+  `+${weechat_state_dir}+`, `+${weechat_cache_dir}+` or `+${weechat_runtime_dir}+`.
 | >> `+${weechat_config_dir}+` +
   == `+/home/user/.config/weechat+` +
   +
   >> `+${weechat_data_dir}+` +
   == `+/home/user/.local/share/weechat+` +
+  +
+  >> `+${weechat_state_dir}+` +
+  == `+/home/user/.local/state/weechat+` +
   +
   >> `+${weechat_cache_dir}+` +
   == `+/home/user/.cache/weechat+` +
@@ -2998,7 +3302,7 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
   >> `+${re:2}+` +
   == `+test2+` +
   +
-  >> `+${re:+}+` +
+  >> `pass:[${re:+}]` +
   == `+test2+` +
   +
   >> `+${re:#}+` +
@@ -3063,15 +3367,19 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
   >> `+${base_decode:64,dGVzdCBzdHJpbmc=}+` +
   == `+test string+`
 
+// TRANSLATION MISSING
 | `+${date}+` +
   `+${date:xxx}+` | 1.3
-| 現在の日付/時刻、カスタム書式を使うことも可能です (`man strftime` を参照)、
+| 現在の日付/時刻、カスタム書式を使うことも可能です (see function <<_util_strftimeval,util_strftimeval>>)、
   デフォルト書式は `%F %T`
 | >> `+${date}+` +
   == `+2015-06-30 19:02:45+` +
   +
   >> `+${date:%H:%M:%S}+` +
-  == `+19:02:45+`
+  == `+19:02:45+` +
+  +
+  >> `+${date:%!.%.3}+` +
+  == `+1435683765.482+`
 
 | `+${env:NAME}+` | 1.2
 | 環境変数 `NAME` の値
@@ -3137,6 +3445,13 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 | >> `+${define:len,${calc:5+3}}${len}x${len}+` +
   == `+8x8+`
 
+// TRANSLATION MISSING
+| `+${hdata_count:name[list]}+` +
+  `+${hdata_count:name[pointer]}+` | 4.4.0
+| Number of items in a hdata list or starting at `pointer`.
+| >> `+${hdata_count:buffer[gui_buffers]}+` +
+  == `+15+`
+
 | `+${sec.data.name}+` |
 | セキュアデータ `name` の値
 | >> `+${sec.data.libera_pass}+` +
@@ -3163,7 +3478,9 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
 | hdata の値 (`window` と `buffer`
   ポインタはデフォルトで現在のウィンドウ/バッファに設定されます),
   `list` can be a list name (example: "gui_buffers"), a pointer
-  (example: "0x1234abcd") or a pointer name (example: "my_pointer").
+  (example: "0x1234abcd") or a pointer name (example: "my_pointer"). +
+  When `var1` is a hashtable, methods `keys()`, `values()`, `keys_sorted()`,
+  `keys_values()` and `keys_values_sorted()` can be called.
 | >> `+${buffer[gui_buffers].full_name}+` +
   == `+core.weechat+` +
   +
@@ -3171,7 +3488,13 @@ str5 = weechat.string_eval_expression("password=abc password=def", {}, {}, optio
   == `+core.weechat+` +
   +
   >> `+${window.buffer.number}+` +
-  == `+1+`
+  == `+1+` +
+  +
+  >> `+${buffer.local_variables.keys_values()}+` +
+  == `+plugin:core,name:weechat+` +
+  +
+  >> `+${buffer.local_variables.plugin}+` +
+  == `+core+`
 |===
 
 ==== string_dyn_alloc
@@ -3337,6 +3660,51 @@ else
 }
 /* ... */
 weechat_string_dyn_free (string, 1);
+----
+
+[NOTE]
+スクリプト API ではこの関数を利用できません。
+
+==== string_concat
+
+_WeeChat ≥ 4.2.0._
+
+// TRANSLATION MISSING
+Concatenate multiple strings using a separator.
+
+プロトタイプ:
+
+[source,c]
+----
+const char *weechat_string_concat (const char *separator, ...);
+----
+
+引数:
+
+// TRANSLATION MISSING
+* _separator_: the separator string which is inserted between concatenated
+  strings (can be NULL or empty string)
+
+// TRANSLATION MISSING
+[NOTE]
+Last argument *MUST* always be NULL. +
+A macro called `WEECHAT_STR_CONCAT` can be used, where the final NULL value is
+not needed (usage of this macro is recommended).
+
+戻り値:
+
+// TRANSLATION MISSING
+* concatenated string
+
+C 言語での使用例:
+
+// TRANSLATION MISSING
+[source,c]
+----
+const char *result = weechat_string_concat (" / ", "abc", "def", "ghi", NULL);  /* result == "abc / def / ghi" */
+
+/* with macro */
+const char *result = WEECHAT_STR_CONCAT(" / ", "abc", "def", "ghi");  /* result == "abc / def / ghi" */
 ----
 
 [NOTE]
@@ -3661,74 +4029,6 @@ int length_on_screen = weechat_utf8_strlen_screen ("é");  /* == 1 */
 [NOTE]
 スクリプト API ではこの関数を利用できません。
 
-==== utf8_charcmp
-
-_WeeChat バージョン 1.0 で更新。_
-
-2 つの UTF-8 文字を比較。
-
-プロトタイプ:
-
-[source,c]
-----
-int weechat_utf8_charcmp (const char *string1, const char *string2);
-----
-
-引数:
-
-* _string1_: 1 番目の比較文字列
-* _string2_: 2 番目の比較文字列
-
-戻り値:
-
-* string1 < string2 の場合は -1
-* string1 == string2 の場合は 0
-* string1 > string2 の場合は 1
-
-C 言語での使用例:
-
-[source,c]
-----
-int diff = weechat_utf8_charcmp ("aaa", "ccc");  /* == -2 */
-----
-
-[NOTE]
-スクリプト API ではこの関数を利用できません。
-
-==== utf8_charcasecmp
-
-_WeeChat バージョン 1.0 で更新。_
-
-大文字小文字の違いを無視して、2 つの UTF-8 文字を比較。
-
-プロトタイプ:
-
-[source,c]
-----
-int weechat_utf8_charcasecmp (const char *string1, const char *string2);
-----
-
-引数:
-
-* _string1_: 1 番目の比較文字列
-* _string2_: 2 番目の比較文字列
-
-戻り値:
-
-* string1 < string2 の場合は -1
-* string1 == string2 の場合は 0
-* string1 > string2 の場合は 1
-
-C 言語での使用例:
-
-[source,c]
-----
-int diff = weechat_utf8_charcasecmp ("aaa", "CCC");  /* == -2 */
-----
-
-[NOTE]
-スクリプト API ではこの関数を利用できません。
-
 ==== utf8_char_size_screen
 
 _WeeChat バージョン 3.8 で更新。_
@@ -3760,7 +4060,7 @@ exception for the following chars, that have a specific behavior in WeeChat:
 
 // TRANSLATION MISSING
 * U+0009 (Tabulation): value of option
-  link:weechat_user.ja.html#option_weechat.look.tab_width[weechat.look.tab_width ^↗^,window=_blank]
+  link:weechat_user.ja.html#option_weechat.look.tab_width[weechat.look.tab_width ^↗^^]
 * U+0001 (1) to U+001F (31), except U+0009 (Tabulation): 1
 * U+00AD (173, soft hyphen): -1
 * U+200B (8203, zero width space): -1
@@ -3971,18 +4271,28 @@ Supported hash algorithms:
 
 [width="100%",cols="2,2,3,6",options="header"]
 |===
-| Value        | Algorithm | Hash size           | Notes
-| `+crc32+`    | CRC32     | 4 bytes (32 bits)   | Not a hash algorithm in the cryptographic sense.
-| `+md5+`      | MD5       | 16 bytes (128 bits) | *Weak*, not recommended for cryptography usage.
-| `+sha1+`     | SHA-1     | 20 bytes (160 bits) | *Weak*, not recommended for cryptography usage.
-| `+sha224+`   | SHA-224   | 28 bytes (224 bits) |
-| `+sha256+`   | SHA-256   | 32 bytes (256 bits) |
-| `+sha384+`   | SHA-384   | 48 bytes (384 bits) |
-| `+sha512+`   | SHA-512   | 64 bytes (512 bits) |
-| `+sha3-224+` | SHA3-224  | 28 bytes (224 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
-| `+sha3-256+` | SHA3-256  | 32 bytes (256 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
-| `+sha3-384+` | SHA3-384  | 48 bytes (384 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
-| `+sha3-512+` | SHA3-512  | 64 bytes (512 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
+| Value           | Algorithm   | Hash size           | Notes
+| `+crc32+`       | CRC32       | 4 bytes (32 bits)   | Not a hash algorithm in the cryptographic sense.
+| `+md5+`         | MD5         | 16 bytes (128 bits) | *Weak*, not recommended for cryptography usage.
+| `+sha1+`        | SHA-1       | 20 bytes (160 bits) | *Weak*, not recommended for cryptography usage.
+| `+sha224+`      | SHA-224     | 28 bytes (224 bits) |
+| `+sha256+`      | SHA-256     | 32 bytes (256 bits) |
+| `+sha384+`      | SHA-384     | 48 bytes (384 bits) |
+| `+sha512+`      | SHA-512     | 64 bytes (512 bits) |
+| `+sha512-224+`  | SHA-512/224 | 28 bytes (224 bits) | Algorithm available with libgcrypt ≥ 1.9.4.
+| `+sha512-256+`  | SHA-512/256 | 32 bytes (256 bits) | Algorithm available with libgcrypt ≥ 1.9.4.
+| `+sha3-224+`    | SHA3-224    | 28 bytes (224 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
+| `+sha3-256+`    | SHA3-256    | 32 bytes (256 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
+| `+sha3-384+`    | SHA3-384    | 48 bytes (384 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
+| `+sha3-512+`    | SHA3-512    | 64 bytes (512 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
+| `+blake2b-160+` | BLAKE2B-160 | 20 bytes (160 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2b-256+` | BLAKE2B-256 | 32 bytes (256 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2b-384+` | BLAKE2B-384 | 48 bytes (384 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2b-512+` | BLAKE2B-512 | 64 bytes (512 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2s-128+` | BLAKE2S-128 | 16 bytes (128 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2s-160+` | BLAKE2S-160 | 20 bytes (160 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2s-224+` | BLAKE2S-224 | 28 bytes (224 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2s-256+` | BLAKE2S-256 | 32 bytes (256 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
 |===
 
 戻り値:
@@ -4176,6 +4486,7 @@ int weechat_mkdir_home (char *directory, int mode);
   strings to force a specific WeeChat directory (WeeChat ≥ 3.2):
 ** `${weechat_config_dir}`
 ** `${weechat_data_dir}` (default)
+** `${weechat_state_dir}`
 ** `${weechat_cache_dir}`
 ** `${weechat_runtime_dir}`
 * _mode_: ディレクトリのモード
@@ -4422,7 +4733,8 @@ int weechat_file_compress (const char *from, const char *to,
 * _to_: destination file
 * _compressor_: the compressor to use, one of:
 ** _gzip_: gzip compression
-** _zstd_: zstandard compression
+** _zstd_: zstandard compression (available only if zstd was enabled when
+   WeeChat was compiled)
 * _compression_level_: compression level, between 1 (fast, low compression) to
   100 (slow, best compression)
 
@@ -4583,6 +4895,84 @@ weechat_printf (NULL, "date: %s",
 [NOTE]
 スクリプト API ではこの関数を利用できません。
 
+// TRANSLATION MISSING
+==== util_strftimeval
+
+_WeeChat ≥ 4.2.0, updated in 4.3.0._
+
+Format date and time like function `strftime` in C library, using `struct timeval`
+as input, and supporting extra specifiers.
+
+Prototype:
+
+[source,c]
+----
+int weechat_util_strftimeval (char *string, int max, const char *format, struct timeval *tv);
+----
+
+Arguments:
+
+* _string_: buffer where the formatted string is stored
+* _max_: string size
+* _format_: format, the same as _strftime_ function, with these extra specifiers:
+** `%.N` where `N` is between 1 and 6: zero-padded microseconds on N digits
+   (for example `%.3` for milliseconds)
+** `%f`: alias of `%.6`
+** `%!`: timestamp as integer, in seconds (value of tv->tv_sec)
+
+Return value:
+
+* number of bytes put in _string_ (value returned from _strftime_ function)
+
+C example:
+
+[source,c]
+----
+char time[256];
+struct timeval tv;
+gettimeofday (&tv, NULL);
+weechat_util_strftimeval (time, sizeof (time), "%FT%T.%f", &tv);
+/* result: 2023-12-26T18:10:04.460509 */
+----
+
+[NOTE]
+スクリプト API ではこの関数を利用できません。
+
+// TRANSLATION MISSING
+==== util_parse_time
+
+_WeeChat ≥ 4.2.0._
+
+Parse date/time with support of microseconds.
+
+Prototype:
+
+[source,c]
+----
+int util_parse_time (const char *datetime, struct timeval *tv);
+----
+
+Arguments:
+
+* _date_: date/time
+* _tv_: parsed date/time ("timeval" structure)
+
+Return value:
+
+* 1 if OK, 0 if error
+
+C example:
+
+[source,c]
+----
+struct timeval tv;
+weechat_util_parse_time ("2023-12-25T10:29:09.456789Z", &tv);  /* == 1 */
+/* result: tv.tv_sec == 1703500149, tv.tv_usec = 456789 */
+----
+
+[NOTE]
+スクリプト API ではこの関数を利用できません。
+
 ==== util_version_number
 
 _WeeChat バージョン 0.3.9 以上で利用可。_
@@ -4608,6 +4998,8 @@ version_number = weechat_util_version_number ("0.3.8");      /* == 0x00030800 */
 version_number = weechat_util_version_number ("0.3.9-dev");  /* == 0x00030900 */
 version_number = weechat_util_version_number ("0.3.9-rc1");  /* == 0x00030900 */
 version_number = weechat_util_version_number ("0.3.9");      /* == 0x00030900 */
+version_number = weechat_util_version_number ("1.0");        /* == 0x01000000 */
+version_number = weechat_util_version_number ("4.0.0");      /* == 0x04000000 */
 ----
 
 [NOTE]
@@ -5070,7 +5462,7 @@ C 言語での使用例:
 // TRANSLATION MISSING
 [source,c]
 ----
-weechat_printf (NULL, "user data of item: 0x%lx", weechat_list_user_data (item));
+weechat_printf (NULL, "user data of item: %p", weechat_list_user_data (item));
 ----
 
 [NOTE]
@@ -5563,7 +5955,7 @@ weechat_arraylist_free (arraylist);
 
 ==== hashtable_new
 
-_WeeChat バージョン 0.3.3 以上で利用可。_
+_WeeChat バージョン 0.3.3 以上で利用可、バージョン 4.4.0 で更新。_
 
 新しいハッシュテーブルを作成。
 
@@ -5592,12 +5984,14 @@ struct t_hashtable *weechat_hashtable_new (int size,
 ** _WEECHAT_HASHTABLE_POINTER_
 ** _WEECHAT_HASHTABLE_BUFFER_
 ** _WEECHAT_HASHTABLE_TIME_
+** _WEECHAT_HASHTABLE_LONGLONG_ _(WeeChat ≥ 4.4.0)_
 * _type_values_: ハッシュテーブルの値の種類:
 ** _WEECHAT_HASHTABLE_INTEGER_
 ** _WEECHAT_HASHTABLE_STRING_
 ** _WEECHAT_HASHTABLE_POINTER_
 ** _WEECHAT_HASHTABLE_BUFFER_
 ** _WEECHAT_HASHTABLE_TIME_
+** _WEECHAT_HASHTABLE_LONGLONG_ _(WeeChat ≥ 4.4.0)_
 * _callback_hash_key_: キーを「ハッシュ化」する (キーを整数値にする)
   際のコールバック関数、キーの種類が "buffer" 以外の場合、コールバックは
   NULL でも可 (デフォルトのハッシュ関数を使います)、引数と戻り値:
@@ -5960,12 +6354,16 @@ const char *weechat_hashtable_get_string (struct t_hashtable *hashtable,
 *** _pointer_: ポインタ
 *** _buffer_: バッファ
 *** _time_: 時間
+// TRANSLATION MISSING
+*** _longlong_: long long integer
 ** _type_values_: 値の型:
 *** _integer_: 整数
 *** _string_: 文字列
 *** _pointer_: ポインタ
 *** _buffer_: バッファ
 *** _time_: 時間
+// TRANSLATION MISSING
+*** _longlong_: long long integer
 ** _keys_: キーのリストを含む文字列 (書式: "key1,key2,key3")
 ** _keys_sorted_: ソートされたキーのリストを含む文字列 (書式: "key1,key2,key3")
 ** _values_: 値のリストを含む文字列 (書式: "value1,value2,value3")
@@ -6173,7 +6571,7 @@ weechat_hashtable_free (hashtable);
 
 ==== config_new
 
-_WeeChat バージョン 1.5 で更新。_
+_WeeChat バージョン 1.5, 4.0.0 で更新。_
 
 新しい設定ファイルを作成。
 
@@ -6191,7 +6589,12 @@ struct t_config_file *weechat_config_new (const char *name,
 
 引数:
 
-* _name_: 設定ファイルの名前 (パスと拡張子は不要)
+// TRANSLATION MISSING
+* _name_: 設定ファイルの名前 (パスと拡張子は不要); a priority
+  is allowed before the name, with format `nnn|name` where `nnn` is non-negative
+  integer with priority; default priority is 1000; files are sorted by priority
+  from higher to lower when running command `/reload`
+  (see priority of configuration files below)
 * _callback_reload_: `/reload` で設定ファイルをリロードする際に呼び出すコールバック関数
   (任意、NULL でも可、下の説明を参照)、引数と戻り値:
 ** _const void *pointer_: ポインタ
@@ -6227,6 +6630,11 @@ struct t_config_file *weechat_config_new (const char *name,
 (<<_config_new_section,config_new_section>> を使って) セクションもしくは
 (<<_config_new_option,config_new_option>> を使って) オプションを追加した後だけです。
 
+// TRANSLATION MISSING
+Priority of default configuration files:
+
+include::{autogendir}/autogen_api_config_priority.ja.adoc[tag=config_priority]
+
 C 言語での使用例:
 
 [source,c]
@@ -6258,6 +6666,183 @@ def my_config_reload_cb(data: str, config_file: str) -> int:
     return weechat.WEECHAT_RC_OK
 
 config_file = weechat.config_new("test", "my_config_reload_cb", "")
+----
+
+// TRANSLATION MISSING
+==== config_set_version
+
+_WeeChat ≥ 4.0.0._
+
+Set configuration file version and a callback to update config sections/options
+on-the-fly when the config is read.
+
+プロトタイプ:
+
+[source,c]
+----
+int config_file_set_version (struct t_config_file *config_file,
+                             int version,
+                             struct t_hashtable *(*callback_update)(const void *pointer,
+                                                                    void *data,
+                                                                    struct t_config_file *config_file,
+                                                                    int version_read,
+                                                                    struct t_hashtable *data_read),
+                             const void *callback_update_pointer,
+                             void *callback_update_data);
+----
+
+引数:
+
+* _config_file_: configuration file pointer
+* _version_: version, must be ≥ 2
+* _callback_update_: function called when configuration file is read, for each
+  section and each option, if the version read is less than the expected version,
+  (optional, can be NULL, see below), arguments and return value:
+** _const void *pointer_: pointer
+** _void *data_: pointer
+** _struct t_config_file *config_file_: configuration file pointer
+** _int version_read_: version read in configuration file (1 by default)
+** _struct t_hashtable *data_read_: hashtable with data read from configuration file
+   (see below)
+** return value:
+*** either "data_read" pointer (hashtable completed), or pointer to a new
+    hashtable (created by callback, with keys and values of type "string")
+* _callback_update_pointer_: pointer given to callback when it is called by
+  WeeChat
+* _callback_update_data_: pointer given to callback when it is called by
+  WeeChat; if not NULL, it must have been allocated with malloc (or similar
+  function) and it is automatically freed when the configuration file is freed
+
+Update callback:
+
+* The callback receives a hashtable with data read from configuration file:
+
+[width="100%",cols="1m,2,8",options="header"]
+|===
+| Key        | Availability    | Value
+| config     | Always set      | Name of configuration file, without extension (eg: `weechat`)
+| section    | Always set      | Name of section being read
+| option     | For option only | Name of the option
+| value      | For option only | Value of the option (if not NULL)
+| value_null | For option only | Option as NULL value (value is always `1`)
+|===
+
+* The callback can update "section" for a line with a section and "option", "value"
+  and "value_null" for a line with an option.
+* If "option" is set to empty string by the callback, the line read in
+  configuration file is ignored.
+* Field "value_null" is set to force a NULL value for the option.
+
+戻り値:
+
+* 1 if OK, 0 if error
+
+C 言語での使用例:
+
+[source,c]
+----
+struct t_hashtable *
+my_config_update_cb (const void *pointer, void *data,
+                     struct t_config_file *config_file,
+                     int version_read,
+                     struct t_hashtable *data_read)
+{
+    const char *ptr_section, *ptr_option;
+
+    /* return now if version is already up-to-date */
+    if (version_read >= 2)
+        return NULL;
+
+    ptr_section = hashtable_get (data_read, "section");
+    ptr_option = hashtable_get (data_read, "option");
+
+    /* rename section "abc" to "def" */
+    if (ptr_section && !ptr_option && (strcmp (ptr_section, "abc") == 0))
+    {
+        hashtable_set (data_read, "section", "def");
+        return data_read;
+    }
+
+    /* limit other changes to section "test" */
+    if (!ptr_section || !ptr_option || (strcmp (ptr_section, "test") != 0))
+        return NULL;
+
+    /* rename option "test1" to "test2" */
+    if (strcmp (ptr_option, "test1") == 0)
+    {
+        hashtable_set (data_read, "option", "test2");
+        return data_read;
+    }
+
+    /* set value to "xxx" for option "test" */
+    if (strcmp (ptr_option, "test") == 0)
+    {
+        hashtable_set (data_read, "value", "xxx");
+        return data_read;
+    }
+
+    /* set value to NULL for option "test_null" */
+    if (strcmp (ptr_option, "test_null") == 0)
+    {
+        hashtable_set (data_read, "value_null", "1");
+        return data_read;
+    }
+
+    /* no changes */
+    return NULL;
+}
+
+struct t_config_file *config_file = weechat_config_new ("test", NULL, NULL, NULL);
+weechat_config_set_version (config_file, 2, &my_config_update_cb, NULL, NULL);
+weechat_config_read (config_file);
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def config_set_version(config_file: str, version: int, callback_update: str, callback_update_data: str) -> int: ...
+
+# 例
+def my_config_update_cb(data: str, config_file: str, version_read: int, data_read: Dict[str, str]) -> Dict[str, str]:
+    # return now if version is already up-to-date
+    if version_read >= 2:
+        return {}
+
+    section = data_read.get("section")
+    option = data_read.get("option")
+
+    # rename section "abc" to "def"
+    if section and not option and section == "abc":
+        data_read["section"] = "def"
+        return data_read
+
+    # limit other changes to section "test"
+    if not section or not option or section != "test":
+        return {}
+
+    # rename option "test1" to "test2"
+    if option == "test1":
+        data_read["option"] = "test2"
+        return data_read
+
+    # set value to "xxx" for option "test"
+    if option == "test":
+        data_read["value"] = "xxx"
+        return data_read
+
+    # set value to NULL for option "test_null"
+    if option == "test_null":
+        data_read["value_null"] = "1"
+        return data_read
+
+    # no changes
+    return {}
+
+config_file = weechat.config_new("test", "", "")
+weechat.config_set_version(config_file, 2, "my_config_update_cb", "")
+weechat.config_read(config_file)
 ----
 
 ==== config_new_section
@@ -6425,9 +7010,10 @@ my_section_read_cb (const void *pointer, void *data,
 {
     /* ... */
 
-    return WEECHAT_CONFIG_READ_OK;
-    /* return WEECHAT_CONFIG_READ_MEMORY_ERROR; */
-    /* return WEECHAT_CONFIG_READ_FILE_NOT_FOUND; */
+    return WEECHAT_CONFIG_OPTION_SET_OK_CHANGED;
+    /* return WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE; */
+    /* return WEECHAT_CONFIG_OPTION_SET_ERROR; */
+    /* return WEECHAT_CONFIG_OPTION_SET_OPTION_NOT_FOUND; */
 }
 
 int
@@ -6483,7 +7069,7 @@ my_section_delete_option_cb (const void *pointer, void *data,
     /* return WEECHAT_CONFIG_OPTION_UNSET_ERROR; */
 }
 
-/* standard section, user can not add/delete options */
+/* standard section, user cannot add/delete options */
 struct t_config_section *new_section1 =
     weechat_config_new_section (config_file, "section1", 0, 0,
                                 NULL, NULL, NULL,
@@ -6517,7 +7103,7 @@ def config_new_section(config_file: str, name: str,
                        callback_delete_option: str, callback_delete_option_data: str) -> str: ...
 
 # 例
-def my_section_read_cb(data: str, config_file: str, section: str, option_name: str, value: str | None) -> int:
+def my_section_read_cb(data: str, config_file: str, section: str, option_name: str, value: Union[str, None]) -> int:
     # ...
     return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
     # return weechat.WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE
@@ -6536,7 +7122,7 @@ def my_section_write_default_cb(data: str, config_file: str, section_name: str) 
     # return weechat.WEECHAT_CONFIG_WRITE_ERROR
     # return weechat.WEECHAT_CONFIG_WRITE_MEMORY_ERROR
 
-def my_section_create_option_cb(data: str, config_file: str, section: str, option_name: str, value: str | None) -> int:
+def my_section_create_option_cb(data: str, config_file: str, section: str, option_name: str, value: Union[str, None]) -> int:
     # ...
     return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
     # return weechat.WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE
@@ -6601,7 +7187,8 @@ section = weechat.config_search_section(config_file, "section")
 
 ==== config_new_option
 
-_WeeChat バージョン 1.5 で更新。_
+// TRANSLATION MISSING
+_Updated in 1.5, 4.1.0._
 
 設定ファイルのあるセクションに新しいオプションを作成。
 
@@ -6649,12 +7236,15 @@ struct t_config_option *weechat_config_new_option (
   "name << file.section.option"
 * _type_: オプションの型:
 ** _boolean_: ブール値 (on/off)
-** _integer_: 整数値 (任意で文字列を受けるようにすることも可)
+** _integer_: 整数値
 ** _string_: 文字列
 ** _color_: 色
+// TRANSLATION MISSING
+** _enum_: list of string values (stored as integer internally)
 * _description_: オプションの説明
+// TRANSLATION MISSING
 * _string_values_: 文字列で値を受ける
-  (`+|+` で区切る)、_integer_ 型の場合に使う (任意)
+  (`+|+` で区切る) (optional, required for type _enum_)
 * _min_: 最小値 (_integer_ 型で有効)
 * _max_: 最大値 (_integer_ 型で有効)
 * _default_value_: オプションのデフォルト値 (オプションをリセットした際に使われる)
@@ -6705,8 +7295,8 @@ C 言語での使用例:
 [source,c]
 ----
 /* boolean */
-struct t_config_option *option1 =
-    weechat_config_new_option (config_file, section, "option1", "boolean",
+struct t_config_option *option_bool =
+    weechat_config_new_option (config_file, section, "option_bool", "boolean",
                                "My option, type boolean",
                                NULL,
                                0, 0,
@@ -6718,8 +7308,8 @@ struct t_config_option *option1 =
                                NULL, NULL, NULL);
 
 /* integer */
-struct t_config_option *option2 =
-    weechat_config_new_option (config_file, section, "option2", "integer",
+struct t_config_option *option_int =
+    weechat_config_new_option (config_file, section, "option_int", "integer",
                                "My option, type integer",
                                NULL,
                                0, 100,
@@ -6730,22 +7320,9 @@ struct t_config_option *option2 =
                                NULL, NULL, NULL,
                                NULL, NULL, NULL);
 
-/* integer (with string values) */
-struct t_config_option *option3 =
-    weechat_config_new_option (config_file, section, "option3", "integer",
-                               "My option, type integer (with string values)",
-                               "top|bottom|left|right",
-                               0, 0,
-                               "bottom",
-                               "bottom",
-                               0,
-                               NULL, NULL, NULL,
-                               NULL, NULL, NULL,
-                               NULL, NULL, NULL);
-
 /* string */
-struct t_config_option *option4 =
-    weechat_config_new_option (config_file, section, "option4", "string",
+struct t_config_option *option_str =
+    weechat_config_new_option (config_file, section, "option_str", "string",
                                "My option, type string",
                                NULL,
                                0, 0,
@@ -6757,13 +7334,26 @@ struct t_config_option *option4 =
                                NULL, NULL, NULL);
 
 /* color */
-struct t_config_option *option5 =
-    weechat_config_new_option (config_file, section, "option5", "color",
+struct t_config_option *option_col =
+    weechat_config_new_option (config_file, section, "option_col", "color",
                                "My option, type color",
                                NULL,
                                0, 0,
                                "lightblue",
                                "lightblue",
+                               0,
+                               NULL, NULL, NULL,
+                               NULL, NULL, NULL,
+                               NULL, NULL, NULL);
+
+/* enum */
+struct t_config_option *option_enum =
+    weechat_config_new_option (config_file, section, "option_enum", "enum",
+                               "My option, type enum",
+                               "top|bottom|left|right",
+                               0, 0,
+                               "bottom",
+                               "bottom",
                                0,
                                NULL, NULL, NULL,
                                NULL, NULL, NULL,
@@ -6777,55 +7367,55 @@ struct t_config_option *option5 =
 # プロトタイプ
 def config_new_option(config_file: str, section: str, name: str, type: str, description: str,
                       string_values: str, min: int, max: int,
-                      default_value: str | None, value: str | None, null_value_allowed: int,
+                      default_value: Union[str, None], value: Union[str, None], null_value_allowed: int,
                       callback_check_value: str, callback_check_value_data: str,
                       callback_change: str, callback_change_data: str,
                       callback_delete: str, callback_delete_data: str) -> str: ...
 
 # 例
-def option4_check_value_cb(data: str, option: str, value: str) -> int:
+def option_str_check_value_cb(data: str, option: str, value: str) -> int:
     # ...
     return 1
     # return 0
 
-def option4_change_cb(data: str, option: str) -> None:
+def option_str_change_cb(data: str, option: str) -> None:
     # ...
 
-def option4_delete_cb(data: str, option: str) -> None:
+def option_str_delete_cb(data: str, option: str) -> None:
     # ...
 
-option1 = weechat.config_new_option(config_file, section, "option1", "boolean",
+option_bool = weechat.config_new_option(config_file, section, "option_bool", "boolean",
     "My option, type boolean",
     "", 0, 0, "on", "on", 0,
     "", "",
     "", "",
     "", "")
 
-option2 = weechat.config_new_option(config_file, section, "option2", "integer",
+option_int = weechat.config_new_option(config_file, section, "option_int", "integer",
     "My option, type integer",
     "", 0, 100, "15", "15", 0,
     "", "",
     "", "",
     "", "")
 
-option3 = weechat.config_new_option(config_file, section, "option3", "integer",
-    "My option, type integer (with string values)",
-    "top|bottom|left|right",
-    0, 0, "bottom", "bottom", 0,
+option_str = weechat.config_new_option(config_file, section, "option_str", "string",
+    "My option, type string",
+    "", 0, 0, "test", "test", 1,
+    "option_str_check_value_cb", "",
+    "option_str_change_cb", "",
+    "option_str_delete_cb", "")
+
+option_col = weechat.config_new_option(config_file, section, "option_col", "color",
+    "My option, type color",
+    "", 0, 0, "lightblue", "lightblue", 0,
     "", "",
     "", "",
     "", "")
 
-option4 = weechat.config_new_option(config_file, section, "option4", "string",
-    "My option, type string",
-    "", 0, 0, "test", "test", 1,
-    "option4_check_value_cb", "",
-    "option4_change_cb", "",
-    "option4_delete_cb", "")
-
-option5 = weechat.config_new_option(config_file, section, "option5", "color",
-    "My option, type color",
-    "", 0, 0, "lightblue", "lightblue", 0,
+option_enum = weechat.config_new_option(config_file, section, "option_enum", "enum",
+    "My option, type enum",
+    "top|bottom|left|right",
+    0, 0, "bottom", "bottom", 0,
     "", "",
     "", "",
     "", "")
@@ -6834,9 +7424,8 @@ option5 = weechat.config_new_option(config_file, section, "option5", "color",
 [NOTE]
 Ruby では、3 組のコールバックとデータ (6 つの文字列変数) を渡す際に必ず 6 つの文字列変数の配列を
 1 つ渡してください (これは Ruby が関数に 15 個以上の引数を渡せないことが原因です)、より詳しい内容は
-link:++weechat_scripting.ja.html#_ruby++[WeeChat スクリプト作成ガイド ^↗^,window=_blank]を参照してください
+link:++weechat_scripting.ja.html#_ruby++[WeeChat スクリプト作成ガイド ^↗^^]を参照してください
 _(WeeChat バージョン 0.4.1 で修正済み)_。
-
 
 ==== config_search_option
 
@@ -7109,7 +7698,8 @@ int weechat_config_option_set (struct t_config_option *option,
   オプションの新しい値、オプションのタイプによって以下の特殊値を取ることも可能です:
 ** _ブール型_:
 *** `toggle`: 現在の値を切り替える
-** _整数型_ または _色_:
+// TRANSLATION MISSING
+** _integer_, _color_ or _enum_:
 *** `++N`: 現在の値に `N` (任意の整数) を加える
 *** `--N`: 現在の値から `N` (任意の整数) を引く
 * _run_callback_: オプションが変更された際に、_callback_change_ コールバックを呼び出す場合は
@@ -7343,6 +7933,7 @@ const char *weechat_config_option_get_string (struct t_config_option *option,
 *** _integer_
 *** _string_
 *** _color_
+*** _enum_
 ** _description_: オプションの説明
 
 戻り値:
@@ -7516,6 +8107,7 @@ int weechat_config_boolean (struct t_config_option *option);
 * _integer_: 0
 * _string_: 0
 * _color_: 0
+* _enum_: 0
 
 C 言語での使用例:
 
@@ -7566,6 +8158,7 @@ int weechat_config_boolean_default (struct t_config_option *option);
 * _integer_: 0
 * _string_: 0
 * _color_: 0
+* _enum_: 0
 
 C 言語での使用例:
 
@@ -7595,6 +8188,50 @@ if weechat.config_boolean_default(option):
     # ...
 ----
 
+// TRANSLATION MISSING
+==== config_boolean_inherited
+
+_WeeChat ≥ 4.3.0._
+
+Return inherited boolean value of option: value of option if not NULL,
+or value of the parent option (if option inherits from another option). +
+If the parent option is not found, return the default value of the option. +
+If the parent value is NULL, return the default value of the parent option.
+
+プロトタイプ:
+
+[source,c]
+----
+int weechat_config_boolean_inherited (struct t_config_option *option);
+----
+
+引数:
+
+* _option_: オプションへのポインタ
+
+Return value: see functions <<_config_boolean,config_boolean>> and
+<<_config_boolean_default,config_boolean_default>>.
+
+C 言語での使用例:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("irc.server.libera.autoconnect");
+int autoconnect = weechat_config_boolean_inherited (option);
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def config_boolean_inherited(option: str) -> int: ...
+
+# 例
+option = weechat.config_get("irc.server.libera.autoconnect")
+autoconnect = weechat.config_boolean_inherited(option)
+----
+
 ==== config_integer
 
 オプションの整数値を返す。
@@ -7616,6 +8253,8 @@ int weechat_config_integer (struct t_config_option *option);
 * _integer_: オプションの整数値
 * _string_: 0
 * _color_: 色インデックス
+// TRANSLATION MISSING
+* _enum_: integer value of option (index of enum value)
 
 C 言語での使用例:
 
@@ -7658,6 +8297,8 @@ int weechat_config_integer_default (struct t_config_option *option);
 * _integer_: オプションのデフォルト整数値
 * _string_: 0
 * _color_: デフォルト色インデックス
+// TRANSLATION MISSING
+* _enum_: default integer value of option (index of enum value)
 
 C 言語での使用例:
 
@@ -7679,6 +8320,50 @@ option = weechat.config_get("plugin.section.option")
 value = weechat.config_integer_default(option)
 ----
 
+// TRANSLATION MISSING
+==== config_integer_inherited
+
+_WeeChat ≥ 4.3.0._
+
+Return inherited integer value of option: value of option if not NULL,
+or value of the parent option (if option inherits from another option). +
+If the parent option is not found, return the default value of the option. +
+If the parent value is NULL, return the default value of the parent option.
+
+プロトタイプ:
+
+[source,c]
+----
+int weechat_config_integer_inherited (struct t_config_option *option);
+----
+
+引数:
+
+* _option_: オプションへのポインタ
+
+Return value: see functions <<_config_integer,config_integer>> and
+<<_config_integer_default,config_integer_default>>.
+
+C 言語での使用例:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("irc.server.libera.autojoin_delay");
+int delay = weechat_config_integer_inherited (option);
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def config_integer_inherited(option: str) -> int: ...
+
+# 例
+option = weechat.config_get("irc.server.libera.autojoin_delay")
+delay = weechat.config_integer_inherited(option)
+----
+
 ==== config_string
 
 オプションの文字列値を返す。
@@ -7697,10 +8382,11 @@ const char *weechat_config_string (struct t_config_option *option);
 戻り値、オプションの型に依存:
 
 * _boolean_: 値が真の場合は "on"、それ以外の場合は "off"
-* _integer_: 値が文字列に対応付けられている場合はその文字列値、それ以外の場合は
-  NULL
+* _integer_: NULL
 * _string_: オプションの文字列値
 * _color_: 色名
+// TRANSLATION MISSING
+* _enum_: string value of option
 
 C 言語での使用例:
 
@@ -7740,10 +8426,11 @@ const char *weechat_config_string_default (struct t_config_option *option);
 戻り値、オプションの型に依存:
 
 * _boolean_: デフォルト値が真の場合は "on"、それ以外の場合は "off"
-* _integer_: デフォルト値が文字列に対応付けられている場合はその文字列値、それ以外の場合は
-  NULL
+* _integer_: NULL
 * _string_: オプションのデフォルト文字列値
 * _color_: デフォルト色名
+// TRANSLATION MISSING
+* _enum_: default string value of option
 
 C 言語での使用例:
 
@@ -7763,6 +8450,50 @@ def config_string_default(option: str) -> str: ...
 # 例
 option = weechat.config_get("plugin.section.option")
 value = weechat.config_string_default(option)
+----
+
+// TRANSLATION MISSING
+==== config_string_inherited
+
+_WeeChat ≥ 4.3.0._
+
+Return inherited string value of option: value of option if not NULL,
+or value of the parent option (if option inherits from another option). +
+If the parent option is not found, return the default value of the option. +
+If the parent value is NULL, return the default value of the parent option.
+
+プロトタイプ:
+
+[source,c]
+----
+const char *weechat_config_string_inherited (struct t_config_option *option);
+----
+
+引数:
+
+* _option_: オプションへのポインタ
+
+Return value: see functions <<_config_string,config_string>> and
+<<_config_string_default,config_string_default>>.
+
+C 言語での使用例:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("irc.server.libera.msg_quit");
+const char *msg_quit = weechat_config_string_inherited (option);
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def config_string_inherited(option: str) -> str: ...
+
+# 例
+option = weechat.config_get("irc.server.libera.msg_quit")
+msg_quit = weechat.config_string_inherited(option)
 ----
 
 ==== config_color
@@ -7786,6 +8517,7 @@ const char *weechat_config_color (struct t_config_option *option);
 * _integer_: NULL
 * _string_: NULL
 * _color_: 色名
+* _enum_: NULL
 
 C 言語での使用例:
 
@@ -7804,7 +8536,7 @@ def config_color(option: str) -> str: ...
 
 # 例
 option = weechat.config_get("plugin.section.option")
-value = weechat.config_color(option)
+color = weechat.config_color(option)
 ----
 
 ==== config_color_default
@@ -7828,6 +8560,7 @@ const char *weechat_config_color_default (struct t_config_option *option);
 * _integer_: NULL
 * _string_: NULL
 * _color_: デフォルト色名
+* _enum_: NULL
 
 C 言語での使用例:
 
@@ -7846,7 +8579,187 @@ def config_color_default(option: str) -> str: ...
 
 # 例
 option = weechat.config_get("plugin.section.option")
-value = weechat.config_color_default(option)
+color = weechat.config_color_default(option)
+----
+
+// TRANSLATION MISSING
+==== config_color_inherited
+
+_WeeChat ≥ 4.3.0._
+
+Return inherited color value of option: value of option if not NULL,
+or value of the parent option (if option inherits from another option). +
+If the parent option is not found, return the default value of the option. +
+If the parent value is NULL, return the default value of the parent option.
+
+プロトタイプ:
+
+[source,c]
+----
+const char *weechat_config_color_inherited (struct t_config_option *option);
+----
+
+引数:
+
+* _option_: オプションへのポインタ
+
+Return value: see functions <<_config_color,config_color>> and
+<<_config_color_default,config_color_default>>.
+
+C 言語での使用例:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("plugin.section.option");
+const char *color = weechat_config_color_inherited (option);
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def config_color_inherited(option: str) -> str: ...
+
+# 例
+option = weechat.config_get("plugin.section.option")
+color = weechat.config_color_inherited(option)
+----
+
+// TRANSLATION MISSING
+==== config_enum
+
+_WeeChat ≥ 4.1.0._
+
+Return enum value of option, as integer.
+
+Prototype:
+
+[source,c]
+----
+int weechat_config_enum (struct t_config_option *option);
+----
+
+Arguments:
+
+* _option_: option pointer
+
+Return value, depending on the option type:
+
+* _boolean_: boolean value of option (0 or 1)
+* _integer_: integer value of option
+* _string_: 0
+* _color_: color index
+* _enum_: integer value of option (index of enum value)
+
+C example:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("plugin.section.option");
+int value = weechat_config_enum (option);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototype
+def config_enum(option: str) -> int: ...
+
+# example
+option = weechat.config_get("plugin.section.option")
+value = weechat.config_enum(option)
+----
+
+// TRANSLATION MISSING
+==== config_enum_default
+
+_WeeChat ≥ 4.1.0._
+
+Return default enum value of option, as integer.
+
+Prototype:
+
+[source,c]
+----
+int weechat_config_enum_default (struct t_config_option *option);
+----
+
+Arguments:
+
+* _option_: option pointer
+
+Return value, depending on the option type:
+
+* _boolean_: default boolean value of option (0 or 1)
+* _integer_: default integer value of option
+* _string_: 0
+* _color_: default color index
+* _enum_: integer value of option (index of enum value)
+
+C example:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("plugin.section.option");
+int value = weechat_config_enum_default (option);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototype
+def config_enum_default(option: str) -> int: ...
+
+# example
+option = weechat.config_get("plugin.section.option")
+value = weechat.config_enum_default(option)
+----
+
+// TRANSLATION MISSING
+==== config_enum_inherited
+
+_WeeChat ≥ 4.3.0._
+
+Return inherited enum value of option: value of option if not NULL,
+or value of the parent option (if option inherits from another option). +
+If the parent option is not found, return the default value of the option. +
+If the parent value is NULL, return the default value of the parent option.
+
+プロトタイプ:
+
+[source,c]
+----
+int weechat_config_enum_inherited (struct t_config_option *option);
+----
+
+引数:
+
+* _option_: オプションへのポインタ
+
+Return value: see functions <<_config_enum,config_enum>> and
+<<_config_enum_default,config_enum_default>>.
+
+C 言語での使用例:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("irc.server.libera.sasl_fail");
+int sasl_fail = weechat_config_enum_inherited (option);
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def config_enum_inherited(option: str) -> int: ...
+
+# 例
+option = weechat.config_get("irc.server.libera.sasl_fail")
+sasl_fail = weechat.config_enum_inherited(option)
 ----
 
 ==== config_write_option
@@ -8841,13 +9754,13 @@ weechat.prnt("", "Color: %sblue %sdefault color %syellow on red"
 void weechat_printf (struct t_gui_buffer *buffer, const char *message, ...);
 ----
 
-この関数は printf_date_tags
+この関数は printf_datetime_tags
 関数の別名です。以下に示す通り、どちらの関数も同じ結果を返します:
 
 [source,c]
 ----
 weechat_printf (buffer, "message");
-weechat_printf_date_tags (buffer, 0, NULL, "message");
+weechat_printf_datetime_tags (buffer, 0, 0, NULL, "message");
 ----
 
 引数:
@@ -8909,6 +9822,15 @@ void weechat_printf_date_tags (struct t_gui_buffer *buffer, time_t date,
                                const char *tags, const char *message, ...);
 ----
 
+この関数は printf_datetime_tags
+関数の別名です。以下に示す通り、どちらの関数も同じ結果を返します:
+
+[source,c]
+----
+weechat_printf_date_tags (buffer, 0, NULL, "message");
+weechat_printf_datetime_tags (buffer, 0, 0, NULL, "message");
+----
+
 引数:
 
 * _buffer_: バッファへのポインタ、NULL の場合、メッセージは WeeChat バッファに表示
@@ -8917,7 +9839,7 @@ void weechat_printf_date_tags (struct t_gui_buffer *buffer, time_t date,
 * _message_: 表示するメッセージ
 
 WeeChat で共通に使われるタグのリストは
-link:weechat_user.ja.html#lines_tags[WeeChat ユーザーズガイド / 行のタグ ^↗^,window=_blank]を参照してください
+link:weechat_user.ja.html#lines_tags[WeeChat ユーザーズガイド / 行のタグ ^↗^^]を参照してください
 
 C 言語での使用例:
 
@@ -8943,6 +9865,64 @@ weechat.prnt_date_tags("", time - 120, "notify_message",
 [NOTE]
 この関数をスクリプトの中で実行するには "print_date_tags" (Python の場合は "prnt_date_tags") と書きます。
 
+==== printf_datetime_tags
+
+_WeeChat ≥ 4.2.0._
+
+// TRANSLATION MISSING
+Display a message on a buffer, using a custom date/time (with microseconds)
+and tags.
+
+プロトタイプ:
+
+[source,c]
+----
+void weechat_printf_datetime_tags (struct t_gui_buffer *buffer, time_t date,
+                                   int date_usec, const char *tags, const char *message, ...);
+----
+
+引数:
+
+* _buffer_: バッファへのポインタ、NULL の場合、メッセージは WeeChat バッファに表示
+* _date_: メッセージの日付 (0 は現在の日付/時間を意味する)
+// TRANSLATION MISSING
+* _date_usec_: microseconds of date (between 0 and 999999)
+* _tags_: タグのコンマ区切りリスト (タグを指定しない場合は NULL)
+* _message_: 表示するメッセージ
+
+WeeChat で共通に使われるタグのリストは
+link:weechat_user.ja.html#lines_tags[WeeChat ユーザーズガイド / 行のタグ ^↗^^]を参照してください
+
+C 言語での使用例:
+
+[source,c]
+----
+struct timeval tv_now;
+
+gettimeofday (&tv_now, NULL);
+weechat_printf_datetime_tags (NULL, tv_now.tv_sec - 120, tv_now.tv_usec,
+                              "notify_message",
+                              "Message 2 minutes ago, with a tag 'notify_message'");
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def prnt_datetime_tags(buffer: str, date: int, date_usec: int, tags: str, message: str) -> int: ...
+
+# 例
+now = time.time()
+time_sec = int(now)
+time_usec = int((now * 1000000) % 1000000)
+weechat.prnt_datetime_tags("", time_sec - 120, time_usec, "notify_message",
+                           "Message 2 minutes ago, with a tag 'notify_message'")
+----
+
+[NOTE]
+この関数をスクリプトの中で実行するには "print_datetime_tags" (Python の場合は "prnt_datetime_tags") と書きます。
+
 ==== printf_y
 
 自由内容のバッファのある行にメッセージを表示
@@ -8951,8 +9931,17 @@ weechat.prnt_date_tags("", time - 120, "notify_message",
 
 [source,c]
 ----
-void weechat_printf_y (struct t_gui_buffer *buffer, int y,
-                       const char *message, ...);
+void weechat_printf_y (struct t_gui_buffer *buffer, int y, const char *message, ...);
+----
+
+// TRANSLATION MISSING
+This function is a shortcut for function printf_y_datetime_tags. +
+These two calls give exactly same result:
+
+[source,c]
+----
+weechat_printf_y (buffer, 0, "message");
+weechat_printf_y_datetime_tags (buffer, 0, 0, 0, NULL, "message");
 ----
 
 引数:
@@ -9001,6 +9990,16 @@ void weechat_printf_y_date_tags (struct t_gui_buffer *buffer, int y, time_t date
                                  const char *tags, const char *message, ...);
 ----
 
+// TRANSLATION MISSING
+This function is a shortcut for function printf_y_datetime_tags. +
+These two calls give exactly same result:
+
+[source,c]
+----
+weechat_printf_y_date_tags (buffer, 0, 0, NULL, "message");
+weechat_printf_y_datetime_tags (buffer, 0, 0, 0, NULL, "message");
+----
+
 引数:
 
 * _buffer_: バッファへのポインタ
@@ -9031,6 +10030,55 @@ weechat.prnt_y_date_tags("", 2, 0, "my_tag", "My message on third line with a ta
 
 [NOTE]
 この関数をスクリプトの中で実行するには "print_y_date_tags" (Python の場合は "prnt_y_date_tags") と書きます。
+
+==== printf_y_datetime_tags
+
+_WeeChat ≥ 4.2.0._
+
+// TRANSLATION MISSING
+Display a message on a line of a buffer with free content, using a custom
+date/time (with microseconds) and tags.
+
+プロトタイプ:
+
+[source,c]
+----
+void weechat_printf_y_datetime_tags (struct t_gui_buffer *buffer, int y, time_t date,
+                                     int date_usec, const char *tags, const char *message, ...);
+----
+
+引数:
+
+* _buffer_: バッファへのポインタ
+* _y_: 行番号 (1 行目は 0); 負数の場合は表示された最後の行の後に行を追加する:
+  _y_ の絶対値で最後の行の後に追加する行数を指定 (例えば
+  -1 は最後の行のすぐ後、-2 は 最後の行の 2 行後)
+* _date_: メッセージの日付 (0 は現在の日付/時間を意味する)
+// TRANSLATION MISSING
+* _date_usec_: microseconds of date (between 0 and 999999)
+* _tags_: タグのコンマ区切りリスト (タグを指定しない場合は NULL)
+* _message_: 表示するメッセージ
+
+C 言語での使用例:
+
+[source,c]
+----
+weechat_printf_y_datetime_tags (buffer, 2, 0, 0, "my_tag", "My message on third line with a tag");
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def prnt_y_datetime_tags(buffer: str, y: int, date: int, date_usec: int, tags: str, message: str) -> int: ...
+
+# 例
+weechat.prnt_y_datetime_tags("", 2, 0, 0, "my_tag", "My message on third line with a tag")
+----
+
+[NOTE]
+この関数をスクリプトの中で実行するには "print_y_datetime_tags" (Python の場合は "prnt_y_datetime_tags") と書きます。
 
 ==== log_printf
 
@@ -9095,7 +10143,7 @@ C examples:
 [source,c]
 ----
 /* hook modifier with priority = 2000 */
-/* high priority: called before other modifier calbacks */
+/* high priority: called before other modifier callbacks */
 weechat_hook_modifier ("2000|input_text_display", &modifier_cb, NULL, NULL);
 
 /* hook two signals with priority = 3000 */
@@ -9195,7 +10243,7 @@ struct t_hook *weechat_hook_command (const char *command,
 
 デフォルトの補完候補コードは:
 
-include::includes/autogen_api_completions.ja.adoc[tag=completions]
+include::{autogendir}/autogen_api_completions.ja.adoc[tag=completions]
 
 特殊コード:
 
@@ -9656,7 +10704,6 @@ struct t_hook *weechat_hook_process (const char *command,
                                      void *callback_data);
 ----
 
-
 引数:
 
 * _command_: 子プロセスで実行するコマンド、URL _(WeeChat バージョン 0.3.7 以上で利用可)_
@@ -9716,7 +10763,7 @@ _callback_ コールバックに送られます (関数の戻り値は外部コ�
 // TRANSLATION MISSING
 If you want to retrieve infos about WeeChat (like current stable version,
 latest git commit, etc.), you can use URLs on
-https://weechat.org/dev/info/[this page ^↗^,window=_blank].
+https://weechat.org/dev/info/[this page ^↗^^].
 
 [NOTE]
 コールバックにデータを送信するバッファのサイズは 64KB (バッファは 2
@@ -9912,22 +10959,8 @@ struct t_hook *weechat_hook_process_hashtable (const char *command,
   _/dev/null_ にリダイレクトする
 |===
 
-"url:..." 型のコマンドでは、以下のコマンドを使うことができます
-(それぞれのオプションについては `+man curl_easy_setopt+` を参照):
-
-include::includes/autogen_api_url_options.ja.adoc[tag=url_options]
-
-[NOTE]
-^(1)^ "mask" タイプのオプションでは、フォーマットは "value1+value2+value3" です。
-"list" タイプのオプションでは、リスト要素を改行で区切ってください。
-(`\n`). +
-^(2)^ 定数が利用可能な場合、定数は必ずオプションの値に含めてください。
-
-URL では、入力/出力ファイル用に 2 つのオプション (文字列) を使うことができます:
-
-* _file_in_: 読み込んで URL に送信するファイル (ファイルを送信)
-* _file_out_: ダウンロードした URL/ファイルをこのファイルに書き込む
-  (標準出力を使わない)
+// TRANSLATION MISSING
+For command "url:...", see available options in function <<_hook_url,hook_url>>.
 
 戻り値:
 
@@ -10087,9 +11120,161 @@ hook4 = weechat.hook_process_hashtable("sh",
                                        20000, "my_process_cb", "")
 ----
 
+// TRANSLATION MISSING
+==== hook_url
+
+_WeeChat ≥ 4.1.0._
+
+URL transfer.
+
+プロトタイプ:
+
+[source,c]
+----
+struct t_hook *weechat_hook_url (const char *url,
+                                 struct t_hashtable *options,
+                                 int timeout,
+                                 int (*callback)(const void *pointer,
+                                                 void *data,
+                                                 const char *url,
+                                                 struct t_hashtable *options,
+                                                 struct t_hashtable *output),
+                                 const void *callback_pointer,
+                                 void *callback_data);
+----
+
+引数:
+
+* _url_: URL
+* _options_: options for URL transfer (see below);
+  ハッシュテーブルは関数の中で複製されるため、この関数を呼び出した後にハッシュテーブルを安全に開放できます。
+* _timeout_: timeout for URL transfer (in milliseconds): after this timeout,
+  the transfer is stopped (0 means no timeout)
+* _callback_: function called when the transfer has ended, arguments and return
+  value:
+** _const void *pointer_: pointer
+** _void *data_: pointer
+** _const char *url_: URL
+** _struct t_hashtable *options_: options
+** _struct t_hashtable *output_: result (keys and values are strings), which may
+   contain the following keys:
+*** _response_code_: HTTP response code
+*** _headers_: HTTP headers in response
+*** _output_: standard output (set only if _file_out_ was not set in options)
+*** _error_: error message (set only in case of error)
+** return value:
+*** _WEECHAT_RC_OK_
+*** _WEECHAT_RC_ERROR_
+* _callback_pointer_: WeeChat が _callback_ コールバックを呼び出す際にコールバックに渡すポインタ
+* _callback_data_: WeeChat が _callback_ コールバックを呼び出す際にコールバックに渡すポインタ;
+  このポインタが NULL でない場合、このポインタは malloc (または類似の関数)
+  によって割り当てられたものでなければいけません。さらに、このポインタはここで作成したフックが削除された時点で自動的に開放されます
+
+The following Curl options are available (see `+man curl_easy_setopt+` for
+a description of each option):
+
+include::{autogendir}/autogen_api_url_options.ja.adoc[tag=url_options]
+
+[NOTE]
+^(1)^ "mask" タイプのオプションでは、フォーマットは "value1+value2+value3" です。
+"list" タイプのオプションでは、リスト要素を改行で区切ってください。
+(`\n`). +
+^(2)^ 定数が利用可能な場合、定数は必ずオプションの値に含めてください。
+
+These two extra options (strings) are allowed for input/output file:
+
+[width="100%",cols="2,^1,7",options="header"]
+|===
+| Option   | Type   | Description
+| file_in  | string | 読み込んで URL に送信するファイル (ファイルを送信)
+| file_out | string | ダウンロードした URL/ファイルをこのファイルに書き込む (標準出力を使わない)
+|===
+
+戻り値:
+
+* 新しいフックへのポインタ、エラーが起きた場合は NULL
+
+C 言語での使用例:
+
+[source,c]
+----
+int
+my_url_cb (const void *pointer, void *data, const char *url,
+           struct t_hashtable *options, struct t_hashtable *output)
+{
+    weechat_printf (NULL, "response_code: %s", weechat_hashtable_get (output, "response_code"));
+    weechat_printf (NULL, "headers: %s", weechat_hashtable_get (output, "headers"));
+    weechat_printf (NULL, "output: %s", weechat_hashtable_get (output, "output"));
+    weechat_printf (NULL, "error: %s", weechat_hashtable_get (output, "error"));
+    return WEECHAT_RC_OK;
+}
+
+/* example 1: output to a file */
+struct t_hashtable *options_url1 = weechat_hashtable_new (8,
+                                                          WEECHAT_HASHTABLE_STRING,
+                                                          WEECHAT_HASHTABLE_STRING,
+                                                          NULL,
+                                                          NULL);
+if (options_url1)
+{
+    weechat_hashtable_set (options_url1, "file_out", "/tmp/weechat.org.html");
+    struct t_hook *my_url_hook = weechat_hook_url ("https://weechat.org/",
+                                                   options_url1,
+                                                   20000,
+                                                   &my_url_cb, NULL, NULL);
+    weechat_hashtable_free (options_url1);
+}
+
+/* example 2: custom HTTP headers, output sent to callback */
+struct t_hashtable *options_url2 = weechat_hashtable_new (8,
+                                                          WEECHAT_HASHTABLE_STRING,
+                                                          WEECHAT_HASHTABLE_STRING,
+                                                          NULL,
+                                                          NULL);
+if (options_url2)
+{
+    weechat_hashtable_set (options_url2, "httpheader",
+                           "Header1: value1\n"
+                           "Header2: value2");
+    struct t_hook *my_url_hook = weechat_hook_url ("http://localhost:8080/",
+                                                   options_url2,
+                                                   20000,
+                                                   &my_url_cb, NULL, NULL);
+    weechat_hashtable_free (options_url2);
+}
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def hook_url(url: str, options: Dict[str, str], timeout: int, callback: str, callback_data: str) -> str: ...
+
+# 例
+def my_url_cb(data: str, url: str, options: Dict[str, str], output: Dict[str, str]) -> int:
+    weechat.prnt("", "output: %s" % output)
+    return weechat.WEECHAT_RC_OK
+
+# example 1: output to a file
+hook1 = weechat.hook_url("https://weechat.org/",
+                         {"file_out": "/tmp/weechat.org.html"},
+                         20000, "my_url_cb", "")
+
+# example 2: custom HTTP headers, output sent to callback
+options = {
+    "httpheader": "\n".join([
+        "Header1: value1",
+        "Header2: value2",
+    ]),
+}
+hook2 = weechat.hook_url("http://localhost:8080/", options, 20000, "my_url_cb", "")
+----
+
 ==== hook_connect
 
-_WeeChat バージョン 1.5 と 2.0 で更新。_
+// TRANSLATION MISSING
+_Updated in 1.5, 2.0, 4.4.0._
 
 接続をフックする (リモートホストへのバックグラウンド接続)。
 
@@ -10124,7 +11309,13 @@ struct t_hook *weechat_hook_connect (const char *proxy,
   (任意、プロキシを使わない場合は NULL)
 * _address_: 接続先のドメイン名または IP アドレス
 * _port_: ポート番号
-* _ipv6_: (IPv4 フォールバックを有効にして) IPv6 を使う場合は 1、IPv4 のみを使う場合は 0
+* _ipv6_:
+// TRANSLATION MISSING
+** `WEECHAT_HOOK_CONNECT_IPV6_DISABLE` ^(1)^: disable IPv6 (use only IPv4)
+// TRANSLATION MISSING
+** `WEECHAT_HOOK_CONNECT_IPV6_AUTO` ^(1)^: use IPv6 with fallback to IPv4
+// TRANSLATION MISSING
+** `WEECHAT_HOOK_CONNECT_IPV6_FORCE` ^(1)^: force IPv6 (do not use IPv4) _(WeeChat ≥ 4.4.0)_
 * _retry_: 再試行回数、IPv6 ホストに接続したもののクライアントの受け入れに失敗した際に
   IPv4 ホストへフォールバックする際に使う
 * _gnutls_sess_: GnuTLS セッション (任意)
@@ -10144,7 +11335,7 @@ struct t_hook *weechat_hook_connect (const char *proxy,
   接続に成功および失敗した際に呼び出すコールバック関数、引数と戻り値:
 ** _const void *pointer_: ポインタ
 ** _void *data_: ポインタ
-** _int status_: 接続状態:
+** _int status_: 接続状態 ^(2)^:
 *** _WEECHAT_HOOK_CONNECT_OK_: 接続成功
 *** _WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND_: アドレスが見つかりません
 *** _WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND_: IP アドレスが見つかりません
@@ -10156,8 +11347,8 @@ struct t_hook *weechat_hook_connect (const char *proxy,
 *** _WEECHAT_HOOK_CONNECT_MEMORY_ERROR_: メモリ不足
 *** _WEECHAT_HOOK_CONNECT_TIMEOUT_: タイムアウト
 *** _WEECHAT_HOOK_CONNECT_SOCKET_ERROR_: ソケットの作成に失敗
-** _gnutls_rc_: _gnutls_handshake()_ の戻り値
-** _sock_: 接続に使うソケット
+** _gnutls_rc_: _gnutls_handshake()_ の戻り値 ^(2)^
+** _sock_: 接続に使うソケット ^(2)^
 ** _const char *error_: _gnutls_strerror(gnutls_rc)_ の戻り値
 ** _const char *ip_address_: 見つかった IP アドレス
 ** 戻り値:
@@ -10168,15 +11359,19 @@ struct t_hook *weechat_hook_connect (const char *proxy,
   このポインタが NULL でない場合、このポインタは malloc (または類似の関数)
   によって割り当てられたものでなければいけません。さらに、このポインタはここで作成したフックが削除された時点で自動的に開放されます
 
-戻り値:
-
-* 新しいフックへのポインタ、エラーが起きた場合は NULL
-
-[IMPORTANT]
-スクリプトにおけるコールバック引数 _status_、_gnutls_rc_、_sock_  は
+// TRANSLATION MISSING
+[NOTE]
+^(1)^ Constants for parameter _ipv6_ are available since WeeChat 4.4.0. +
+For older releases, allowed values are `1` (use IPv6 with fallback to IPv4) and
+`0` (disable IPv6, use only IPv4). +
+^(2)^ スクリプトにおけるコールバック引数 _status_、_gnutls_rc_、_sock_  は
 WeeChat バージョン 2.0 以上では整数、バージョン 1.9 以下では文字列です。 +
 すべてのバージョンで互換性を保つには、使用前にコールバック引数 _status_、_gnutls_rc_、_sock_
 を整数へ変換することを推奨します (Python の場合 `int(sock)` のように変換してください)。
+
+戻り値:
+
+* 新しいフックへのポインタ、エラーが起きた場合は NULL
 
 C 言語での使用例:
 
@@ -10227,7 +11422,8 @@ my_connect_cb (const void *pointer, void *data, int status, int gnutls_rc,
 
 struct t_hook *my_connect_hook = weechat_hook_connect (NULL,
                                                        "my.server.org", 1234,
-                                                       1, 0,
+                                                       WEECHAT_HOOK_CONNECT_IPV6_AUTO,
+                                                       0,
                                                        NULL, NULL, 0,  /* GnuTLS */
                                                        NULL,
                                                        &my_connect_cb, NULL, NULL);
@@ -10243,38 +11439,39 @@ def hook_connect(proxy: str, address: str, port: int, ipv6: int, retry: int, loc
 
 # 例
 def my_connect_cb(data: str, status: int, gnutls_rc: int, sock: int, error: str, ip_address: str) -> int:
-    if status == WEECHAT_HOOK_CONNECT_OK:
+    if status == weechat.WEECHAT_HOOK_CONNECT_OK:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_PROXY_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_PROXY_ERROR:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_MEMORY_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_MEMORY_ERROR:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_TIMEOUT:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_TIMEOUT:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_SOCKET_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_SOCKET_ERROR:
         # ...
     return weechat.WEECHAT_RC_OK
 
-hook = weechat.hook_connect("", "my.server.org", 1234, 1, 0, "",
+hook = weechat.hook_connect("", "my.server.org", 1234,
+                            weechat.WEECHAT_HOOK_CONNECT_IPV6_AUTO, 0, "",
                             "my_connect_cb", "")
 ----
 
 ==== hook_line
 
 // TRANSLATION MISSING
-_WeeChat ≥ 2.3, updated in 3.7._
+_WeeChat ≥ 2.3, updated in 4.2.0._
 
 バッファに対する行表示をフックする。
 
@@ -10373,10 +11570,22 @@ struct t_hook *weechat_hook_line (const char *buffer_type,
 | 利用不可 ("0")
 | `+1533792000+`
 
+// TRANSLATION MISSING
+| date_usec
+| Microseconds of line date (between 0 and 999999).
+| N/A ("0").
+| `+123456+`
+
 | date_printed
 | 行が表示された日付 (タイムスタンプ)
 | 利用不可 ("0")
 | `+1533792012+`
+
+// TRANSLATION MISSING
+| date_usec_printed
+| Microseconds of date when line was displayed (between 0 and 999999).
+| N/A ("0").
+| `+654321+`
 
 | str_time
 | 行に追加される日付 (色コードを入れてもよい)
@@ -10465,10 +11674,23 @@ WeeChat はそれらを無視します。
 | 日付はこの値に設定されます +
   これに対応して `+str_time+` も更新されます
 
+// TRANSLATION MISSING
+| date_usec
+| Integer ("0" to "999999").
+| 利用不可
+| The microseconds of line date is set to this value. +
+  これに対応して `+str_time+` も更新されます
+
 | date_printed
 | タイムスタンプ
 | 利用不可
 | 表示される日付はこのタイムスタンプを使います。The printed date is set to this timestamp (not displayed).
+
+// TRANSLATION MISSING
+| date_usec_printed
+| Integer ("0" to "999999").
+| 利用不可
+| The microseconds of printed date is set to this value.
 
 | str_time
 | 文字列
@@ -10513,7 +11735,7 @@ C 言語での使用例:
 [source,c]
 ----
 int
-my_line_cb (const void *pointer, void *data, struct t_hasbtable *line)
+my_line_cb (const void *pointer, void *data, struct t_hashtable *line)
 {
     struct t_hashtable *hashtable;
 
@@ -10550,7 +11772,7 @@ hook = weechat.hook_line("", "", "irc_join", "my_line_cb", "")
 
 ==== hook_print
 
-_WeeChat バージョン 0.4.3、1.0、1.5 で更新。_
+_WeeChat バージョン 0.4.3、1.0、1.5、4.2.0 で更新。_
 
 メッセージの表示をフックする。これは行がフォーマット済みバッファに追加された時点で呼び出されます。
 
@@ -10569,6 +11791,7 @@ struct t_hook *weechat_hook_print (struct t_gui_buffer *buffer,
                                                    void *data,
                                                    struct t_gui_buffer *buffer,
                                                    time_t date,
+                                                   int date_usec,
                                                    int tags_count,
                                                    const char **tags,
                                                    int displayed,
@@ -10598,6 +11821,8 @@ struct t_hook *weechat_hook_print (struct t_gui_buffer *buffer,
 ** _void *data_: ポインタ
 ** _struct t_gui_buffer *buffer_: バッファへのポインタ
 ** _time_t date_: 日付
+// TRANSLATION MISSING
+** _int date_usec_: microseconds of date
 ** _int tags_count_: 行に付けられたタグの個数
 ** _const char **tags_: 行に付けられたタグの配列
 ** _int displayed_: 行が表示される場合は 1、フィルタされる (隠される) 場合は 0
@@ -10628,7 +11853,7 @@ C 言語での使用例:
 ----
 int
 my_print_cb (const void *pointer, void *data, struct t_gui_buffer *buffer,
-             time_t date, int tags_count, const char **tags,
+             time_t date, int date_usec, int tags_count, const char **tags,
              int displayed, int highlight,
              const char *prefix, const char *message)
 {
@@ -11069,6 +12294,11 @@ WeeChat とプラグインが送信するシグナルのリスト:
 | Pointer: 行
 | バッファに行を追加
 
+// TRANSLATION MISSING
+| weechat | [[hook_signal_buffer_line_data_changed]] buffer_line_data_changed | 4.4.0
+| Pointer: line data.
+| Line data has been updated in a buffer.
+
 | weechat | [[hook_signal_buffer_lines_hidden]] buffer_lines_hidden |
 | Pointer: バッファ
 | バッファから行を隠す
@@ -11109,6 +12339,16 @@ WeeChat とプラグインが送信するシグナルのリスト:
 | Pointer: バッファ
 | バッファのタイトルを変更
 
+// TRANSLATION MISSING
+| weechat | [[hook_signal_buffer_modes_changed]] buffer_modes_changed | 4.3.0
+| Pointer: buffer.
+| Modes of buffer changed.
+
+// TRANSLATION MISSING
+| weechat | [[hook_signal_buffer_time_for_each_line_changed]] buffer_time_for_each_line_changed | 4.4.0
+| Pointer: buffer.
+| Display time for each line changed.
+
 | weechat | [[hook_signal_buffer_type_changed]] buffer_type_changed |
 | Pointer: バッファ
 | バッファのタイプを変更
@@ -11126,7 +12366,7 @@ WeeChat とプラグインが送信するシグナルのリスト:
 | String: text sent to buffer.
 | Text sent to a user buffer as input (sent only for buffers created with `/buffer add`). +
   If the return code of a callback is _WEECHAT_RC_OK_EAT_, then the string "q"
-  can not be used any more to close the buffer.
+  cannot be used anymore to close the buffer.
 
 // TRANSLATION MISSING
 | weechat | [[hook_signal_buffer_user_closing_xxx]] buffer_user_closing_xxx ^(2)^ | 3.8
@@ -11187,6 +12427,11 @@ WeeChat とプラグインが送信するシグナルのリスト:
 | Pointer: バッファ
 | バッファテキストの検索
 
+// TRANSLATION MISSING
+| weechat | [[hook_signal_input_prompt_changed]] input_prompt_changed | 4.3.0
+| Pointer: buffer.
+| Input prompt changed.
+
 | weechat | [[hook_signal_input_text_changed]] input_text_changed |
 | Pointer: バッファ
 | 入力テキストが変更された
@@ -11218,6 +12463,16 @@ WeeChat とプラグインが送信するシグナルのリスト:
 | weechat | [[hook_signal_key_combo_cursor]] key_combo_cursor | 1.0
 | String: キーの組み合わせ
 | _cursor_ コンテキスト内のキーの組み合わせ
+
+// TRANSLATION MISSING
+| weechat | [[hook_signal_layout_buffers_applied]] layout_buffers_applied | 4.4.0
+| String: layout name.
+| Layout applied for buffers.
+
+// TRANSLATION MISSING
+| weechat | [[hook_signal_layout_windows_applied]] layout_windows_applied | 4.4.0
+| String: layout name.
+| Layout applied for windows.
 
 | weechat | [[hook_signal_mouse_enabled]] mouse_enabled | 1.1
 | -
@@ -12098,6 +13353,19 @@ WeeChat とプラグインが使う修飾子のリスト:
 | 修飾子 | Min WeeChat | 修飾子データ | 文字列 | 出力
 
 // TRANSLATION MISSING
+| [[hook_modifier_irc_batch]] irc_batch | 4.0.0
+| Server name + "," + batch type + "," + batch parameters
+| Content of multiple messages, separated by a newline char ("\n").
+| New content of messages (number can be different), an empty string discards
+  all messages in the batch.
+
+// TRANSLATION MISSING
+| [[hook_modifier_irc_cap_sync_req]] irc_cap_sync_req | 4.0.0
+| Server name + "," + supported capabilities on server (separated by spaces)
+| Capabilities to request (separated by spaces).
+| New content of capabilities to request (separated by spaces).
+
+// TRANSLATION MISSING
 | [[hook_modifier_irc_in_xxx]] irc_in_xxx ^(1)^ |
 | サーバ名
 | IRC サーバから受信したメッセージの内容 (文字セットをデコードする前) +
@@ -12122,6 +13390,26 @@ WeeChat とプラグインが使う修飾子のリスト:
 | IRC サーバに送信するメッセージの内容
   (自動分割後、自動分割はデフォルトでメッセージを 512 バイト内に収まるように分割します)。|
   メッセージの新しい内容
+
+// TRANSLATION MISSING
+| [[hook_modifier_relay_client_irc_in]] relay_client_irc_in | 4.0.0
+| String with relay client pointer (eg: "0x1234abcd")
+| Content of message received from relay IRC client.
+| New content of message.
+
+// TRANSLATION MISSING
+| [[hook_modifier_relay_client_irc_out1]] relay_client_irc_out1 | 4.0.0
+| String with relay client pointer (eg: "0x1234abcd")
+| Content of message about to be sent to relay IRC client before automatic split
+  (to fit in 512 bytes by default).
+| New content of message.
+
+// TRANSLATION MISSING
+| [[hook_modifier_relay_client_irc_out]] relay_client_irc_out | 4.0.0
+| String with relay client pointer (eg: "0x1234abcd")
+| Content of message about to be sent to relay IRC client after automatic split
+  (to fit in 512 bytes by default).
+| New content of message.
 
 // TRANSLATION MISSING
 | [[hook_modifier_bar_condition_yyy]] bar_condition_yyy ^(2)^ |
@@ -12288,14 +13576,21 @@ WeeChat とプラグインが定義する修飾子のリスト:
 | -
 | Any string.
 | String with IRC tag value escaped,
-  see https://ircv3.net/specs/extensions/message-tags#escaping-values[this page ^↗^,window=_blank].
+  see https://ircv3.net/specs/extensions/message-tags#escaping-values[this page ^↗^^].
 
 // TRANSLATION MISSING
 | [[hook_modifier_irc_tag_unescape_value]] irc_tag_unescape_value | 3.3
 | -
 | Any string.
 | String with IRC tag value unescaped,
-  see https://ircv3.net/specs/extensions/message-tags#escaping-values[this page ^↗^,window=_blank].
+  see https://ircv3.net/specs/extensions/message-tags#escaping-values[this page ^↗^^].
+
+// TRANSLATION MISSING
+| [[hook_modifier_color_decode]] color_decode | 4.3.0
+| Replacement string for colors removed
+| Any string.
+| String with WeeChat colors converted to a replacement string
+  (colors stripped if the replacement string is empty).
 
 | [[hook_modifier_color_decode_ansi]] color_decode_ansi | 1.0
 | 色を保持する場合は "1"、削除する場合は "0"
@@ -12659,7 +13954,7 @@ struct t_hook *my_hdata = weechat_hook_hdata ("my_hdata",
 
 ==== hook_focus
 
-_WeeChat バージョン 1.5 で更新。_
+_WeeChat バージョン 1.5, 4.0.0, 4.1.0 で更新。_
 
 フォーカス (マウスイベントやカーソルモード
 (カーソルが自由に移動出来る状態) でキーが押されたこと) をフック。
@@ -12757,8 +14052,16 @@ info を使う前にエリアが一致していることを確認して下さい
 | _chat_line_date | 日付/時間の行
 | "1313237175" | "0"
 
+// TRANSLATION MISSING
+| _chat_line_date_usec | Microseconds of line date/time.
+| "123456" | "0"
+
 | _chat_line_date_printed | 日付/時間の行 ^(4)^
 | "1313237175" | "0"
+
+// TRANSLATION MISSING
+| _chat_line_date_usec_printed | Microseconds of line printed date/time ^(4)^.
+| "123456" | "0"
 
 | _chat_line_time | 表示された時間
 | "14:06:15" | ""
@@ -12775,15 +14078,27 @@ info を使う前にエリアが一致していることを確認して下さい
 | _chat_line_message | 行のメッセージ部分
 | "Hello world!" | ""
 
+// TRANSLATION MISSING
+| _chat_focused_line | Line at (x, y) _(WeeChat ≥ 4.0.0)_.
+| "Hello world!" | ""
+
+// TRANSLATION MISSING
+| _chat_focused_line_bol | Text from beginning of line to (x-1, y) _(WeeChat ≥ 4.1.0)_.
+| "Hello" | ""
+
+// TRANSLATION MISSING
+| _chat_focused_line_eol | Text from (x, y) to end of line _(WeeChat ≥ 4.1.0)_.
+| "llo world!" | ""
+
 | _chat_word | (x,y) の位置にある単語
 | "Hello" | ""
 
 // TRANSLATION MISSING
-| _chat_bol | Text from beginning of line to (x-1, y).
+| _chat_bol | Text from beginning of message to (x-1, y).
 | "He" | ""
 
 // TRANSLATION MISSING
-| _chat_eol | Text from (x, y) to the end of line.
+| _chat_eol | Text from (x, y) to the end of message.
 | "llo world!" | ""
 
 | _bar_name | バーの名前
@@ -13294,9 +14609,10 @@ weechat.prnt(weechat.current_buffer(), "Text on current buffer")
 
 ==== buffer_search
 
-_WeeChat バージョン 1.0 で更新。_
+_WeeChat バージョン 1.0, 4.3.0 で更新。_
 
-プラグインおよび名前でバッファを検索。
+// TRANSLATION MISSING
+Search a buffer by plugin/name, full name or unique identifier (`id`).
 
 プロトタイプ:
 
@@ -13308,10 +14624,13 @@ struct t_gui_buffer *weechat_buffer_search (const char *plugin,
 
 引数:
 
-* _plugin_: プラグインの名前、以下の特殊値を使うことができます:
+// TRANSLATION MISSING
+* _plugin_: name of plugin, following special values are allowed:
 ** `+==+`: name 引数でバッファの完全な名前を使う (例:
    `libera.#weechat` ではなく `irc.libera.#weechat`)
    _(WeeChat バージョン 1.0 以上で利用可)_
+// TRANSLATION MISSING
+** `+==id+`: the name used is the buffer unique identifier (`id`) _(WeeChat ≥ 4.3.0)_
 * _name_: バッファの名前、NULL または空文字列の場合、現在のバッファ
   (現在のウィンドウに表示されているバッファ) を返す; 名前が `(?i)`
   で始まる場合、検索は大文字小文字を区別せずに検索 _(WeeChat バージョン 1.0 以上で利用可)_
@@ -13326,6 +14645,7 @@ C 言語での使用例:
 ----
 struct t_gui_buffer *buffer1 = weechat_buffer_search ("irc", "libera.#weechat");
 struct t_gui_buffer *buffer2 = weechat_buffer_search ("==", "irc.libera.#test");  /* WeeChat バージョン 1.0 以上で利用可 */
+struct t_gui_buffer *buffer3 = weechat_buffer_search ("==id", "1709797810942688");  /* WeeChat バージョン 4.3.0 以上で利用可 */
 ----
 
 スクリプト (Python) での使用例:
@@ -13544,46 +14864,48 @@ int weechat_buffer_get_integer (struct t_gui_buffer *buffer,
 
 * _buffer_: バッファへのポインタ
 * _property_: プロパティ名:
+// TRANSLATION MISSING
+** _opening_: 1 if buffer is opening, otherwise 0 _(WeeChat ≥ 4.2.0)_
 ** _number_: バッファの番号 (1 以上)
 ** _layout_number_: レイアウトに保存されたバッファの番号
 ** _layout_number_merge_order_: レイアウトのマージをする際の順番
-** _short_name_is_set_: 短い名前が設定されている場合は 1、そうでない場合は 0
 ** _type_: バッファタイプ (0: 書式あり、1: 自由内容)
 ** _notify_: バッファの通知レベル
 ** _num_displayed_: バッファを表示しているウィンドウの数
-** _active_: バッファがマージされて選択されている場合は 2、バッファが選択されている場合は
-   1、バッファがマージされ選択されていない場合は 0
-** _hidden_: バッファが隠されている場合は 1、そうでない場合は 0
-   _(WeeChat バージョン 1.0 以上で利用可)_
-** _zoomed_: バッファがマージとズームされている場合は 1、そうでない場合は 0
-   _(WeeChat バージョン 1.0 以上で利用可)_
+** _active_: バッファがマージされて選択されている場合は 2、バッファが選択されている場合は 1、バッファがマージされ選択されていない場合は 0
+** _hidden_: バッファが隠されている場合は 1、そうでない場合は 0 _(WeeChat バージョン 1.0 以上で利用可)_
+** _zoomed_: バッファがマージとズームされている場合は 1、そうでない場合は 0 _(WeeChat バージョン 1.0 以上で利用可)_
 ** _print_hooks_enabled_: プリントフックが有効化されている場合は 1、そうでない場合は 0
-** _day_change_: 日付変更メッセージを表示する場合は 1、そうでない場合は 0
-   _(WeeChat バージョン 0.4.3 以上で利用可)_
-** _clear_: コマンド `/buffer clear` でバッファをクリアできる場合は 1、そうでない場合は 0
-   _(WeeChat バージョン 1.0 以上で利用可)_
-** _filter_: バッファでフィルタが有効な場合は 1、そうでない場合は 0
-   _(WeeChat バージョン 1.0 以上で利用可)_
-** _lines_hidden_: バッファに非表示 (フィルタされた) メッセージが 1
-   行以上含まれる場合は 1、すべてのメッセージが表示冴えている場合は 0
+** _day_change_: 日付変更メッセージを表示する場合は 1、そうでない場合は 0 _(WeeChat バージョン 0.4.3 以上で利用可)_
+** _clear_: コマンド `/buffer clear` でバッファをクリアできる場合は 1、そうでない場合は 0 _(WeeChat バージョン 1.0 以上で利用可)_
+** _filter_: バッファでフィルタが有効な場合は 1、そうでない場合は 0 _(WeeChat バージョン 1.0 以上で利用可)_
+// TRANSLATION MISSING
+** _closing_: 1 if buffer is closing, otherwise 0 _(WeeChat ≥ 1.0)_
+** _lines_hidden_: バッファに非表示 (フィルタされた) メッセージが 1 行以上含まれる場合は 1、すべてのメッセージが表示冴えている場合は 0
 ** _prefix_max_length_: バッファプレフィックスの最大長
-** _time_for_each_line_: バッファの各行に時間を表示する場合は
-   1 (デフォルト)、そうでない場合は 0
+// TRANSLATION MISSING
+** _next_line_id_: next line id in buffer _(WeeChat ≥ 3.8)_
+** _time_for_each_line_: バッファの各行に時間を表示する場合は 1 (デフォルト)、そうでない場合は 0
 ** _nicklist_: ニックネームリストが有効化されている場合は 1、そうでない場合は 0
 ** _nicklist_case_sensitive_: ニックネームの大文字小文字を区別する場合は 1、そうでない場合は 0
 ** _nicklist_max_length_: ニックネームの最大長
 ** _nicklist_display_groups_: グループを表示する場合 1、そうでない場合は 0
 ** _nicklist_count_: ニックネームリストに含まれるニックネームとグループの数
+// TRANSLATION MISSING
+** _nicklist_visible_count_: number of nicks/groups displayed
 ** _nicklist_groups_count_: ニックネームリストに含まれるグループの数
+// TRANSLATION MISSING
+** _nicklist_groups_visible_count_: number of groups displayed
 ** _nicklist_nicks_count_: ニックネームリストに含まれるニックネームの数
-** _nicklist_visible_count_: 表示されているニックネームとグループの数
+// TRANSLATION MISSING
+** _nicklist_nicks_visible_count_: number of nicks displayed
 ** _input_: 入力可能な場合は 1、そうでない場合は 0
-** _input_get_unknown_commands_: 未定義のコマンドを入力コールバックに送信する場合は
-   1、そうでない場合は 0
+// TRANSLATION MISSING
+** _input_get_any_user_data_: 1 if any user data, including commands, are sent to input callback, otherwise 0
+** _input_get_unknown_commands_: 未定義のコマンドを入力コールバックに送信する場合は 1、そうでない場合は 0
 ** _input_get_empty_: 入力コールバックに何も送信されなかった場合は 1、そうでない場合は 0
 // TRANSLATION MISSING
-** _input_multiline_: 1 if multiple lines are sent as one message to input
-   callback, otherwise 0
+** _input_multiline_: 1 if multiple lines are sent as one message to input callback, otherwise 0
 ** _input_size_: 入力サイズ (バイト単位)
 ** _input_length_: 入力長 (文字数)
 ** _input_pos_: バッファ入力におけるカーソル位置
@@ -13591,9 +14913,33 @@ int weechat_buffer_get_integer (struct t_gui_buffer *buffer,
 ** _num_history_: コマンド履歴の数
 ** _text_search_: テキスト検索タイプ:
 *** 0: 現在検索していない
-*** 1: 後方検索 (検索方向: 最古のメッセージに向かって検索)
-*** 2: 前方検索 (検索方向: 最新のメッセージに向かって検索)
+// TRANSLATION MISSING
+*** 1: search in buffer lines
+// TRANSLATION MISSING
+*** 2: search in commands history
+// TRANSLATION MISSING
+** _text_search_direction_: direction for search:
+// TRANSLATION MISSING
+*** 0: backward search (direction: oldest messages/commands)
+// TRANSLATION MISSING
+*** 1: forward search (direction: newest messages/commands)
 ** _text_search_exact_: テキスト検索で大文字小文字を区別する場合は 1
+// TRANSLATION MISSING
+** _text_search_regex_: 1 if searching with a regular expression
+** _text_search_where_:
+*** 0: 現在検索していない
+// TRANSLATION MISSING
+*** 1: search in message
+// TRANSLATION MISSING
+*** 2: search in prefix
+// TRANSLATION MISSING
+*** 3: search in prefix and message
+** _text_search_history_:
+*** 0: 現在検索していない
+// TRANSLATION MISSING
+*** 1: search in buffer local history
+// TRANSLATION MISSING
+*** 2: search in global history
 ** _text_search_found_: テキストが見つかった場合は 1、そうでない場合は 0
 
 戻り値:
@@ -13635,14 +14981,23 @@ const char *weechat_buffer_get_string (struct t_gui_buffer *buffer,
 
 * _buffer_: バッファへのポインタ
 * _property_: プロパティ名:
-** _plugin_: バッファを作成したプラグインの名前
-   ("core" は WeeChat メインバッファ)
+// TRANSLATION MISSING
+** _id_: unique identifier _(WeeChat ≥ 4.3.0)_
+** _plugin_: バッファを作成したプラグインの名前 ("core" は WeeChat メインバッファ)
 ** _name_: バッファの名前
 ** _full_name_: バッファの完全な名前 ("plugin.name") _(WeeChat バージョン 0.3.7 以上で利用可)_
-** _short_name_: バッファの短縮名 (注意:
-   表示目的以外に使用するのは禁止、ユーザは書き換えることが可能、バッファを検索する際にこれを使ってはいけない、_name_、_full_name_、またはローカル変数
-   _channel_ を使うこと)
+// TRANSLATION MISSING
+** _old_full_name_: old full name of buffer ("plugin.name"), set before the buffer is renamed _(WeeChat ≥ 2.8)_
+** _short_name_: バッファの短縮名 (注意: 表示目的以外に使用するのは禁止、ユーザは書き換えることが可能、バッファを検索する際にこれを使ってはいけない、_name_、_full_name_、またはローカル変数 _channel_ を使うこと)
+// TRANSLATION MISSING
+** _type_: type of buffer: "formatted" or "free" _(WeeChat ≥ 4.2.0)_
 ** _title_: バッファのタイトル
+// TRANSLATION MISSING
+** _modes_: modes _(WeeChat ≥ 4.3.0)_
+// TRANSLATION MISSING
+** _nicklist_last_id_assigned_: last unique identifier used in this buffer for a group or nick _(WeeChat ≥ 4.3.0)_
+// TRANSLATION MISSING
+** _input_prompt_: input prompt _(WeeChat ≥ 4.3.0)_
 ** _input_: 入力テキスト
 ** _text_search_input_: テキスト検索前に保存した入力テキスト
 ** _highlight_words_: ハイライトする単語のリスト
@@ -13652,8 +15007,7 @@ const char *weechat_buffer_get_string (struct t_gui_buffer *buffer,
 ** _highlight_tags_restrict_: これらのタグを付けられたメッセージだけにハイライトを制限する
 ** _highlight_tags_: これらのタグを付けられたメッセージを強制的にハイライトする
 ** _hotlist_max_level_nicks_: 一部のニックネームに対するホットリストレベルの最大値
-** _localvar_xxx_: ローカル変数 "xxx" の値
-   ("xxx" は読み出す変数の名前)
+** _localvar_xxx_: ローカル変数 "xxx" の値 ("xxx" は読み出す変数の名前)
 
 戻り値:
 
@@ -13697,8 +15051,11 @@ void *weechat_buffer_pointer (struct t_gui_buffer *buffer,
 
 * _buffer_: バッファへのポインタ
 * _property_: プロパティ名:
-** _plugin_: このバッファを作ったプラグインへのポインタ
-   (WeeChat メインバッファの場合は NULL)
+** _plugin_: このバッファを作ったプラグインへのポインタ (WeeChat メインバッファの場合は NULL)
+// TRANSLATION MISSING
+** _text_search_regex_compiled_: compiled regular expression
+// TRANSLATION MISSING
+** _text_search_ptr_history_: history found
 ** _highlight_disable_regex_compiled_: コンパイル済みの正規表現 _highlight_disable_regex_
 ** _highlight_regex_compiled_: コンパイル済みの正規表現 _highlight_regex_
 
@@ -13710,7 +15067,7 @@ C 言語での使用例:
 
 [source,c]
 ----
-weechat_printf (NULL, "plugin pointer of my buffer: %lx",
+weechat_printf (NULL, "plugin pointer of my buffer: %p",
                 weechat_buffer_get_pointer (my_buffer, "plugin"));
 ----
 
@@ -13752,9 +15109,12 @@ void weechat_buffer_set (struct t_gui_buffer *buffer, const char *property,
 
 | hotlist | | "+", "-", WEECHAT_HOTLIST_LOW, WEECHAT_HOTLIST_MESSAGE,
   WEECHAT_HOTLIST_PRIVATE, WEECHAT_HOTLIST_HIGHLIGHT, "-1"
+// TRANSLATION MISSING
 | "+": ホットリストを有効化 (グローバル設定、バッファへのポインタは使われない) +
   "-": ホットリストを無効化 (グローバル設定、バッファへのポインタは使われない) +
-  優先度: この優先度でホットリストにバッファを追加 +
+  優先度: この優先度でホットリストにバッファを追加
+  (conditions defined in option _weechat.look.hotlist_add_conditions_
+  are *NOT* checked) +
   "-1": ホットリストからバッファを削除 _(WeeChat バージョン 1.0 以上で利用可)_
 
 | completion_freeze | | "0" または "1"
@@ -13763,8 +15123,13 @@ void weechat_buffer_set (struct t_gui_buffer *buffer, const char *property,
   "1": コマンドラインが更新された際に補完を継続する
   (グローバル設定、バッファへのポインタは使われない)
 
-| unread | | -
-| バッファの最後の行の後に未読マーカーを設定
+// TRANSLATION MISSING
+| unread | | empty string, "0", "+N", "-N" or "N" (N is integer)
+| empty string: set unread marker after last line of buffer +
+  "0": remove unread marker from buffer +
+  "N": move the unread marker N lines from the end towards the first line of buffer +
+  "-N": move the unread marker N lines towards the first line of buffer +
+  "+N": move the unread marker N lines towards the last line of buffer.
 
 | display | | "1" または "auto"
 | "1": 指定したバッファを現在のウィンドウに表示 +
@@ -13812,6 +15177,10 @@ void weechat_buffer_set (struct t_gui_buffer *buffer, const char *property,
 
 | title | | 任意の文字列
 | 指定したバッファの新しいタイトルを設定
+
+// TRANSLATION MISSING
+| modes | 4.3.0 | any string
+| Set new modes for buffer.
 
 | time_for_each_line | | "0" または "1"
 | バッファのすべての行に時間を表示しない場合は "0"、表示する場合は
@@ -13873,11 +15242,20 @@ void weechat_buffer_set (struct t_gui_buffer *buffer, const char *property,
 | key_unbind_xxx | | -
 | 指定したバッファに対してキー _xxx_ の割り当てを解除する
 
+// TRANSLATION MISSING
+| input_prompt | 4.3.0 | any string
+| Set new value for input prompt.
+
 | input | | 任意の文字列
 | バッファ入力に新しい値を設定
 
 | input_pos | | 位置
 | バッファ入力のカーソル位置を設定
+
+// TRANSLATION MISSING
+| input_get_any_user_data | 4.3.0 | "0" or "1"
+| "0" to get only user messages (default behavior), "1" to get everything,
+  including commands.
 
 | input_get_unknown_commands | | "0" または "1"
 | 指定したバッファに対する未定義のコマンドを無効にする場合は "0"
@@ -14050,7 +15428,8 @@ str = weechat.buffer_string_replace_local_var(my_buffer, "test with $toto")
 
 ==== buffer_match_list
 
-_WeeChat バージョン 0.3.5 以上で利用可。_
+// TRANSLATION MISSING
+_WeeChat ≥ 0.3.5, updated in 4.0.0._
 
 バッファがバッファのリストにマッチすることを確認。
 
@@ -14069,6 +15448,10 @@ int weechat_buffer_match_list (struct t_gui_buffer *buffer, const char *string);
 ** 名前の最初に `+!+` がある場合はその名前を含まない場合にマッチ
 ** 名前にワイルドカード `+*+` を使うことができます
 
+// TRANSLATION MISSING
+[NOTE]
+Since version 4.0.0, comparison of buffer names is case-sensitive.
+
 戻り値:
 
 * バッファがバッファリストにマッチする場合は 1、そうでない場合は 0
@@ -14082,7 +15465,7 @@ if (buffer)
 {
     weechat_printf (NULL, "%d", weechat_buffer_match_list (buffer, "*"));                    /* 1 */
     weechat_printf (NULL, "%d", weechat_buffer_match_list (buffer, "*,!*#weechat*"));        /* 0 */
-    weechat_printf (NULL, "%d", weechat_buffer_match_list (buffer, "irc.libera.*"));       /* 1 */
+    weechat_printf (NULL, "%d", weechat_buffer_match_list (buffer, "irc.libera.*"));         /* 1 */
     weechat_printf (NULL, "%d", weechat_buffer_match_list (buffer, "irc.oftc.*,python.*"));  /* 0 */
 }
 ----
@@ -14099,8 +15482,52 @@ buffer = weechat.buffer_search("irc", "libera.#weechat")
 if buffer:
     weechat.prnt("", "%d" % weechat.buffer_match_list(buffer, "*"))                    # 1
     weechat.prnt("", "%d" % weechat.buffer_match_list(buffer, "*,!*#weechat*"))        # 0
-    weechat.prnt("", "%d" % weechat.buffer_match_list(buffer, "irc.libera.*"))       # 1
+    weechat.prnt("", "%d" % weechat.buffer_match_list(buffer, "irc.libera.*"))         # 1
     weechat.prnt("", "%d" % weechat.buffer_match_list(buffer, "irc.oftc.*,python.*"))  # 0
+----
+
+// TRANSLATION MISSING
+[[buffer_lines]]
+=== Buffer lines
+
+// TRANSLATION MISSING
+Functions for buffer lines.
+
+==== line_search_by_id
+
+_WeeChat ≥ 4.4.0._
+
+// TRANSLATION MISSING
+Search line in buffer by identifier.
+
+プロトタイプ:
+
+[source,c]
+----
+struct t_gui_line *weechat_line_search_by_id (struct t_gui_buffer *buffer, int id);
+----
+
+戻り値:
+
+// TRANSLATION MISSING
+* pointer to line found, NULL if not found
+
+C 言語での使用例:
+
+[source,c]
+----
+struct t_gui_line *line = weechat_line_search_by_id (buffer, 123);
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def line_search_by_id(buffer: str, line_id: int) -> str: ...
+
+# 例
+line = weechat.line_search_by_id(buffer, 123)
 ----
 
 [[windows]]
@@ -14167,7 +15594,7 @@ C 言語での使用例:
 [source,c]
 ----
 weechat_printf (NULL,
-                "window displaying core buffer: %lx",
+                "window displaying core buffer: %p",
                 weechat_window_search_with_buffer (weechat_buffer_search_main ()));
 ----
 
@@ -14304,7 +15731,7 @@ C 言語での使用例:
 [source,c]
 ----
 weechat_printf (NULL,
-                "buffer displayed in current window: %lx",
+                "buffer displayed in current window: %p",
                 weechat_window_get_pointer (weechat_current_window (), "buffer"));
 ----
 
@@ -14428,7 +15855,10 @@ group = weechat.nicklist_add_group(my_buffer, my_parent_group, "test_group",
 
 ==== nicklist_search_group
 
-ニックネームリストからグループを検索。
+_WeeChat バージョン 4.3.0 で更新。_
+
+// TRANSLATION MISSING
+Search a group in a nicklist by name or unique identifier (`id`).
 
 プロトタイプ:
 
@@ -14444,7 +15874,9 @@ struct t_gui_nick_group *weechat_nicklist_search_group (struct t_gui_buffer *buf
 * _buffer_: バッファへのポインタ
 * _from_group_:
   このグループのみを検索、全てのニックネームリストから検索する場合は NULL
-* _name_: 検索するグループ名
+// TRANSLATION MISSING
+* _name_: group name to search; with WeeChat ≥ 4.3.0, a unique identifier can
+  be given with the format: `==id:xxx` (where `xxx` is the identifier)
 
 戻り値:
 
@@ -14454,8 +15886,10 @@ C 言語での使用例:
 
 [source,c]
 ----
-struct t_gui_nick_group *ptr_group = weechat_nicklist_search_group (my_buffer,
-                                                                    NULL, "test_group");
+struct t_gui_nick_group *ptr_group1 = weechat_nicklist_search_group (my_buffer,
+                                                                     NULL, "test_group");
+struct t_gui_nick_group *ptr_group2 = weechat_nicklist_search_group (my_buffer,
+                                                                     NULL, "==id:1714382231198764");
 ----
 
 スクリプト (Python) での使用例:
@@ -14466,7 +15900,8 @@ struct t_gui_nick_group *ptr_group = weechat_nicklist_search_group (my_buffer,
 def nicklist_search_group(buffer: str, from_group: str, name: str) -> str: ...
 
 # 例
-group = weechat.nicklist_search_group(my_buffer, "", "test_group")
+group1 = weechat.nicklist_search_group(my_buffer, "", "test_group")
+group2 = weechat.nicklist_search_group(my_buffer, "", "==id:1714382231198764")
 ----
 
 ==== nicklist_add_nick
@@ -14477,13 +15912,13 @@ group = weechat.nicklist_search_group(my_buffer, "", "test_group")
 
 [source,c]
 ----
-struct t_gui_nick_group *weechat_nicklist_add_nick (struct t_gui_buffer *buffer,
-                                                    struct t_gui_nick_group *group,
-                                                    const char *name,
-                                                    const char *color,
-                                                    const char *prefix,
-                                                    const char *prefix_color,
-                                                    int visible);
+struct t_gui_nick *weechat_nicklist_add_nick (struct t_gui_buffer *buffer,
+                                              struct t_gui_nick_group *group,
+                                              const char *name,
+                                              const char *color,
+                                              const char *prefix,
+                                              const char *prefix_color,
+                                              int visible);
 ----
 
 引数:
@@ -14543,7 +15978,10 @@ nick = weechat.nicklist_add_nick(my_buffer, my_group, "test_nick", color, "@", "
 
 ==== nicklist_search_nick
 
-ニックネームリストからニックネームを検索。
+_WeeChat バージョン 4.3.0 で更新。_
+
+// TRANSLATION MISSING
+Search a nick in a nicklist by name or unique identifier (`id`).
 
 プロトタイプ:
 
@@ -14559,7 +15997,9 @@ struct t_gui_nick *weechat_nicklist_search_nick (struct t_gui_buffer *buffer,
 * _buffer_: バッファへのポインタ
 * _from_group_:
   このグループのみを検索、全てのニックネームリストから検索する場合は NULL
-* _name_: 検索するニックネーム
+// TRANSLATION MISSING
+* _name_: nick name to search; with WeeChat ≥ 4.3.0, a unique identifier can
+  be given with the format: `==id:xxx` (where `xxx` is the identifier)
 
 戻り値:
 
@@ -14569,8 +16009,10 @@ C 言語での使用例:
 
 [source,c]
 ----
-struct t_gui_nick *ptr_nick = weechat_nicklist_search_nick (my_buffer,
-                                                            NULL, "test_nick");
+struct t_gui_nick *ptr_nick1 = weechat_nicklist_search_nick (my_buffer,
+                                                             NULL, "test_nick");
+struct t_gui_nick *ptr_nick2 = weechat_nicklist_search_nick (my_buffer,
+                                                             NULL, "==id:1714382252187496");
 ----
 
 スクリプト (Python) での使用例:
@@ -14581,7 +16023,8 @@ struct t_gui_nick *ptr_nick = weechat_nicklist_search_nick (my_buffer,
 def nicklist_search_nick(buffer: str, from_group: str, name: str) -> str: ...
 
 # 例
-nick = weechat.nicklist_search_nick(my_buffer, "", "test_nick")
+nick1 = weechat.nicklist_search_nick(my_buffer, "", "test_nick")
+nick2 = weechat.nicklist_search_nick(my_buffer, "", "==id:1714382252187496")
 ----
 
 ==== nicklist_remove_group
@@ -14802,6 +16245,8 @@ const char *weechat_nicklist_group_get_string (struct t_gui_buffer *buffer,
 * _buffer_: バッファへのポインタ
 * _group_: グループへのポインタ
 * _property_: プロパティ名:
+// TRANSLATION MISSING
+** _id_: unique identifier _(WeeChat ≥ 4.3.0)_
 ** _name_: グループの名前
 ** _color_: ニックネームリストのグループ色
 
@@ -14873,7 +16318,8 @@ parent = weechat.nicklist_group_get_pointer(buffer, group, "parent")
 
 ==== nicklist_group_set
 
-_WeeChat バージョン 0.3.4 以上で利用可。_
+// TRANSLATION MISSING
+_WeeChat ≥ 0.3.4, updated in 4.3.0._
 
 グループプロパティの文字列値。
 
@@ -14896,15 +16342,21 @@ void weechat_nicklist_group_set (struct t_gui_buffer *buffer,
 
 プロパティ:
 
-[width="100%",cols="^2,4,8",options="header"]
+[width="100%",cols="^2,^1,4,8",options="header"]
 |===
-| 名前 | 値 | 説明
+// TRANSLATION MISSING
+| 名前 | Min WeeChat | 値 | 説明
 
-| color | WeeChat 色オプション名
+// TRANSLATION MISSING
+| id | 4.3.0 | long long integer ≥ 0
+| New id for the group (it must be unique in the buffer). +
+  Note: it is not recommended to change this identifier.
+
+| color | | WeeChat 色オプション名
 | 関数 <<_nicklist_add_group,nicklist_add_group>>
   の引数 "color" を参照
 
-| visible | "0"、"1"
+| visible | | "0"、"1"
 | "0" = 非表示状態のグループ、"1" = 表示状態のグループ
 |===
 
@@ -15005,6 +16457,8 @@ const char *weechat_nicklist_nick_get_string (struct t_gui_buffer *buffer,
 * _buffer_: バッファへのプロパティ
 * _nick_: ニックネームへのポインタ
 * _property_: プロパティ名:
+// TRANSLATION MISSING
+** _id_: unique identifier _(WeeChat ≥ 4.3.0)_
 ** _name_: ニックネームの名前
 ** _color_: ニックネームリスト内でのニックネームの色
 ** _prefix_: ニックネームのプレフィックス
@@ -15078,7 +16532,8 @@ group = weechat.nicklist_nick_get_pointer(buffer, nick, "group")
 
 ==== nicklist_nick_set
 
-_WeeChat バージョン 0.3.4 以上で利用可。_
+// TRANSLATION MISSING
+_WeeChat ≥ 0.3.4, updated in 4.3.0._
 
 ニックネームプロパティの文字列値を設定。
 
@@ -15101,22 +16556,28 @@ void weechat_nicklist_nick_set (struct t_gui_buffer *buffer,
 
 プロパティ:
 
-[width="100%",cols="^2,4,8",options="header"]
+[width="100%",cols="^2,^1,4,8",options="header"]
 |===
-| 名前 | 値 | 説明
+// TRANSLATION MISSING
+| 名前 | Min WeeChat | 値 | 説明
 
-| color | WeeChat 色オプション名
+// TRANSLATION MISSING
+| id | 4.3.0 | long long integer ≥ 0
+| New id for the nick (it must be unique in the buffer). +
+  Note: it is not recommended to change this identifier.
+
+| color | | WeeChat 色オプション名
 | 関数 <<_nicklist_add_nick,nicklist_add_nick>>
   の引数 "color" を参照
 
-| prefix | 任意の文字列
+| prefix | | 任意の文字列
 | 指定したニックネームのプレフィックス
 
-| prefix_color | WeeChat color option name
+| prefix_color | | WeeChat color option name
 | 関数 <<_nicklist_add_nick,nicklist_add_nick>>
   の引数 "prefix_color" を参照
 
-| visible | "0", "1"
+| visible | | "0", "1"
 | "0" = 非表示状態のニックネーム、"1" = 表示状態のニックネーム
 |===
 
@@ -15398,7 +16859,7 @@ bar = weechat.bar_search("mybar")
 
 ==== bar_new
 
-_WeeChat バージョン 2.9 で更新。_
+_WeeChat バージョン 2.9, 4.0.0 で更新。_
 
 新しいバーを作成。
 
@@ -15439,7 +16900,7 @@ struct t_gui_bar *weechat_bar_new (const char *name,
 ** _inactive_: 非アクティブウィンドウのみに表示されているバー
 ** _nicklist_: ニックネームリストを持つウィンドウに表示されているバー
 ** 評価された式:
-   link:weechat_user.ja.html#bar_conditions[WeeChat ユーザーズガイド / バー状態 ^↗^,window=_blank]を参照してください
+   link:weechat_user.ja.html#bar_conditions[WeeChat ユーザーズガイド / バー状態 ^↗^^]を参照してください
 * _position_: _top_、_bottom_、_left_、_right_
 * _filling_top_bottom_:
 ** _horizontal_: 要素は水平方向に詰め込まれている (各要素の後に間隔)
@@ -15469,26 +16930,19 @@ struct t_gui_bar *weechat_bar_new (const char *name,
 
 * 新しいバーへのポインタ、エラーが起きた場合は NULL
 
+// TRANSLATION MISSING
+[NOTE]
+Since version 4.0.0, if the bar already exists, WeeChat sets the values received
+as default values for bar options and returns the bar pointer instead of NULL.
+
 C 言語での使用例:
 
 [source,c]
 ----
-struct t_gui_bar *my_bar = weechat_bar_new ("mybar",
-                                            "off",
-                                            "100",
-                                            "window",
-                                            "",
-                                            "top",
-                                            "horizontal",
-                                            "vertical",
-                                            "0",
-                                            "5",
-                                            "default",
-                                            "cyan",
-                                            "blue",
-                                            "darkgray",
-                                            "off",
-                                            "time,buffer_number+buffer_name");
+struct t_gui_bar *my_bar = weechat_bar_new (
+    "mybar", "off", "100", "window", "", "top", "horizontal", "vertical",
+    "0", "5", "default", "cyan", "blue", "darkgray", "off",
+    "time,buffer_number+buffer_name");
 ----
 
 スクリプト (Python) での使用例:
@@ -15511,7 +16965,7 @@ bar = weechat.bar_new("mybar", "off", "100", "window", "", "top", "horizontal", 
 With WeeChat ≥ 2.9, in Ruby, the 4 colors (color_fg, color_delim, color_bg,
 color_bg_inactive) must be given in an array of 4 strings (due to a Ruby
 limitation of 15 arguments by function), see the
-link:++weechat_scripting.ja.html#_ruby++[WeeChat scripting guide ^↗^,window=_blank]
+link:++weechat_scripting.ja.html#_ruby++[WeeChat scripting guide ^↗^^]
 for more info.
 
 ==== bar_set
@@ -15627,7 +17081,8 @@ WeeChat コマンドを実行する関数。
 
 ==== command
 
-_WeeChat バージョン 1.1 で更新。_
+// TRANSLATION MISSING
+_Updated in 1.1, 4.0.0._
 
 コマンドを実行するか、バッファにテキストを送信。
 
@@ -15644,6 +17099,11 @@ int weechat_command (struct t_gui_buffer *buffer, const char *command);
   (コマンドは指定したバッファで実行されます、現在のバッファで実行するには NULL を指定してください)
 * _command_: 実行するコマンド ("/"
   で始まっている場合)、またはバッファに送信するテキスト
+
+// TRANSLATION MISSING
+[NOTE]
+On buffer with `input_multiline` set to `0` (default), only the first command
+is executed (before the first newline char: `\n`).
 
 戻り値 _(WeeChat バージョン 1.1 以上で利用可)_:
 
@@ -15672,7 +17132,8 @@ rc = weechat.command(weechat.buffer_search("irc", "libera.#weechat"), "/whois Fl
 
 ==== command_options
 
-_WeeChat バージョン 2.5 以上で利用可。_
+// TRANSLATION MISSING
+_WeeChat ≥ 2.5, updated in 4.0.0, 4.5.0._
 
 バッファにてオプション付きでコマンドを実行またはテキストを送信
 
@@ -15688,15 +17149,20 @@ int weechat_command_options (struct t_gui_buffer *buffer, const char *command,
 
 * _buffer_: バッファへのポインタ
   (コマンドは指定したバッファで実行されます、現在のバッファで実行するには NULL を指定してください)
-* _command_: 実行するコマンド ("/"
-  で始まっている場合)、またはバッファに送信するテキスト
+// TRANSLATION MISSING
+* _command_: 実行するコマンド (if beginning with a `/` or a command char)、またはバッファに送信するテキスト
 * _options_: オプションを含むハッシュテーブル (キーと値は文字列です)
   (NULL は使えません):
 * _options_: a hashtable with some options (keys and values must be string)
   (can be NULL):
+// TRANSLATION MISSING
 ** _commands_: 指定したコマンドの中で実行を許可するコマンドのカンマ区切りリスト、リストの書式は関数
-   <<_string_match_list,string_match_list>> を参考にしてください
+   <<_string_match_list,string_match_list>> を参考にしてください;
+   the special value `-` (hyphen-minus) disables the execution of commands
+   and the string in _command_ is sent as-is to the buffer (_WeeChat ≥ 4.5.0_)
 ** _delay_: コマンド実行までの遅延時間、ミリ秒単位
+// TRANSLATION MISSING
+** _split_newline_: `1` to split commands on newline char (`\n`) (_WeeChat ≥ 4.0.0_)
 
 戻り値:
 
@@ -15727,7 +17193,7 @@ rc = weechat_command_options (NULL, "/some_command arguments", options);
 def command_options(buffer: str, command: str, options: Dict[str, str]) -> int: ...
 
 # 例: /exec 以外のコマンド実行を許可
-rc = weechat.command("", "/some_command arguments", {"commands": "*,!exec"})
+rc = weechat.command_options("", "/some_command arguments", {"commands": "*,!exec", "delay": "2000"})
 ----
 
 // TRANSLATION MISSING
@@ -16099,7 +17565,7 @@ WeeChat バージョン 2.5 以上の場合、返却される値は確保され�
 
 インフォ:
 
-include::includes/autogen_api_infos.ja.adoc[tag=infos]
+include::{autogendir}/autogen_api_infos.ja.adoc[tag=infos]
 
 C 言語での使用例:
 
@@ -16155,11 +17621,13 @@ struct t_hashtable *weechat_info_get_hashtable (const char *info_name,
 
 戻り値:
 
-* 指定したインフォを含むハッシュテーブル、エラーが起きた場合は NULL
+// TRANSLATION MISSING
+* 指定したインフォを含むハッシュテーブル、エラーが起きた場合は NULL (must be
+  freed by calling <<_hashtable_free,hashtable_free>> after use)
 
 インフォ:
 
-include::includes/autogen_api_infos_hashtable.ja.adoc[tag=infos_hashtable]
+include::{autogendir}/autogen_api_infos_hashtable.ja.adoc[tag=infos_hashtable]
 
 C 言語での使用例:
 
@@ -16208,8 +17676,7 @@ if (hashtable_in)
 
 [NOTE]
 "irc_message_parse" の出力に関するより詳しい情報は
-link:weechat_scripting.ja.html#irc_message_parse[WeeChat スクリプト作成ガイド / メッセージの構文解析 ^↗^,window=_blank]を参照してください。
-
+link:weechat_scripting.ja.html#irc_message_parse[WeeChat スクリプト作成ガイド / メッセージの構文解析 ^↗^^]を参照してください。
 
 スクリプト (Python) での使用例:
 
@@ -16557,7 +18024,7 @@ struct t_infolist *weechat_infolist_get (const char *infolist_name,
 
 インフォリスト:
 
-include::includes/autogen_api_infolists.ja.adoc[tag=infolists]
+include::{autogendir}/autogen_api_infolists.ja.adoc[tag=infolists]
 
 C 言語での使用例:
 
@@ -16901,8 +18368,7 @@ C 言語での使用例:
 
 [source,c]
 ----
-weechat_printf (NULL, "pointer = 0x%lx",
-                weechat_infolist_pointer (infolist, "my_pointer"));
+weechat_printf (NULL, "pointer = %p", weechat_infolist_pointer (infolist, "my_pointer"));
 ----
 
 スクリプト (Python) での使用例:
@@ -16944,8 +18410,7 @@ C 言語での使用例:
 ----
 int size;
 void *pointer = weechat_infolist_buffer (infolist, "my_buffer", &size);
-weechat_printf (NULL, "buffer = 0x%lx, size = %d",
-                pointer, size);
+weechat_printf (NULL, "buffer = %p, size = %d", pointer, size);
 ----
 
 [NOTE]
@@ -16987,7 +18452,7 @@ weechat_printf (NULL, "time = %ld",
 def infolist_time(infolist: str, var: str) -> int: ...
 
 # 例
-weechat.prnt("", "time = %ld" % weechat.infolist_time(infolist, "my_time"))
+weechat.prnt("", "time = %d" % weechat.infolist_time(infolist, "my_time"))
 ----
 
 ==== infolist_free
@@ -17102,7 +18567,7 @@ struct t_hdata *hdata = weechat_hdata_new ("myplugin_list", "prev", "next", 0, 0
 ==== hdata_new_var
 
 // TRANSLATION MISSING
-_WeeChat ≥ 0.3.6, updated in 0.3.7, 0.3.9, 0.4.3, 3.4._
+_WeeChat ≥ 0.3.6, updated in 0.3.7, 0.3.9, 0.4.3, 3.4, 4.3.0._
 
 hdata に新しい変数を作成。
 
@@ -17123,6 +18588,7 @@ void weechat_hdata_new_var (struct t_hdata *hdata, const char *name, int offset,
 ** _WEECHAT_HDATA_CHAR_
 ** _WEECHAT_HDATA_INTEGER_
 ** _WEECHAT_HDATA_LONG_
+** _WEECHAT_HDATA_LONGLONG_ (_WeeChat ≥ 4.3.0_)
 ** _WEECHAT_HDATA_STRING_
 ** _WEECHAT_HDATA_SHARED_STRING_ (_WeeChat ≥ 0.4.3_)
 ** _WEECHAT_HDATA_POINTER_
@@ -17308,7 +18774,7 @@ struct t_hdata *weechat_hdata_get (const char *hdata_name);
 
 hdata のリスト:
 
-include::includes/autogen_api_hdata.ja.adoc[tag=hdata]
+include::{autogendir}/autogen_api_hdata.ja.adoc[tag=hdata]
 
 C 言語での使用例:
 
@@ -17348,7 +18814,7 @@ int weechat_hdata_get_var_offset (struct t_hdata *hdata, const char *name);
 
 戻り値:
 
-* オフセットの値、エラーが起きた場合は 0
+* オフセットの値、エラーが起きた場合は -1
 
 C 言語での使用例:
 
@@ -17404,6 +18870,9 @@ switch (type)
         /* ... */
         break;
     case WEECHAT_HDATA_LONG:
+        /* ... */
+        break;
+    case WEECHAT_HDATA_LONGLONG:
         /* ... */
         break;
     case WEECHAT_HDATA_STRING:
@@ -17852,7 +19321,7 @@ void *weechat_hdata_search (struct t_hdata *hdata, void *pointer, const char *se
 * _pointer_: WeeChat および plugin オブジェクトへのポインタ
 * _search_: 評価する式、式中のデフォルトポインタは hdata の名前
   (デフォルトポインタはリストに含まれる各要素で置換されます); 式に関する詳細は
-  link:weechat_user.ja.html#command_weechat_eval[WeeChat ユーザーズガイド / WeeChat コマンド / eval ^↗^,window=_blank] を参照してください
+  link:weechat_user.ja.html#command_weechat_eval[WeeChat ユーザーズガイド / WeeChat コマンド / eval ^↗^^] を参照してください
 * _pointers_: 関数に渡されるハッシュテーブル
   <<_string_eval_expression,string_eval_expression>>
 * _extra_vars_: 関数に渡されるハッシュテーブル
@@ -18007,7 +19476,7 @@ weechat.prnt("", "number = %d" % weechat.hdata_integer(hdata, buffer, "number"))
 
 _WeeChat バージョン 0.3.6 以上で利用可。_
 
-hdata を使って構造体に含まれる long 型変数の値を返す。
+hdata を使って構造体に含まれる "long" 型変数の値を返す。
 
 プロトタイプ:
 
@@ -18042,7 +19511,51 @@ weechat_printf (NULL, "longvar = %ld", weechat_hdata_long (hdata, pointer, "long
 def hdata_long(hdata: str, pointer: str, name: str) -> int: ...
 
 # 例
-weechat.prnt("", "longvar = %ld" % weechat.hdata_long(hdata, pointer, "longvar"))
+weechat.prnt("", "longvar = %d" % weechat.hdata_long(hdata, pointer, "longvar"))
+----
+
+==== hdata_longlong
+
+_WeeChat バージョン 4.3.0 以上で利用可。_
+
+// TRANSLATION MISSING
+Return value of "long long" variable in structure using hdata.
+
+プロトタイプ:
+
+[source,c]
+----
+long long weechat_hdata_longlong (struct t_hdata *hdata, void *pointer, const char *name);
+----
+
+引数:
+
+* _hdata_: hdata へのポインタ
+* _pointer_: WeeChat および plugin オブジェクトへのポインタ
+* _name_: 変数名 (必ず「long long 型」であること); 配列の場合、"N|name"
+  のように名前を指定することが可能。ここで N は配列のインデックス (1 番目は 0)、例: "2|name"
+
+戻り値:
+
+// TRANSLATION MISSING
+* "long long" value of variable
+
+C 言語での使用例:
+
+[source,c]
+----
+weechat_printf (NULL, "longlongvar = %lld", weechat_hdata_longlong (hdata, pointer, "longlongvar"));
+----
+
+スクリプト (Python) での使用例:
+
+[source,python]
+----
+# プロトタイプ
+def hdata_longlong(hdata: str, pointer: str, name: str) -> int: ...
+
+# 例
+weechat.prnt("", "longlongvar = %d" % weechat.hdata_longlong(hdata, pointer, "longlongvar"))
 ----
 
 ==== hdata_string
@@ -18121,7 +19634,7 @@ C 言語での使用例:
 ----
 struct t_hdata *hdata = weechat_hdata_get ("buffer");
 struct t_gui_buffer *buffer = weechat_buffer_search_main ();
-weechat_printf (NULL, "lines = %lx", weechat_hdata_pointer (hdata, buffer, "lines"));
+weechat_printf (NULL, "lines = %p", weechat_hdata_pointer (hdata, buffer, "lines"));
 ----
 
 スクリプト (Python) での使用例:
@@ -18134,7 +19647,7 @@ def hdata_pointer(hdata: str, pointer: str, name: str) -> str: ...
 # 例
 hdata = weechat.hdata_get("buffer")
 buffer = weechat.buffer_search_main()
-weechat.prnt("", "lines = %lx" % weechat.hdata_pointer(hdata, buffer, "lines"))
+weechat.prnt("", "lines = %x" % weechat.hdata_pointer(hdata, buffer, "lines"))
 ----
 
 ==== hdata_time
@@ -18258,7 +19771,8 @@ for key in hash:
 
 ==== hdata_compare
 
-_WeeChat バージョン 1.9 以上で利用可。_
+// TRANSLATION MISSING
+_WeeChat ≥ 1.9, updated in 4.1.0._
 
 2 つのオブジェクトの hdata 変数を比較。
 
@@ -18274,8 +19788,9 @@ int weechat_hdata_compare (struct t_hdata *hdata, void *pointer1, void *pointer2
 * _hdata_: hdata へのポインタ
 * _pointer1_: 1 番目の WeeChat およびプラグインオブジェクトへのポインタ
 * _pointer2_: 2 番目の WeeChat およびプラグインオブジェクトへのポインタ
-* _name_: 変数名; 配列の場合、変数名を "N|name" のように指定できます。ここで
-  N は配列のインデックス番号です (番号は 0 から始まります)。例: "2|name"
+// TRANSLATION MISSING
+* _name_: variable name or path to a variable name; 配列の場合、変数名を "N|name"
+  のように指定できます。ここで N は配列のインデックス番号です (番号は 0 から始まります)。例: "2|name"
 * _case_sensitive_: 大文字小文字を区別する場合 1、それ以外の場合 0
 
 戻り値:
@@ -18291,8 +19806,12 @@ C 言語での使用例:
 struct t_hdata *hdata = weechat_hdata_get ("buffer");
 struct t_gui_buffer *buffer1 = weechat_buffer_search ("irc", "libera.#weechat");
 struct t_gui_buffer *buffer2 = weechat_buffer_search ("irc", "libera.#weechat-fr");
-weechat_printf (NULL, "number comparison = %d",
+weechat_printf (NULL, "comparison of buffer number = %d",
                 weechat_hdata_compare (hdata, buffer1, buffer2, "number", 0));
+weechat_printf (NULL, "comparison of number of lines = %d",
+                weechat_hdata_compare (hdata, buffer1, buffer2, "own_lines.lines_count", 0));
+weechat_printf (NULL, "comparison of local variable = %d",
+                weechat_hdata_compare (hdata, buffer1, buffer2, "local_variables.myvar", 0));
 ----
 
 スクリプト (Python) での使用例:
@@ -18306,7 +19825,9 @@ def hdata_compare(hdata: str, pointer1: str, pointer2: str, name: str, case_sens
 hdata = weechat.hdata_get("buffer")
 buffer1 = weechat.buffer_search("irc", "libera.#weechat")
 buffer2 = weechat.buffer_search("irc", "libera.#weechat-fr")
-weechat.prnt("", "number comparison = %d" % weechat.hdata_compare(hdata, buffer1, buffer2, "number", 0))
+weechat.prnt("", "comparison of buffer number = %d" % weechat.hdata_compare(hdata, buffer1, buffer2, "number", 0))
+weechat.prnt("", "comparison of number of lines = %d" % weechat.hdata_compare(hdata, buffer1, buffer2, "own_lines.lines_count", 0))
+weechat.prnt("", "comparison of local variable = %d" % weechat.hdata_compare(hdata, buffer1, buffer2, "local_variables.myvar", 0))
 ----
 
 ==== hdata_set

@@ -1,7 +1,7 @@
 /*
  * xfer-chat.c - chat with direct connection to remote host
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -93,8 +93,7 @@ xfer_chat_sendf (struct t_xfer *xfer, const char *format, ...)
         xfer_close (xfer, XFER_STATUS_FAILED);
     }
 
-    if (msg_encoded)
-        free (msg_encoded);
+    free (msg_encoded);
 
     free (vbuffer);
 }
@@ -167,8 +166,8 @@ xfer_chat_recv_cb (const void *pointer, void *data, int fd)
                     length--;
                 }
 
-                if ((ptr_buf[0] == '\01')
-                    && (ptr_buf[length - 1] == '\01'))
+                if ((ptr_buf[0] == '\001')
+                    && (ptr_buf[length - 1] == '\001'))
                 {
                     ptr_buf[length - 1] = '\0';
                     ptr_buf++;
@@ -224,8 +223,7 @@ xfer_chat_recv_cb (const void *pointer, void *data, int fd)
                               (pv_tags && pv_tags[0]) ? "," : "",
                               (str_color) ? str_color : "default",
                               xfer->remote_nick);
-                    if (str_color)
-                        free (str_color);
+                    free (str_color);
                     weechat_printf_date_tags (
                         xfer->buffer,
                         0,
@@ -237,19 +235,15 @@ xfer_chat_recv_cb (const void *pointer, void *data, int fd)
                         xfer->remote_nick,
                         ptr_buf2);
                 }
-                if (ptr_buf_decoded)
-                    free (ptr_buf_decoded);
-                if (ptr_buf_without_weechat_colors)
-                    free (ptr_buf_without_weechat_colors);
-                if (ptr_buf_color)
-                    free (ptr_buf_color);
+                free (ptr_buf_decoded);
+                free (ptr_buf_without_weechat_colors);
+                free (ptr_buf_color);
             }
 
             ptr_buf = next_ptr_buf;
         }
 
-        if (buf2)
-            free (buf2);
+        free (buf2);
     }
     else
     {
@@ -290,8 +284,7 @@ xfer_chat_buffer_input_cb (const void *pointer, void *data,
                           "irc_privmsg,no_highlight,prefix_nick_%s,nick_%s,log1",
                           (str_color) ? str_color : "default",
                           ptr_xfer->local_nick);
-                if (str_color)
-                    free (str_color);
+                free (str_color);
                 input_data_color = weechat_hook_modifier_exec ("irc_color_decode",
                                                                "1",
                                                                input_data);
@@ -303,8 +296,7 @@ xfer_chat_buffer_input_cb (const void *pointer, void *data,
                     weechat_color ("chat_nick_self"),
                     ptr_xfer->local_nick,
                     (input_data_color) ? input_data_color : input_data);
-                if (input_data_color)
-                    free (input_data_color);
+                free (input_data_color);
             }
         }
     }
@@ -344,55 +336,75 @@ xfer_chat_buffer_close_cb (const void *pointer, void *data,
 }
 
 /*
+ * Applies properties to a buffer.
+ */
+
+void
+xfer_chat_apply_props (void *data,
+                       struct t_hashtable *hashtable,
+                       const void *key,
+                       const void *value)
+{
+    /* make C compiler happy */
+    (void) hashtable;
+
+    weechat_buffer_set ((struct t_gui_buffer *)data,
+                        (const char *)key,
+                        (const char *)value);
+}
+
+/*
  * Creates buffer for DCC chat.
  */
 
 void
 xfer_chat_open_buffer (struct t_xfer *xfer)
 {
+    struct t_hashtable *buffer_props;
     char *name;
-    int length, buffer_created;
 
-    buffer_created = 0;
+    buffer_props = NULL;
 
-    length = strlen (xfer->plugin_name) + 8 + strlen (xfer->plugin_id) + 1
-        + strlen (xfer->remote_nick) + 1;
-    name = malloc (length);
-    if (!name)
-        return;
+    if (weechat_asprintf (&name, "%s_dcc.%s.%s",
+                          xfer->plugin_name,
+                          xfer->plugin_id,
+                          xfer->remote_nick) < 0)
+        goto end;
 
-    snprintf (name, length, "%s_dcc.%s.%s",
-              xfer->plugin_name, xfer->plugin_id, xfer->remote_nick);
-    xfer->buffer = weechat_buffer_search (XFER_PLUGIN_NAME, name);
-    if (!xfer->buffer)
+    buffer_props = weechat_hashtable_new (
+        32,
+        WEECHAT_HASHTABLE_STRING,
+        WEECHAT_HASHTABLE_STRING,
+        NULL, NULL);
+    if (buffer_props)
     {
-        xfer->buffer = weechat_buffer_new (
-            name,
-            &xfer_chat_buffer_input_cb, NULL, NULL,
-            &xfer_chat_buffer_close_cb, NULL, NULL);
-        buffer_created = 1;
 
-        /* failed to create buffer ? then return */
-        if (!xfer->buffer)
-        {
-            free (name);
-            return;
-        }
+        weechat_hashtable_set (buffer_props, "title", _("xfer chat"));
+        weechat_hashtable_set (buffer_props, "short_name", xfer->remote_nick);
+        weechat_hashtable_set (buffer_props, "input_prompt", xfer->local_nick);
+        weechat_hashtable_set (buffer_props, "localvar_set_type", "private");
+        weechat_hashtable_set (buffer_props, "localvar_set_nick", xfer->local_nick);
+        weechat_hashtable_set (buffer_props, "localvar_set_channel", xfer->remote_nick);
+        weechat_hashtable_set (buffer_props, "localvar_set_tls_version", "cleartext");
+        weechat_hashtable_set (buffer_props, "highlight_words_add", "$nick");
     }
 
-    if (buffer_created)
+    xfer->buffer = weechat_buffer_search (XFER_PLUGIN_NAME, name);
+    if (xfer->buffer)
     {
-        weechat_buffer_set (xfer->buffer, "title", _("xfer chat"));
-        if (!weechat_buffer_get_integer (xfer->buffer, "short_name_is_set"))
-        {
-            weechat_buffer_set (xfer->buffer, "short_name",
-                                xfer->remote_nick);
-        }
-        weechat_buffer_set (xfer->buffer, "localvar_set_type", "private");
-        weechat_buffer_set (xfer->buffer, "localvar_set_nick", xfer->local_nick);
-        weechat_buffer_set (xfer->buffer, "localvar_set_channel", xfer->remote_nick);
-        weechat_buffer_set (xfer->buffer, "localvar_set_tls_version", "cleartext");
-        weechat_buffer_set (xfer->buffer, "highlight_words_add", "$nick");
+        weechat_hashtable_remove (buffer_props, "short_name");
+        weechat_hashtable_remove (buffer_props, "highlight_words_add");
+        weechat_hashtable_map (buffer_props, &xfer_chat_apply_props, xfer->buffer);
+    }
+    else
+    {
+        xfer->buffer = weechat_buffer_new_props (
+            name,
+            buffer_props,
+            &xfer_chat_buffer_input_cb, NULL, NULL,
+            &xfer_chat_buffer_close_cb, NULL, NULL);
+        if (!xfer->buffer)
+            goto end;
     }
 
     weechat_printf (xfer->buffer,
@@ -402,5 +414,7 @@ xfer_chat_open_buffer (struct t_xfer *xfer)
                     xfer->remote_nick,
                     xfer->remote_address_str);
 
+end:
+    weechat_hashtable_free (buffer_props);
     free (name);
 }

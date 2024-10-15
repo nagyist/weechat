@@ -1,7 +1,7 @@
 /*
  * test-irc-config.cpp - test IRC configuration functions
  *
- * Copyright (C) 2019-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2019-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -29,6 +29,26 @@ extern "C"
 TEST_GROUP(IrcConfig)
 {
 };
+
+/*
+ * Tests functions:
+ *   irc_config_notice_nick_notify
+ */
+
+TEST(IrcConfig, NoticeNickNotify)
+{
+    LONGS_EQUAL(0, irc_config_notice_nick_notify (NULL));
+    LONGS_EQUAL(1, irc_config_notice_nick_notify (""));
+
+    LONGS_EQUAL(1, irc_config_notice_nick_notify ("test"));
+    LONGS_EQUAL(1, irc_config_notice_nick_notify ("memoserv"));
+
+    /* default list of nicks preventing notification */
+    LONGS_EQUAL(0, irc_config_notice_nick_notify ("chanserv"));
+    LONGS_EQUAL(0, irc_config_notice_nick_notify ("ChanServ"));
+    LONGS_EQUAL(0, irc_config_notice_nick_notify ("nickserv"));
+    LONGS_EQUAL(0, irc_config_notice_nick_notify ("NickServ"));
+}
 
 /*
  * Tests functions:

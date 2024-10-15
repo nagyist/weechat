@@ -1,7 +1,7 @@
 /*
  * test-typing-status.cpp - test typing status functions
  *
- * Copyright (C) 2021-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2021-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -25,7 +25,7 @@
 
 extern "C"
 {
-#include "src/core/wee-hashtable.h"
+#include "src/core/core-hashtable.h"
 #include "src/gui/gui-buffer.h"
 #include "src/plugins/typing/typing-status.h"
 }

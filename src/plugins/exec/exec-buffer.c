@@ -1,7 +1,7 @@
 /*
  * exec-buffer.c - buffers with output of commands
  *
- * Copyright (C) 2014-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2014-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -68,10 +68,8 @@ exec_buffer_input_cb (const void *pointer, void *data,
     if (argv && argv_eol)
         exec_command_run (buffer, argc, argv, argv_eol, 0);
 
-    if (argv)
-        weechat_string_free_split (argv);
-    if (argv_eol)
-        weechat_string_free_split (argv_eol);
+    weechat_string_free_split (argv);
+    weechat_string_free_split (argv_eol);
 
     return WEECHAT_RC_OK;
 }
@@ -148,6 +146,7 @@ exec_buffer_new (const char *name, int free_content, int clear_buffer,
                  int switch_to_buffer)
 {
     struct t_gui_buffer *new_buffer;
+    struct t_hashtable *buffer_props;
     int buffer_type;
 
     new_buffer = weechat_buffer_search (EXEC_PLUGIN_NAME, name);
@@ -165,22 +164,34 @@ exec_buffer_new (const char *name, int free_content, int clear_buffer,
         goto end;
     }
 
-    new_buffer = weechat_buffer_new (name,
-                                     &exec_buffer_input_cb, NULL, NULL,
-                                     &exec_buffer_close_cb, NULL, NULL);
+
+
+    buffer_props = weechat_hashtable_new (32,
+                                          WEECHAT_HASHTABLE_STRING,
+                                          WEECHAT_HASHTABLE_STRING,
+                                          NULL, NULL);
+    if (buffer_props)
+    {
+        if (free_content)
+            weechat_hashtable_set (buffer_props, "type", "free");
+        weechat_hashtable_set (buffer_props, "clear", "1");
+        weechat_hashtable_set (buffer_props, "title", _("Executed commands"));
+        weechat_hashtable_set (buffer_props, "localvar_set_type", "exec");
+        weechat_hashtable_set (buffer_props, "localvar_set_no_log", "1");
+        weechat_hashtable_set (buffer_props, "time_for_each_line", "0");
+        weechat_hashtable_set (buffer_props, "input_get_unknown_commands", "0");
+    }
+
+    new_buffer = weechat_buffer_new_props (name,
+                                           buffer_props,
+                                           &exec_buffer_input_cb, NULL, NULL,
+                                           &exec_buffer_close_cb, NULL, NULL);
+
+    weechat_hashtable_free (buffer_props);
 
     /* failed to create buffer ? then return */
     if (!new_buffer)
         return NULL;
-
-    if (free_content)
-        weechat_buffer_set (new_buffer, "type", "free");
-    weechat_buffer_set (new_buffer, "clear", "1");
-    weechat_buffer_set (new_buffer, "title", _("Executed commands"));
-    weechat_buffer_set (new_buffer, "localvar_set_type", "exec");
-    weechat_buffer_set (new_buffer, "localvar_set_no_log", "1");
-    weechat_buffer_set (new_buffer, "time_for_each_line", "0");
-    weechat_buffer_set (new_buffer, "input_get_unknown_commands", "0");
 
 end:
     if (clear_buffer)

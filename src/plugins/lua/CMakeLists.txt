@@ -1,6 +1,6 @@
 #
 # Copyright (C) 2006-2007 Emmanuel Bouthenot <kolter@openics.org>
-# Copyright (C) 2006-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2006-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -29,4 +29,4 @@ if(LUA_FOUND)
   target_link_libraries(lua ${LUA_LDFLAGS} weechat_plugins_scripts coverage_config)
 endif()
 
-install(TARGETS lua LIBRARY DESTINATION ${WEECHAT_LIBDIR}/plugins)
+install(TARGETS lua LIBRARY DESTINATION "${WEECHAT_LIBDIR}/plugins")

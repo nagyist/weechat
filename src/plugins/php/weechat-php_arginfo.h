@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: a89a2f8dfa145afbf1c86bf246715c88babebb07 */
+ * Stub hash: ac17ccd00483eea80bd3dc22ec07ab3bf41dec88 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_weechat_register, 0, 7, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, p0, IS_STRING, 0)
@@ -130,6 +130,13 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_weechat_config_new, 0, 3, IS_STR
 	ZEND_ARG_TYPE_INFO(0, p2, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_weechat_config_set_version, 0, 4, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, p0, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, p1, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, p2, IS_MIXED, 0)
+	ZEND_ARG_TYPE_INFO(0, p3, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
 #define arginfo_weechat_config_new_section arginfo_weechat_list_new
 
 #define arginfo_weechat_config_search_section arginfo_weechat_iconv_to_internal
@@ -154,6 +161,10 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_weechat_config_option_rename arginfo_weechat_string_has_highlight
 
+#define arginfo_weechat_config_option_get_string arginfo_weechat_iconv_to_internal
+
+#define arginfo_weechat_config_option_get_pointer arginfo_weechat_iconv_to_internal
+
 #define arginfo_weechat_config_option_is_null arginfo_weechat_charset_set
 
 #define arginfo_weechat_config_option_default_is_null arginfo_weechat_charset_set
@@ -162,17 +173,31 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_weechat_config_boolean_default arginfo_weechat_charset_set
 
+#define arginfo_weechat_config_boolean_inherited arginfo_weechat_charset_set
+
 #define arginfo_weechat_config_integer arginfo_weechat_charset_set
 
 #define arginfo_weechat_config_integer_default arginfo_weechat_charset_set
+
+#define arginfo_weechat_config_integer_inherited arginfo_weechat_charset_set
 
 #define arginfo_weechat_config_string arginfo_weechat_plugin_get_name
 
 #define arginfo_weechat_config_string_default arginfo_weechat_plugin_get_name
 
+#define arginfo_weechat_config_string_inherited arginfo_weechat_plugin_get_name
+
 #define arginfo_weechat_config_color arginfo_weechat_plugin_get_name
 
 #define arginfo_weechat_config_color_default arginfo_weechat_plugin_get_name
+
+#define arginfo_weechat_config_color_inherited arginfo_weechat_plugin_get_name
+
+#define arginfo_weechat_config_enum arginfo_weechat_charset_set
+
+#define arginfo_weechat_config_enum_default arginfo_weechat_charset_set
+
+#define arginfo_weechat_config_enum_inherited arginfo_weechat_charset_set
 
 #define arginfo_weechat_config_write_option arginfo_weechat_string_has_highlight
 
@@ -228,18 +253,29 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_weechat_print_date_tags, 0, 4, I
 	ZEND_ARG_TYPE_INFO(0, p3, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_weechat_print_datetime_tags, 0, 5, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, p0, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, p1, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, p2, IS_LONG, 0)
+	ZEND_ARG_TYPE_INFO(0, p3, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, p4, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_weechat_print_y, 0, 3, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, p0, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, p1, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, p2, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_weechat_print_y_date_tags, 0, 5, IS_LONG, 0)
+#define arginfo_weechat_print_y_date_tags arginfo_weechat_print_datetime_tags
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_weechat_print_y_datetime_tags, 0, 6, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, p0, IS_STRING, 0)
 	ZEND_ARG_TYPE_INFO(0, p1, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, p2, IS_LONG, 0)
-	ZEND_ARG_TYPE_INFO(0, p3, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, p3, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, p4, IS_STRING, 0)
+	ZEND_ARG_TYPE_INFO(0, p5, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
 #define arginfo_weechat_log_print arginfo_weechat_charset_set
@@ -303,6 +339,8 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_weechat_hook_process_hashtable, 
 	ZEND_ARG_TYPE_INFO(0, p3, IS_MIXED, 0)
 	ZEND_ARG_TYPE_INFO(0, p4, IS_STRING, 0)
 ZEND_END_ARG_INFO()
+
+#define arginfo_weechat_hook_url arginfo_weechat_hook_process_hashtable
 
 #define arginfo_weechat_hook_connect arginfo_weechat_list_new
 
@@ -400,6 +438,8 @@ ZEND_END_ARG_INFO()
 #define arginfo_weechat_buffer_string_replace_local_var arginfo_weechat_iconv_to_internal
 
 #define arginfo_weechat_buffer_match_list arginfo_weechat_string_has_highlight
+
+#define arginfo_weechat_line_search_by_id arginfo_weechat_list_get
 
 #define arginfo_weechat_current_window arginfo_weechat_list_new
 
@@ -578,6 +618,8 @@ ZEND_END_ARG_INFO()
 
 #define arginfo_weechat_hdata_long arginfo_weechat_config_write_line
 
+#define arginfo_weechat_hdata_longlong arginfo_weechat_config_write_line
+
 #define arginfo_weechat_hdata_string arginfo_weechat_config_search_option
 
 #define arginfo_weechat_hdata_pointer arginfo_weechat_config_search_option
@@ -615,3 +657,4 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_forget_class, 0, 1, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
 
 #define arginfo_forget_function arginfo_forget_class
+

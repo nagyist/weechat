@@ -2,27 +2,19 @@
 :author: Sébastien Helleu
 :email: flashcode@flashtux.org
 :lang: it
-:toc: left
-:toclevels: 4
 :toc-title: Indice
-:sectnums:
-:sectnumlevels: 3
-:docinfo1:
-
 
 // TRANSLATION MISSING
 Translators:
 
 * Marco Paolone <marcopaolone@gmail.com>, 2010-2012
 
-
 Questo manuale documenta il client di chat WeeChat, ed è parte
 del programma stesso.
 
 // TRANSLATION MISSING
 Latest version of this document can be found on
-https://weechat.org/doc/[this page ^↗^,window=_blank].
-
+https://weechat.org/doc/[this page ^↗^^].
 
 [[introduction]]
 == Introduzione
@@ -162,7 +154,7 @@ default plugins).
 
 The default WeeChat plugins are initialized in this order:
 
-include::includes/autogen_api_plugins_priority.it.adoc[tag=plugins_priority]
+include::{autogendir}/autogen_api_plugins_priority.it.adoc[tag=plugins_priority]
 
 ==== weechat_plugin_end
 
@@ -193,9 +185,10 @@ il file _weechat-plugin.h_.
 
 Per compilare un plugin che ha un file "tizio.c" (in GNU/Linux):
 
+[source,shell]
 ----
-$ gcc -fPIC -Wall -c tizio.c
-$ gcc -shared -fPIC -o tizio.so tizio.o
+gcc -fPIC -Wall -c tizio.c
+gcc -shared -fPIC -o tizio.so tizio.o
 ----
 
 [[load_plugin]]
@@ -310,7 +303,7 @@ Functions to register a script: used only by scripting API, not the C API.
 Register the script.
 
 For more information, see the
-link:weechat_scripting.it.html#register_function[WeeChat scripting guide ^↗^,window=_blank].
+link:weechat_scripting.it.html#register_function[WeeChat scripting guide ^↗^^].
 
 Script (Python):
 
@@ -576,6 +569,60 @@ num_files = 2
 str = weechat.ngettext("file", "files", num_files)
 ----
 
+==== asprintf
+
+_WeeChat ≥ 4.3.0._
+
+// TRANSLATION MISSING
+Format a message in a string allocated by the function.
+
+// TRANSLATION MISSING
+[NOTE]
+This function is defined for systems where the GNU function `asprintf()`
+is not available. +
+The behavior is almost the same except that `*result` is set to NULL on error.
+
+Prototipo:
+
+[source,c]
+----
+int weechat_asprintf (char **result, const char *fmt, ...);
+----
+
+Argomenti:
+
+// TRANSLATION MISSING
+* _result_: pointer to a string pointer
+// TRANSLATION MISSING
+* _fmt_: format string
+
+Valore restituito:
+
+// TRANSLATION MISSING
+* number of bytes written in `*result` (excluding the final null byte),
+  a negative value in case of error.
+
+Esempio in C:
+
+[source,c]
+----
+char *str;
+
+if (weechat_asprintf (&str, "%s, %d", "test", 42) >= 0)
+{
+    /* *str == "test, 42" */
+    /* ... */
+    free (str);
+}
+else
+{
+    /* error: *str == NULL */
+}
+----
+
+[NOTE]
+Questa funzione non è disponibile nelle API per lo scripting.
+
 ==== strndup
 
 // TRANSLATION MISSING
@@ -630,7 +677,7 @@ Argomenti:
 
 * _string_: string to cut
 * _length_: max chars
-* _count_suffix_: if 1, the length of suffix is counter in the max length
+* _count_suffix_: if 1, the length of suffix is counted in the max length
 * _screen_: if 1, the cut is based on width of chars displayed
 * _cut_suffix_: the suffix added after the string if it is cut
 
@@ -656,9 +703,13 @@ Questa funzione non è disponibile nelle API per lo scripting.
 _Updated in 3.8._
 
 // TRANSLATION MISSING
-Return a string with uppercase letters converted to lowercase. +
-This function is locale independent: only letters `A` to `Z` without accents
-are converted to lowercase. All other chars are kept as-is.
+Return a string with uppercase letters converted to lowercase.
+
+[NOTE]
+Behavior has changed in version 3.8: now all uppercase letters are properly
+converted to lowercase (by calling function `towlower`), in addition to the
+range `A` to `Z`. +
+Moreover, a newly allocated string is returned and must be freed after use.
 
 Prototipo:
 
@@ -680,7 +731,7 @@ Esempio in C:
 
 [source,c]
 ----
-char *str = weechat_string_tolower ("ABCD_É");  /* result: "abcd_É" */
+char *str = weechat_string_tolower ("ABCD_É");  /* result: "abcd_é" */
 /* ... */
 free (str);
 ----
@@ -694,9 +745,13 @@ Questa funzione non è disponibile nelle API per lo scripting.
 _Updated in 3.8._
 
 // TRANSLATION MISSING
-Return a string with lowercase letters converted to uppercase. +
-This function is locale independent: only letters `a` to `z` without accents
-are converted to uppercase. All other chars are kept as-is.
+Return a string with lowercase letters converted to uppercase.
+
+[NOTE]
+Behavior has changed in version 3.8: now all lowercase letters are properly
+converted to uppercase (by calling function `towupper`), in addition to the
+range `a` to `z`. +
+Moreover, a newly allocated string is returned and must be freed after use.
 
 Prototipo:
 
@@ -718,9 +773,175 @@ Esempio in C:
 
 [source,c]
 ----
-char *str = weechat_string_toupper ("abcd_é");  /* result: "ABCD_é" */
+char *str = weechat_string_toupper ("abcd_é");  /* result: "ABCD_É" */
 /* ... */
 free (str);
+----
+
+[NOTE]
+Questa funzione non è disponibile nelle API per lo scripting.
+
+==== string_charcmp
+
+// TRANSLATION MISSING
+_Updated in 1.0, 3.8._
+
+Confronta due caratteri.
+
+Prototipo:
+
+[source,c]
+----
+int weechat_string_charcmp (const char *string1, const char *string2);
+----
+
+Argomenti:
+
+* _string1_: prima stringa da comparare
+* _string2_: seconda stringa da comparare
+
+// TRANSLATION MISSING
+Return value:
+
+* arithmetic result of subtracting the first UTF-8 char in _string2_
+  from the first UTF-8 char in _string1_:
+// TRANSLATION MISSING
+** < 0 if char1 < char2
+** 0 if char1 == char2
+** > 0 if char1 > char2
+
+Esempio in C:
+
+[source,c]
+----
+int diff = weechat_string_charcmp ("aaa", "ccc");  /* == -2 */
+----
+
+[NOTE]
+Questa funzione non è disponibile nelle API per lo scripting.
+
+==== string_charcasecmp
+
+// TRANSLATION MISSING
+_Updated in 1.0, 3.8._
+
+Confronta due caratteri, ignorando la sensibilità alle maiuscole.
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8: now all uppercase letters are properly
+converted to lowercase (by calling function `towlower`), in addition to the
+range `A` to `Z`.
+
+Prototipo:
+
+[source,c]
+----
+int weechat_string_charcasecmp (const char *string1, const char *string2);
+----
+
+Argomenti:
+
+* _string1_: prima stringa da comparare
+* _string2_: seconda stringa da comparare
+
+// TRANSLATION MISSING
+Return value:
+
+* arithmetic result of subtracting the first UTF-8 char in _string2_
+  (converted to lowercase) from the first UTF-8 char in _string1_ (converted to
+  lowercase):
+// TRANSLATION MISSING
+** < 0 if char1 < char2
+** 0 if char1 == char2
+** > 0 if char1 > char2
+
+Esempio in C:
+
+[source,c]
+----
+int diff = weechat_string_charcasecmp ("aaa", "CCC");  /* == -2 */
+----
+
+[NOTE]
+Questa funzione non è disponibile nelle API per lo scripting.
+
+==== strcmp
+
+// TRANSLATION MISSING
+_WeeChat ≥ 3.8._
+
+// TRANSLATION MISSING
+Case-sensitive string comparison.
+
+Prototipo:
+
+[source,c]
+----
+int weechat_strcmp (const char *string1, const char *string2);
+----
+
+Argomenti:
+
+* _string1_: prima stringa da comparare
+* _string2_: seconda stringa da comparare
+
+// TRANSLATION MISSING
+Return value:
+
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ from the last compared UTF-8 char in _string1_:
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
+
+Esempio in C:
+
+[source,c]
+----
+int diff = weechat_strcmp ("aaa", "ccc");  /* == -2 */
+----
+
+[NOTE]
+Questa funzione non è disponibile nelle API per lo scripting.
+
+==== strncmp
+
+// TRANSLATION MISSING
+_WeeChat ≥ 3.8._
+
+// TRANSLATION MISSING
+Case-sensitive string comparison, for _max_ chars.
+
+Prototipo:
+
+[source,c]
+----
+int weechat_strncmp (const char *string1, const char *string2, int max);
+----
+
+Argomenti:
+
+* _string1_: prima stringa da comparare
+* _string2_: seconda stringa da comparare
+* _max_: numero massimo di caratteri da comparare
+
+// TRANSLATION MISSING
+Return value:
+
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ from the last compared UTF-8 char in _string1_:
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
+
+Esempio in C:
+
+[source,c]
+----
+int diff = weechat_strncmp ("aabb", "aacc", 2);  /* == 0 */
 ----
 
 [NOTE]
@@ -729,9 +950,16 @@ Questa funzione non è disponibile nelle API per lo scripting.
 ==== strcasecmp
 
 // TRANSLATION MISSING
-_Updated in 1.0._
+_Updated in 1.0, 3.8._
 
-Confronta stringa non sensibile alle maiuscole e alla localizzazione.
+// TRANSLATION MISSING
+Case-insensitive string comparison.
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8: now all uppercase letters are properly
+converted to lowercase (by calling function `towlower`), in addition to the
+range `A` to `Z`.
 
 Prototipo:
 
@@ -745,17 +973,24 @@ Argomenti:
 * _string1_: prima stringa da comparare
 * _string2_: seconda stringa da comparare
 
-Valore restituito:
+// TRANSLATION MISSING
+Return value:
 
-* -1 se stringa1 < stringa2
-* 0 se stringa1 == stringa1
-* 1 se stringa1 > stringa2
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ (converted to lowercase) from the last compared UTF-8 char in _string1_
+  (converted to lowercase):
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
 
 Esempio in C:
 
 [source,c]
 ----
-int diff = weechat_strcasecmp ("aaa", "CCC");  /* == -2 */
+int diff;
+diff = weechat_strcasecmp ("aaa", "CCC");    /* == -2 */
+diff = weechat_strcasecmp ("noël", "NOËL");  /* == 0  */
 ----
 
 [NOTE]
@@ -764,7 +999,7 @@ Questa funzione non è disponibile nelle API per lo scripting.
 ==== strcasecmp_range
 
 // TRANSLATION MISSING
-_WeeChat ≥ 0.3.7, updated in 1.0._
+_WeeChat ≥ 0.3.7, updated in 1.0, 3.8._
 
 Confronta stringa non sensibile alle maiuscole e alla localizzazione, usando una
 serie per il confronto.
@@ -788,11 +1023,16 @@ Argomenti:
 [NOTE]
 I valori 29 e 30 vengono usati da alcuni protocolli come IRC.
 
-Valore restituito:
+// TRANSLATION MISSING
+Return value:
 
-* -1 se stringa1 < stringa2
-* 0 se stringa1 == stringa1
-* 1 se stringa1 > stringa2
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ (converted to lowercase) from the last compared UTF-8 char in _string1_
+  (converted to lowercase):
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
 
 Esempio in C:
 
@@ -807,10 +1047,16 @@ Questa funzione non è disponibile nelle API per lo scripting.
 ==== strncasecmp
 
 // TRANSLATION MISSING
-_Updated in 1.0._
+_Updated in 1.0, 3.8._
 
-Confronta stringa indipendente non sensibile alle maiuscole e alla
-localizzazione, per un numero _max_ di caratteri.
+// TRANSLATION MISSING
+Case-insensitive string comparison, for _max_ chars.
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8: now all uppercase letters are properly
+converted to lowercase (by calling function `towlower`), in addition to the
+range `A` to `Z`.
 
 Prototipo:
 
@@ -825,17 +1071,22 @@ Argomenti:
 * _string2_: seconda stringa da comparare
 * _max_: numero massimo di caratteri da comparare
 
-Valore restituito:
+// TRANSLATION MISSING
+Return value:
 
-* -1 se stringa1 < stringa2
-* 0 se stringa1 == stringa1
-* 1 se stringa1 > stringa2
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ (converted to lowercase) from the last compared UTF-8 char in _string1_
+  (converted to lowercase):
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
 
 Esempio in C:
 
 [source,c]
 ----
-int diff = weechat_strncasecmp ("aabb", "aacc", 2);  /* == 0 */
+int diff = weechat_strncasecmp ("aabb", "AACC", 2);  /* == 0 */
 ----
 
 [NOTE]
@@ -844,7 +1095,7 @@ Questa funzione non è disponibile nelle API per lo scripting.
 ==== strncasecmp_range
 
 // TRANSLATION MISSING
-_WeeChat ≥ 0.3.7, updated in 1.0._
+_WeeChat ≥ 0.3.7, updated in 1.0, 3.8._
 
 Confronta una stringa non sensibile alle maiuscole e alla localizzazione, per un
 numero _max_ di caratteri, usando una serie per il confronto.
@@ -869,11 +1120,16 @@ Argomenti:
 [NOTE]
 I valori 29 e 30 vengono usati da alcuni protocolli come IRC.
 
-Valore restituito:
+// TRANSLATION MISSING
+Return value:
 
-* -1 se stringa1 < stringa2
-* 0 se stringa1 == stringa1
-* 1 se stringa1 > stringa2
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ (converted to lowercase) from the last compared UTF-8 char in _string1_
+  (converted to lowercase):
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
 
 Esempio in C:
 
@@ -888,10 +1144,10 @@ Questa funzione non è disponibile nelle API per lo scripting.
 ==== strcmp_ignore_chars
 
 // TRANSLATION MISSING
-_Updated in 1.0._
+_Updated in 1.0, 3.8._
 
-Confronta una stringa localizzata (e opzionalmente non sensibile alle
-maiuscole), ignorando alcuni caratteri.
+// TRANSLATION MISSING
+String comparison ignoring some chars.
 
 Prototipo:
 
@@ -909,11 +1165,23 @@ Argomenti:
 * _chars_ignored_: stringa con caratteri da ignorare
 * _case_sensitive_: 1 per il confronto sensibile alle maiuscole, altrimenti 0
 
-Valore restituito:
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8 when _case_sensitive_ is set to 0: now all
+uppercase letters are properly converted to lowercase (by calling function
+`towlower`), in addition to the range `A` to `Z`.
 
-* -1 se stringa1 < stringa2
-* 0 se stringa1 == stringa1
-* 1 se stringa1 > stringa2
+// TRANSLATION MISSING
+Return value:
+
+* arithmetic result of subtracting the last compared UTF-8 char in
+  _string2_ (converted to lowercase if _case_sensitive_ is set to 0) from the last
+  compared UTF-8 char in _string1_ (converted to lowercase if _case_sensitive_ is
+  set to 0):
+// TRANSLATION MISSING
+** < 0 if string1 < string2
+** 0 if string1 == string2
+** > 0 if string1 > string2
 
 Esempio in C:
 
@@ -928,10 +1196,16 @@ Questa funzione non è disponibile nelle API per lo scripting.
 ==== strcasestr
 
 // TRANSLATION MISSING
-_Updated in 1.3._
+_Updated in 1.3, 3.8._
 
-Cerca una stringa non sensibile alle maiuscole e indipendente dalla
-localizzazione.
+// TRANSLATION MISSING
+Case-insensitive string search.
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8: now all uppercase letters are properly
+converted to lowercase (by calling function `towlower`), in addition to the
+range `A` to `Z`.
 
 Prototipo:
 
@@ -1010,7 +1284,7 @@ length = weechat.strlen_screen("é")  # 1
 ==== string_match
 
 // TRANSLATION MISSING
-_Updated in 1.0._
+_Updated in 1.0, 3.8._
 
 Verifica se una stringa coincide ad una mask.
 
@@ -1034,6 +1308,12 @@ Argomenti:
 [NOTE]
 Since version 1.0, wildcards are allowed inside the mask
 (not only beginning/end of mask).
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8 when _case_sensitive_ is set to 0: now all
+uppercase letters are properly converted to lowercase (by calling function
+`towlower`), in addition to the range `A` to `Z`.
 
 Valore restituito:
 
@@ -1067,7 +1347,8 @@ match5 = weechat.string_match("abcdef", "*b*d*", 0)  # == 1
 
 ==== string_match_list
 
-_WeeChat ≥ 2.5._
+// TRANSLATION MISSING
+_WeeChat ≥ 2.5, updated in 3.8._
 
 // TRANSLATION MISSING
 Check if a string matches a list of masks where negative mask is allowed
@@ -1088,7 +1369,13 @@ Argomenti:
 * _string_: string
 * _masks_: list of masks, with a NULL after the last mask in list; each mask
   is compared to the string with the function <<_string_match,string_match>>
-* _case_sensitive_: 1 for case sensitive comparison, otherwise 0
+* _case_sensitive_: 1 for case-sensitive comparison, otherwise 0
+
+// TRANSLATION MISSING
+[NOTE]
+Behavior has changed in version 3.8 when _case_sensitive_ is set to 0: now all
+uppercase letters are properly converted to lowercase (by calling function
+`towlower`), in addition to the range `A` to `Z`.
 
 Valore restituito:
 
@@ -1422,7 +1709,7 @@ Allowed flags are:
 
 // TRANSLATION MISSING
 * _e_: POSIX extended regular expression (_REG_EXTENDED_)
-* _i_: case insensitive (_REG_ICASE_)
+* _i_: case-insensitive (_REG_ICASE_)
 * _n_: match-any-character operators don_t match a newline (_REG_NEWLINE_)
 * _s_: support for substring addressing of matches is not required (_REG_NOSUB_)
 
@@ -1872,7 +2159,7 @@ Split a string like the shell does for a command with arguments.
 // TRANSLATION MISSING
 This function is a C conversion of Python class "shlex" (file: Lib/shlex.py in
 Python repository), see
-https://docs.python.org/3/library/shlex.html[this page ^↗^,window=_blank].
+https://docs.python.org/3/library/shlex.html[this page ^↗^^].
 
 Prototipo:
 
@@ -2211,23 +2498,25 @@ size = weechat.string_color_code_size(weechat.color("yellow,red"))  # size == 7
 
 ==== string_remove_color
 
+// TRANSLATION MISSING
+_Updated in 4.3.0._
+
 Rimuove i colori di WeeChat da una stringa.
 
 Prototipo:
 
 [source,c]
 ----
-char *weechat_string_remove_color (const char *string,
-                                   const char *replacement);
+char *weechat_string_remove_color (const char *string, const char *replacement);
 ----
 
 Argomenti:
 
 * _string_: stringa
-* _replacement_: se non NULL e non vuota, i codici colore di WeeChat sono
-  sostituiti dal primo carattere di questa stringa, altrimenti i codici colori di
-  WeeChat ed i caratteri seguenti (se correlate al colore) sono rimossi dalla
-  stringa
+// TRANSLATION MISSING
+* _replacement_: if not NULL and not empty, WeeChat color codes are replaced by
+  this string, otherwise WeeChat color codes and following chars (if related
+  to color) are removed from string
 
 Valore restituito:
 
@@ -2243,7 +2532,7 @@ char *str = weechat_string_remove_color (my_string1, NULL);
 free (str);
 
 /* sostituisce i codici colore con "?" */
-char *str = weechat_string_remove_color (my_string2, "?");
+char *str = weechat_string_remove_color (my_string2, "[color]");
 /* ... */
 free (str);
 ----
@@ -2256,12 +2545,12 @@ Script (Python):
 def string_remove_color(string: str, replacement: str) -> str: ...
 
 # esempio
-str = weechat.string_remove_color(my_string, "?")
+str = weechat.string_remove_color(my_string, "[color]")
 ----
 
 ==== string_base_encode
 
-_WeeChat ≥ 2.4._
+_WeeChat ≥ 2.4, updated in 4.3.0._
 
 // TRANSLATION MISSING
 Encode a string in base 16, 32, or 64.
@@ -2270,13 +2559,13 @@ Prototipo:
 
 [source,c]
 ----
-int weechat_string_base_encode (int base, const char *from, int length, char *to);
+int weechat_string_base_encode (const char *base, const char *from, int length, char *to);
 ----
 
 Argomenti:
 
 // TRANSLATION MISSING
-* _base_: 16, 32, or 64
+* _base_: "16", "32", "64", or "64url"
 * _from_: stringa da codificare
 * _length_: lunghezza della stringa da codificare (ad esempio `strlen(from)`)
 * _to_: puntatore alla stringa per memorizzare il risultato (deve essere
@@ -2294,11 +2583,11 @@ Esempio in C:
 ----
 char *string = "abcdefgh", result[128];
 int length;
-length = weechat_string_base_encode (16, string, strlen (string), result);
+length = weechat_string_base_encode ("16", string, strlen (string), result);
 /* length == 16, result == "6162636465666768" */
-length = weechat_string_base_encode (32, string, strlen (string), result);
+length = weechat_string_base_encode ("32", string, strlen (string), result);
 /* length == 16, result == "MFRGGZDFMZTWQ===" */
-length = weechat_string_base_encode (64, string, strlen (string), result);
+length = weechat_string_base_encode ("64", string, strlen (string), result);
 /* length == 12, result == "YWJjZGVmZ2g=" */
 ----
 
@@ -2307,7 +2596,7 @@ Questa funzione non è disponibile nelle API per lo scripting.
 
 ==== string_base_decode
 
-_WeeChat ≥ 2.4._
+_WeeChat ≥ 2.4, updated in 4.3.0._
 
 // TRANSLATION MISSING
 Decode a string encoded in base 16, 32, or 64.
@@ -2316,13 +2605,13 @@ Prototipo:
 
 [source,c]
 ----
-int weechat_string_base_decode (int base, const char *from, char *to);
+int weechat_string_base_decode (const char *base, const char *from, char *to);
 ----
 
 Argomenti:
 
 // TRANSLATION MISSING
-* _base_: 16, 32, or 64
+* _base_: "16", "32", "64" or "64url"
 * _from_: stringa da decodificare
 * _to_: puntatore alla stringa per memorizzare il risultato (deve essere
   sufficientemente lunga, il risultato è più lungo della stringa iniziale)
@@ -2339,11 +2628,11 @@ Esempio in C:
 ----
 char result[128];
 int length;
-length = weechat_string_base_decode (16, "6162636465666768", result);
+length = weechat_string_base_decode ("16", "6162636465666768", result);
 /* length == 8, result == "abcdefgh" */
-length = weechat_string_base_decode (32, "MFRGGZDFMZTWQ===", result);
+length = weechat_string_base_decode ("32", "MFRGGZDFMZTWQ===", result);
 /* length == 8, result == "abcdefgh" */
-length = weechat_string_base_decode (64, "YWJjZGVmZ2g=", result);
+length = weechat_string_base_decode ("64", "YWJjZGVmZ2g=", result);
 /* length == 8, result == "abcdefgh" */
 ----
 
@@ -2484,8 +2773,7 @@ str3 = weechat.string_input_for_buffer("//test")  # "/test"
 // TRANSLATION MISSING
 ==== string_eval_expression
 
-_WeeChat ≥ 0.4.0, updated in 0.4.2, 0.4.3, 1.0, 1.1, 1.2, 1.3, 1.6, 1.8, 2.0,
-2.2, 2.3, 2.7, 2.9, 3.1, 3.2, 3.3, 3.4, 3.6, 3.8._
+_WeeChat ≥ 0.4.0, updated in 0.4.2, 0.4.3, 1.0, 1.1, 1.2, 1.3, 1.6, 1.8, 2.0, 2.2, 2.3, 2.7, 2.9, 3.1, 3.2, 3.3, 3.4, 3.6, 3.8, 4.0.0, 4.2.0, 4.3.0, 4.4.0._
 
 Evaluate an expression and return result as a string.
 Special variables with format `+${variable}+` are expanded (see table below).
@@ -2659,7 +2947,7 @@ from first used to last):
   == `+1+`
 
 | `+==*+` | 2.9
-| Is matching mask where "*" is allowed, case sensitive (see function <<_string_match,string_match>>)
+| Is matching mask where "*" is allowed, case-sensitive (see function <<_string_match,string_match>>)
 | >> `+abc def ==* a*f+` +
   == `+1+` +
   +
@@ -2667,7 +2955,7 @@ from first used to last):
   == `+0+`
 
 | `+!!*+` | 2.9
-| Is NOT wildcard mask where "*" is allowed, case sensitive (see function <<_string_match,string_match>>)
+| Is NOT wildcard mask where "*" is allowed, case-sensitive (see function <<_string_match,string_match>>)
 | >> `+abc def !!* a*f+` +
   == `+0+` +
   +
@@ -2675,7 +2963,7 @@ from first used to last):
   == `+1+`
 
 | `+=*+` | 1.8
-| Is matching mask where "*" is allowed, case insensitive (see function <<_string_match,string_match>>)
+| Is matching mask where "*" is allowed, case-insensitive (see function <<_string_match,string_match>>)
 | >> `+abc def =* A*F+` +
   == `+1+` +
   +
@@ -2683,7 +2971,7 @@ from first used to last):
   == `+0+`
 
 | `+!*+` | 1.8
-| Is NOT wildcard mask where "*" is allowed, case insensitive (see function <<_string_match,string_match>>)
+| Is NOT wildcard mask where "*" is allowed, case-insensitive (see function <<_string_match,string_match>>)
 | >> `+abc def !* A*F+` +
   == `+0+` +
   +
@@ -2691,7 +2979,7 @@ from first used to last):
   == `+1+`
 
 | `+==-+` | 2.9
-| Is included, case sensitive
+| Is included, case-sensitive
 | >> `+abc def ==- bc+` +
   == `+1+` +
   +
@@ -2699,7 +2987,7 @@ from first used to last):
   == `+0+`
 
 | `+!!-+` | 2.9
-| Is NOT included, case sensitive
+| Is NOT included, case-sensitive
 | >> `+abc def !!- bc+` +
   == `+0+` +
   +
@@ -2707,7 +2995,7 @@ from first used to last):
   == `+1+`
 
 | `+=-+` | 2.9
-| Is included, case insensitive
+| Is included, case-insensitive
 | >> `+abc def =- BC+` +
   == `+1+` +
   +
@@ -2715,7 +3003,7 @@ from first used to last):
   == `+0+`
 
 | `+!-+` | 2.9
-| Is NOT included, case insensitive
+| Is NOT included, case-insensitive
 | >> `+abc def !- BC+` +
   == `+0+` +
   +
@@ -2818,10 +3106,20 @@ expanded to last):
 |===
 | Format | Min WeeChat | Description | Examples
 
+| `+${raw_hl:xxx}+` | 4.2.0
+| Raw string (not evaluated), with syntax highlighting (using colors).
+| >> `+${raw_hl:${cut:1,,${rev:hello}}}+` +
+  == `+${cut:1,,${rev:hello}}+` (with colors)
+
 | `+${raw:xxx}+` | 3.1
 | Raw string (not evaluated).
 | >> `+${raw:${info:version}}+` +
   == `+${info:version}+`
+
+| `+${hl:xxx}+` | 4.2.0
+| String with syntax highlighting (using colors).
+| >> `+${hl:${file.section.option}}+` +
+  == `+test ${variable}+` (with colors)
 
 | `+${name}+` | 3.4
 | User variable (defined with `+${define:name,value}+`).
@@ -2835,12 +3133,15 @@ expanded to last):
 
 | `+${weechat_xxx_dir}+` | 3.2
 | A WeeChat directory: `+${weechat_config_dir}+`, `+${weechat_data_dir}+`,
-  `+${weechat_cache_dir}+` or `+${weechat_runtime_dir}+`.
+  `+${weechat_state_dir}+`, `+${weechat_cache_dir}+` or `+${weechat_runtime_dir}+`.
 | >> `+${weechat_config_dir}+` +
   == `+/home/user/.config/weechat+` +
   +
   >> `+${weechat_data_dir}+` +
   == `+/home/user/.local/share/weechat+` +
+  +
+  >> `+${weechat_state_dir}+` +
+  == `+/home/user/.local/state/weechat+` +
   +
   >> `+${weechat_cache_dir}+` +
   == `+/home/user/.cache/weechat+` +
@@ -2870,7 +3171,6 @@ expanded to last):
   >> `+${\ua9}+` +
   == `+©+`
 
-// TRANSLATION MISSING
 | `+${chars:range}+` | 3.8
 | String with a range of chars, where `range` is one of: +
   - `digit` (`0123456789`) +
@@ -2895,13 +3195,11 @@ expanded to last):
   >> `+${chars:←-↓}+` +
   == `+←↑→↓+`
 
-// TRANSLATION MISSING
 | `+${lower:string}+` | 3.6
 | String converted to lower case.
 | >> `+${lower:TEST}+` +
   == `+test+`
 
-// TRANSLATION MISSING
 | `+${upper:string}+` | 3.6
 | String converted to upper case.
 | >> `+${upper:test}+` +
@@ -3055,7 +3353,7 @@ expanded to last):
   >> `+${re:2}+` +
   == `+test2+` +
   +
-  >> `+${re:+}+` +
+  >> `pass:[${re:+}]` +
   == `+test2+` +
   +
   >> `+${re:#}+` +
@@ -3118,13 +3416,16 @@ expanded to last):
 
 | `+${date}+` +
   `+${date:xxx}+` | 1.3
-| Current date/time, with custom format (see `man strftime`),
+| Current date/time, with custom format (see function <<_util_strftimeval,util_strftimeval>>),
   default format is `%F %T`.
 | >> `+${date}+` +
   == `+2015-06-30 19:02:45+` +
   +
   >> `+${date:%H:%M:%S}+` +
-  == `+19:02:45+`
+  == `+19:02:45+` +
+  +
+  >> `+${date:%!.%.3}+` +
+  == `+1435683765.482+`
 
 | `+${env:NAME}+` | 1.2
 | Value of the environment variable `NAME`.
@@ -3186,6 +3487,12 @@ expanded to last):
 | >> `+${define:len,${calc:5+3}}${len}x${len}+` +
   == `+8x8+`
 
+| `+${hdata_count:name[list]}+` +
+  `+${hdata_count:name[pointer]}+` | 4.4.0
+| Number of items in a hdata list or starting at `pointer`.
+| >> `+${hdata_count:buffer[gui_buffers]}+` +
+  == `+15+`
+
 | `+${sec.data.name}+` |
 | Value of the secured data `name`.
 | >> `+${sec.data.libera_pass}+` +
@@ -3210,7 +3517,9 @@ expanded to last):
   `+${hdata[list].var1.var2...}+` |
 | Hdata value (pointers `window` and `buffer` are set by default with current
   window/buffer), `list` can be a list name (example: "gui_buffers"), a pointer
-  (example: "0x1234abcd") or a pointer name (example: "my_pointer").
+  (example: "0x1234abcd") or a pointer name (example: "my_pointer"). +
+  When `var1` is a hashtable, methods `keys()`, `values()`, `keys_sorted()`,
+  `keys_values()` and `keys_values_sorted()` can be called.
 | >> `+${buffer[gui_buffers].full_name}+` +
   == `+core.weechat+` +
   +
@@ -3218,7 +3527,13 @@ expanded to last):
   == `+core.weechat+` +
   +
   >> `+${window.buffer.number}+` +
-  == `+1+`
+  == `+1+` +
+  +
+  >> `+${buffer.local_variables.keys_values()}+` +
+  == `+plugin:core,name:weechat+` +
+  +
+  >> `+${buffer.local_variables.plugin}+` +
+  == `+core+`
 |===
 
 ==== string_dyn_alloc
@@ -3399,6 +3714,51 @@ else
 }
 /* ... */
 weechat_string_dyn_free (string, 1);
+----
+
+[NOTE]
+Questa funzione non è disponibile nelle API per lo scripting.
+
+==== string_concat
+
+_WeeChat ≥ 4.2.0._
+
+// TRANSLATION MISSING
+Concatenate multiple strings using a separator.
+
+Prototipo:
+
+[source,c]
+----
+const char *weechat_string_concat (const char *separator, ...);
+----
+
+Argomenti:
+
+// TRANSLATION MISSING
+* _separator_: the separator string which is inserted between concatenated
+  strings (can be NULL or empty string)
+
+// TRANSLATION MISSING
+[NOTE]
+Last argument *MUST* always be NULL. +
+A macro called `WEECHAT_STR_CONCAT` can be used, where the final NULL value is
+not needed (usage of this macro is recommended).
+
+Valore restituito:
+
+// TRANSLATION MISSING
+* concatenated string
+
+Esempio in C:
+
+// TRANSLATION MISSING
+[source,c]
+----
+const char *result = weechat_string_concat (" / ", "abc", "def", "ghi", NULL);  /* result == "abc / def / ghi" */
+
+/* with macro */
+const char *result = WEECHAT_STR_CONCAT(" / ", "abc", "def", "ghi");  /* result == "abc / def / ghi" */
 ----
 
 [NOTE]
@@ -3735,76 +4095,6 @@ int length_on_screen = weechat_utf8_strlen_screen ("é");  /* == 1 */
 [NOTE]
 Questa funzione non è disponibile nelle API per lo scripting.
 
-==== utf8_charcmp
-
-// TRANSLATION MISSING
-_Updated in 1.0._
-
-Confronta due caratteri UTF-8.
-
-Prototipo:
-
-[source,c]
-----
-int weechat_utf8_charcmp (const char *string1, const char *string2);
-----
-
-Argomenti:
-
-* _string1_: prima stringa da comparare
-* _string2_: seconda stringa da comparare
-
-Valore restituito:
-
-* -1 se string1 < string2
-* 0 se string1 == string2
-* 1 se string1 > string2
-
-Esempio in C:
-
-[source,c]
-----
-int diff = weechat_utf8_charcmp ("aaa", "ccc");  /* == -2 */
-----
-
-[NOTE]
-Questa funzione non è disponibile nelle API per lo scripting.
-
-==== utf8_charcasecmp
-
-// TRANSLATION MISSING
-_Updated in 1.0._
-
-Confronta due caratteri UTF-8, ignorando la sensibilità alle maiuscole.
-
-Prototipo:
-
-[source,c]
-----
-int weechat_utf8_charcasecmp (const char *string1, const char *string2);
-----
-
-Argomenti:
-
-* _string1_: prima stringa da comparare
-* _string2_: seconda stringa da comparare
-
-Valore restituito:
-
-* -1 se string1 < string2
-* 0 se string1 == string2
-* 1 se string1 > string2
-
-Esempio in C:
-
-[source,c]
-----
-int diff = weechat_utf8_charcasecmp ("aaa", "CCC");  /* == -2 */
-----
-
-[NOTE]
-Questa funzione non è disponibile nelle API per lo scripting.
-
 ==== utf8_char_size_screen
 
 // TRANSLATION MISSING
@@ -3839,7 +4129,7 @@ exception for the following chars, that have a specific behavior in WeeChat:
 
 // TRANSLATION MISSING
 * U+0009 (Tabulation): value of option
-  link:weechat_user.it.html#option_weechat.look.tab_width[weechat.look.tab_width ^↗^,window=_blank]
+  link:weechat_user.it.html#option_weechat.look.tab_width[weechat.look.tab_width ^↗^^]
 * U+0001 (1) to U+001F (31), except U+0009 (Tabulation): 1
 * U+00AD (173, soft hyphen): -1
 * U+200B (8203, zero width space): -1
@@ -4052,18 +4342,28 @@ Supported hash algorithms:
 
 [width="100%",cols="2,2,3,6",options="header"]
 |===
-| Value        | Algorithm | Hash size           | Notes
-| `+crc32+`    | CRC32     | 4 bytes (32 bits)   | Not a hash algorithm in the cryptographic sense.
-| `+md5+`      | MD5       | 16 bytes (128 bits) | *Weak*, not recommended for cryptography usage.
-| `+sha1+`     | SHA-1     | 20 bytes (160 bits) | *Weak*, not recommended for cryptography usage.
-| `+sha224+`   | SHA-224   | 28 bytes (224 bits) |
-| `+sha256+`   | SHA-256   | 32 bytes (256 bits) |
-| `+sha384+`   | SHA-384   | 48 bytes (384 bits) |
-| `+sha512+`   | SHA-512   | 64 bytes (512 bits) |
-| `+sha3-224+` | SHA3-224  | 28 bytes (224 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
-| `+sha3-256+` | SHA3-256  | 32 bytes (256 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
-| `+sha3-384+` | SHA3-384  | 48 bytes (384 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
-| `+sha3-512+` | SHA3-512  | 64 bytes (512 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
+| Value           | Algorithm   | Hash size           | Notes
+| `+crc32+`       | CRC32       | 4 bytes (32 bits)   | Not a hash algorithm in the cryptographic sense.
+| `+md5+`         | MD5         | 16 bytes (128 bits) | *Weak*, not recommended for cryptography usage.
+| `+sha1+`        | SHA-1       | 20 bytes (160 bits) | *Weak*, not recommended for cryptography usage.
+| `+sha224+`      | SHA-224     | 28 bytes (224 bits) |
+| `+sha256+`      | SHA-256     | 32 bytes (256 bits) |
+| `+sha384+`      | SHA-384     | 48 bytes (384 bits) |
+| `+sha512+`      | SHA-512     | 64 bytes (512 bits) |
+| `+sha512-224+`  | SHA-512/224 | 28 bytes (224 bits) | Algorithm available with libgcrypt ≥ 1.9.4.
+| `+sha512-256+`  | SHA-512/256 | 32 bytes (256 bits) | Algorithm available with libgcrypt ≥ 1.9.4.
+| `+sha3-224+`    | SHA3-224    | 28 bytes (224 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
+| `+sha3-256+`    | SHA3-256    | 32 bytes (256 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
+| `+sha3-384+`    | SHA3-384    | 48 bytes (384 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
+| `+sha3-512+`    | SHA3-512    | 64 bytes (512 bits) | Algorithm available with libgcrypt ≥ 1.7.0.
+| `+blake2b-160+` | BLAKE2B-160 | 20 bytes (160 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2b-256+` | BLAKE2B-256 | 32 bytes (256 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2b-384+` | BLAKE2B-384 | 48 bytes (384 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2b-512+` | BLAKE2B-512 | 64 bytes (512 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2s-128+` | BLAKE2S-128 | 16 bytes (128 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2s-160+` | BLAKE2S-160 | 20 bytes (160 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2s-224+` | BLAKE2S-224 | 28 bytes (224 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
+| `+blake2s-256+` | BLAKE2S-256 | 32 bytes (256 bits) | Algorithm available with libgcrypt ≥ 1.8.0.
 |===
 
 Valore restituito:
@@ -4259,6 +4559,7 @@ Argomenti:
   strings to force a specific WeeChat directory (WeeChat ≥ 3.2):
 ** `${weechat_config_dir}`
 ** `${weechat_data_dir}` (default)
+** `${weechat_state_dir}`
 ** `${weechat_cache_dir}`
 ** `${weechat_runtime_dir}`
 * _mode_: modalità per la cartella
@@ -4508,7 +4809,8 @@ Argomenti:
 * _to_: destination file
 * _compressor_: the compressor to use, one of:
 ** _gzip_: gzip compression
-** _zstd_: zstandard compression
+** _zstd_: zstandard compression (available only if zstd was enabled when
+   WeeChat was compiled)
 * _compression_level_: compression level, between 1 (fast, low compression) to
   100 (slow, best compression)
 
@@ -4680,6 +4982,84 @@ weechat_printf (NULL, "date: %s",
 [NOTE]
 Questa funzione non è disponibile nelle API per lo scripting.
 
+// TRANSLATION MISSING
+==== util_strftimeval
+
+_WeeChat ≥ 4.2.0, updated in 4.3.0._
+
+Format date and time like function `strftime` in C library, using `struct timeval`
+as input, and supporting extra specifiers.
+
+Prototype:
+
+[source,c]
+----
+int weechat_util_strftimeval (char *string, int max, const char *format, struct timeval *tv);
+----
+
+Arguments:
+
+* _string_: buffer where the formatted string is stored
+* _max_: string size
+* _format_: format, the same as _strftime_ function, with these extra specifiers:
+** `%.N` where `N` is between 1 and 6: zero-padded microseconds on N digits
+   (for example `%.3` for milliseconds)
+** `%f`: alias of `%.6`
+** `%!`: timestamp as integer, in seconds (value of tv->tv_sec)
+
+Return value:
+
+* number of bytes put in _string_ (value returned from _strftime_ function)
+
+C example:
+
+[source,c]
+----
+char time[256];
+struct timeval tv;
+gettimeofday (&tv, NULL);
+weechat_util_strftimeval (time, sizeof (time), "%FT%T.%f", &tv);
+/* result: 2023-12-26T18:10:04.460509 */
+----
+
+[NOTE]
+Questa funzione non è disponibile nelle API per lo scripting.
+
+// TRANSLATION MISSING
+==== util_parse_time
+
+_WeeChat ≥ 4.2.0._
+
+Parse date/time with support of microseconds.
+
+Prototype:
+
+[source,c]
+----
+int util_parse_time (const char *datetime, struct timeval *tv);
+----
+
+Arguments:
+
+* _date_: date/time
+* _tv_: parsed date/time ("timeval" structure)
+
+Return value:
+
+* 1 if OK, 0 if error
+
+C example:
+
+[source,c]
+----
+struct timeval tv;
+weechat_util_parse_time ("2023-12-25T10:29:09.456789Z", &tv);  /* == 1 */
+/* result: tv.tv_sec == 1703500149, tv.tv_usec = 456789 */
+----
+
+[NOTE]
+Questa funzione non è disponibile nelle API per lo scripting.
+
 ==== util_version_number
 
 _WeeChat ≥ 0.3.9._
@@ -4707,6 +5087,8 @@ version_number = weechat_util_version_number ("0.3.8");      /* == 0x00030800 */
 version_number = weechat_util_version_number ("0.3.9-dev");  /* == 0x00030900 */
 version_number = weechat_util_version_number ("0.3.9-rc1");  /* == 0x00030900 */
 version_number = weechat_util_version_number ("0.3.9");      /* == 0x00030900 */
+version_number = weechat_util_version_number ("1.0");        /* == 0x01000000 */
+version_number = weechat_util_version_number ("4.0.0");      /* == 0x04000000 */
 ----
 
 [NOTE]
@@ -5171,7 +5553,7 @@ Esempio in C:
 
 [source,c]
 ----
-weechat_printf (NULL, "user data of item: 0x%lx", weechat_list_user_data (item));
+weechat_printf (NULL, "user data of item: %p", weechat_list_user_data (item));
 ----
 
 [NOTE]
@@ -5692,7 +6074,8 @@ Funzioni per le tabelle hash.
 
 ==== hashtable_new
 
-_WeeChat ≥ 0.3.3._
+// TRANSLATION MISSING
+_WeeChat ≥ 0.3.3, updated in 4.4.0._
 
 Crea una nuova tabella hash.
 
@@ -5721,12 +6104,14 @@ Argomenti:
 ** _WEECHAT_HASHTABLE_POINTER_
 ** _WEECHAT_HASHTABLE_BUFFER_
 ** _WEECHAT_HASHTABLE_TIME_
+** _WEECHAT_HASHTABLE_LONGLONG_ _(WeeChat ≥ 4.4.0)_
 * _type_values_: tipo per i valori nella tabella hash:
 ** _WEECHAT_HASHTABLE_INTEGER_
 ** _WEECHAT_HASHTABLE_STRING_
 ** _WEECHAT_HASHTABLE_POINTER_
 ** _WEECHAT_HASHTABLE_BUFFER_
 ** _WEECHAT_HASHTABLE_TIME_
+** _WEECHAT_HASHTABLE_LONGLONG_ _(WeeChat ≥ 4.4.0)_
 // TRANSLATION MISSING
 * _callback_hash_key_: callback used to "hash" a key (key as integer value), can
   be NULL if key type is not "buffer" (a default hash function is used),
@@ -6096,12 +6481,16 @@ Argomenti:
 *** _pointer_: puntatore
 *** _buffer_: buffer
 *** _time_: tempo
+// TRANSLATION MISSING
+*** _longlong_: long long integer
 ** _type_values_: tipo per i valori:
 *** _integer_: intero
 *** _string_: stringa
 *** _pointer_: puntatore
 *** _buffer_: buffer
 *** _time_: tempo
+// TRANSLATION MISSING
+*** _longlong_: long long integer
 ** _keys_: stringa con la lista di chiavi (formato: "chiave1,chiave2,chiave3")
 ** _keys_sorted_: stringa con l'elenco di chiavi ordinate (formato: "chiave1,chiave2,chiave3")
 ** _values_: stringa  con la lista di valori (formato: "valore1,valore2,valore3")
@@ -6361,7 +6750,7 @@ Funzioni per i file di configurazione.
 ==== config_new
 
 // TRANSLATION MISSING
-_Updated in 1.5._
+_Updated in 1.5, 4.0.0._
 
 Crea un nuovo file di configurazione.
 
@@ -6379,7 +6768,12 @@ struct t_config_file *weechat_config_new (const char *name,
 
 Argomenti:
 
-* _name_: nome del file di configurazione (senza percorso o estensione)
+// TRANSLATION MISSING
+* _name_: nome del file di configurazione (senza percorso o estensione); a priority
+  is allowed before the name, with format `nnn|name` where `nnn` is non-negative
+  integer with priority; default priority is 1000; files are sorted by priority
+  from higher to lower when running command `/reload`
+  (see priority of configuration files below)
 // TRANSLATION MISSING
 * _callback_reload_: funzione chiamata quando il file di configurazione viene
   ricaricato con `/reload` (opzionale, può essere NULL, see below), argomenti e valore
@@ -6420,6 +6814,11 @@ Si dovrebbe chiamare questa funzione solo dopo aver aggiunto alcune sezioni
 (con <<_config_new_section,config_new_section>>) e le
 opzioni (con <<_config_new_option,config_new_option>>).
 
+// TRANSLATION MISSING
+Priority of default configuration files:
+
+include::{autogendir}/autogen_api_config_priority.it.adoc[tag=config_priority]
+
 Esempio in C:
 
 [source,c]
@@ -6451,6 +6850,183 @@ def my_config_reload_cb(data: str, config_file: str) -> int:
     return weechat.WEECHAT_RC_OK
 
 config_file = weechat.config_new("test", "my_config_reload_cb", "")
+----
+
+// TRANSLATION MISSING
+==== config_set_version
+
+_WeeChat ≥ 4.0.0._
+
+Set configuration file version and a callback to update config sections/options
+on-the-fly when the config is read.
+
+Prototipo:
+
+[source,c]
+----
+int config_file_set_version (struct t_config_file *config_file,
+                             int version,
+                             struct t_hashtable *(*callback_update)(const void *pointer,
+                                                                    void *data,
+                                                                    struct t_config_file *config_file,
+                                                                    int version_read,
+                                                                    struct t_hashtable *data_read),
+                             const void *callback_update_pointer,
+                             void *callback_update_data);
+----
+
+Argomenti:
+
+* _config_file_: configuration file pointer
+* _version_: version, must be ≥ 2
+* _callback_update_: function called when configuration file is read, for each
+  section and each option, if the version read is less than the expected version,
+  (optional, can be NULL, see below), arguments and return value:
+** _const void *pointer_: pointer
+** _void *data_: pointer
+** _struct t_config_file *config_file_: configuration file pointer
+** _int version_read_: version read in configuration file (1 by default)
+** _struct t_hashtable *data_read_: hashtable with data read from configuration file
+   (see below)
+** return value:
+*** either "data_read" pointer (hashtable completed), or pointer to a new
+    hashtable (created by callback, with keys and values of type "string")
+* _callback_update_pointer_: pointer given to callback when it is called by
+  WeeChat
+* _callback_update_data_: pointer given to callback when it is called by
+  WeeChat; if not NULL, it must have been allocated with malloc (or similar
+  function) and it is automatically freed when the configuration file is freed
+
+Update callback:
+
+* The callback receives a hashtable with data read from configuration file:
+
+[width="100%",cols="1m,2,8",options="header"]
+|===
+| Key        | Availability    | Value
+| config     | Always set      | Name of configuration file, without extension (eg: `weechat`)
+| section    | Always set      | Name of section being read
+| option     | For option only | Name of the option
+| value      | For option only | Value of the option (if not NULL)
+| value_null | For option only | Option as NULL value (value is always `1`)
+|===
+
+* The callback can update "section" for a line with a section and "option", "value"
+  and "value_null" for a line with an option.
+* If "option" is set to empty string by the callback, the line read in
+  configuration file is ignored.
+* Field "value_null" is set to force a NULL value for the option.
+
+Valore restituito:
+
+* 1 if OK, 0 if error
+
+Esempio in C:
+
+[source,c]
+----
+struct t_hashtable *
+my_config_update_cb (const void *pointer, void *data,
+                     struct t_config_file *config_file,
+                     int version_read,
+                     struct t_hashtable *data_read)
+{
+    const char *ptr_section, *ptr_option;
+
+    /* return now if version is already up-to-date */
+    if (version_read >= 2)
+        return NULL;
+
+    ptr_section = hashtable_get (data_read, "section");
+    ptr_option = hashtable_get (data_read, "option");
+
+    /* rename section "abc" to "def" */
+    if (ptr_section && !ptr_option && (strcmp (ptr_section, "abc") == 0))
+    {
+        hashtable_set (data_read, "section", "def");
+        return data_read;
+    }
+
+    /* limit other changes to section "test" */
+    if (!ptr_section || !ptr_option || (strcmp (ptr_section, "test") != 0))
+        return NULL;
+
+    /* rename option "test1" to "test2" */
+    if (strcmp (ptr_option, "test1") == 0)
+    {
+        hashtable_set (data_read, "option", "test2");
+        return data_read;
+    }
+
+    /* set value to "xxx" for option "test" */
+    if (strcmp (ptr_option, "test") == 0)
+    {
+        hashtable_set (data_read, "value", "xxx");
+        return data_read;
+    }
+
+    /* set value to NULL for option "test_null" */
+    if (strcmp (ptr_option, "test_null") == 0)
+    {
+        hashtable_set (data_read, "value_null", "1");
+        return data_read;
+    }
+
+    /* no changes */
+    return NULL;
+}
+
+struct t_config_file *config_file = weechat_config_new ("test", NULL, NULL, NULL);
+weechat_config_set_version (config_file, 2, &my_config_update_cb, NULL, NULL);
+weechat_config_read (config_file);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def config_set_version(config_file: str, version: int, callback_update: str, callback_update_data: str) -> int: ...
+
+# esempio
+def my_config_update_cb(data: str, config_file: str, version_read: int, data_read: Dict[str, str]) -> Dict[str, str]:
+    # return now if version is already up-to-date
+    if version_read >= 2:
+        return {}
+
+    section = data_read.get("section")
+    option = data_read.get("option")
+
+    # rename section "abc" to "def"
+    if section and not option and section == "abc":
+        data_read["section"] = "def"
+        return data_read
+
+    # limit other changes to section "test"
+    if not section or not option or section != "test":
+        return {}
+
+    # rename option "test1" to "test2"
+    if option == "test1":
+        data_read["option"] = "test2"
+        return data_read
+
+    # set value to "xxx" for option "test"
+    if option == "test":
+        data_read["value"] = "xxx"
+        return data_read
+
+    # set value to NULL for option "test_null"
+    if option == "test_null":
+        data_read["value_null"] = "1"
+        return data_read
+
+    # no changes
+    return {}
+
+config_file = weechat.config_new("test", "", "")
+weechat.config_set_version(config_file, 2, "my_config_update_cb", "")
+weechat.config_read(config_file)
 ----
 
 ==== config_new_section
@@ -6624,9 +7200,10 @@ my_section_read_cb (const void *pointer, void *data,
 {
     /* ... */
 
-    return WEECHAT_CONFIG_READ_OK;
-    /* return WEECHAT_CONFIG_READ_MEMORY_ERROR; */
-    /* return WEECHAT_CONFIG_READ_FILE_NOT_FOUND; */
+    return WEECHAT_CONFIG_OPTION_SET_OK_CHANGED;
+    /* return WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE; */
+    /* return WEECHAT_CONFIG_OPTION_SET_ERROR; */
+    /* return WEECHAT_CONFIG_OPTION_SET_OPTION_NOT_FOUND; */
 }
 
 int
@@ -6716,7 +7293,7 @@ def config_new_section(config_file: str, name: str,
                        callback_delete_option: str, callback_delete_option_data: str) -> str: ...
 
 # esempio
-def my_section_read_cb(data: str, config_file: str, section: str, option_name: str, value: str | None) -> int:
+def my_section_read_cb(data: str, config_file: str, section: str, option_name: str, value: Union[str, None]) -> int:
     # ...
     return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
     # return weechat.WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE
@@ -6735,7 +7312,7 @@ def my_section_write_default_cb(data: str, config_file: str, section_name: str) 
     # return weechat.WEECHAT_CONFIG_WRITE_ERROR
     # return weechat.WEECHAT_CONFIG_WRITE_MEMORY_ERROR
 
-def my_section_create_option_cb(data: str, config_file: str, section: str, option_name: str, value: str | None) -> int:
+def my_section_create_option_cb(data: str, config_file: str, section: str, option_name: str, value: Union[str, None]) -> int:
     # ...
     return weechat.WEECHAT_CONFIG_OPTION_SET_OK_CHANGED
     # return weechat.WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE
@@ -6801,7 +7378,7 @@ section = weechat.config_search_section(config_file, "section")
 ==== config_new_option
 
 // TRANSLATION MISSING
-_Updated in 1.5._
+_Updated in 1.5, 4.1.0._
 
 Crea una nuova opzione nella sezione di un file di configurazione.
 
@@ -6850,12 +7427,15 @@ Argomenti:
   "name << file.section.option"
 * _type_: tipo dell'opzione:
 ** _boolean_: valore booleano (on/off)
-** _integer_: valore intero (con stringhe opzionali per i valori)
+** _integer_: valore intero
 ** _string_: valore stringa
 ** _color_: colore
+// TRANSLATION MISSING
+** _enum_: list of string values (stored as integer internally)
 * _description_: descrizione dell'opzione
-* _string_values_: valori come stringa (separati da `+|+`), usato dal tipo _integer_
-  (opzionale)
+// TRANSLATION MISSING
+* _string_values_: valori come stringa (separati da `+|+`) (optional, required
+  for type _enum_)
 * _min_: valore minimo (per il tipo _integer_)
 * _max_: valore massimo (per il tipo _integer_)
 * _default_value_: valore predefinito per l'opzione (usato per il reset dell'opzione)
@@ -6909,8 +7489,8 @@ Esempio in C:
 [source,c]
 ----
 /* booleano */
-struct t_config_option *option1 =
-    weechat_config_new_option (config_file, section, "option1", "boolean",
+struct t_config_option *option_bool =
+    weechat_config_new_option (config_file, section, "option_bool", "boolean",
                                "My option, type boolean",
                                NULL,
                                0, 0,
@@ -6922,8 +7502,8 @@ struct t_config_option *option1 =
                                NULL, NULL, NULL);
 
 /* intero */
-struct t_config_option *option2 =
-    weechat_config_new_option (config_file, section, "option2", "integer",
+struct t_config_option *option_int =
+    weechat_config_new_option (config_file, section, "option_int", "integer",
                                "My option, type integer",
                                NULL,
                                0, 100,
@@ -6934,22 +7514,9 @@ struct t_config_option *option2 =
                                NULL, NULL, NULL,
                                NULL, NULL, NULL);
 
-/* intero (con valori stringa) */
-struct t_config_option *option3 =
-    weechat_config_new_option (config_file, section, "option3", "integer",
-                               "My option, type integer (with string values)",
-                               "top|bottom|left|right",
-                               0, 0,
-                               "bottom",
-                               "bottom",
-                               0,
-                               NULL, NULL, NULL,
-                               NULL, NULL, NULL,
-                               NULL, NULL, NULL);
-
 /* stringa */
-struct t_config_option *option4 =
-    weechat_config_new_option (config_file, section, "option4", "string",
+struct t_config_option *option_str =
+    weechat_config_new_option (config_file, section, "option_str", "string",
                                "My option, type string",
                                NULL,
                                0, 0,
@@ -6961,13 +7528,26 @@ struct t_config_option *option4 =
                                NULL, NULL, NULL);
 
 /* colore */
-struct t_config_option *option5 =
-    weechat_config_new_option (config_file, section, "option5", "color",
+struct t_config_option *option_col =
+    weechat_config_new_option (config_file, section, "option_col", "color",
                                "My option, type color",
                                NULL,
                                0, 0,
                                "lightblue",
                                "lightblue",
+                               0,
+                               NULL, NULL, NULL,
+                               NULL, NULL, NULL,
+                               NULL, NULL, NULL);
+
+/* enum */
+struct t_config_option *option_enum =
+    weechat_config_new_option (config_file, section, "option_enum", "enum",
+                               "My option, type enum",
+                               "top|bottom|left|right",
+                               0, 0,
+                               "bottom",
+                               "bottom",
                                0,
                                NULL, NULL, NULL,
                                NULL, NULL, NULL,
@@ -6981,55 +7561,55 @@ Script (Python):
 # prototipo
 def config_new_option(config_file: str, section: str, name: str, type: str, description: str,
                       string_values: str, min: int, max: int,
-                      default_value: str | None, value: str | None, null_value_allowed: int,
+                      default_value: Union[str, None], value: Union[str, None], null_value_allowed: int,
                       callback_check_value: str, callback_check_value_data: str,
                       callback_change: str, callback_change_data: str,
                       callback_delete: str, callback_delete_data: str) -> str: ...
 
 # esempio
-def option4_check_value_cb(data: str, option: str, value: str) -> int:
+def option_str_check_value_cb(data: str, option: str, value: str) -> int:
     # ...
     return 1
     # return 0
 
-def option4_change_cb(data: str, option: str) -> None:
+def option_str_change_cb(data: str, option: str) -> None:
     # ...
 
-def option4_delete_cb(data: str, option: str) -> None:
+def option_str_delete_cb(data: str, option: str) -> None:
     # ...
 
-option1 = weechat.config_new_option(config_file, section, "option1", "boolean",
+option_bool = weechat.config_new_option(config_file, section, "option_bool", "boolean",
     "My option, type boolean",
     "", 0, 0, "on", "on", 0,
     "", "",
     "", "",
     "", "")
 
-option2 = weechat.config_new_option(config_file, section, "option2", "integer",
+option_int = weechat.config_new_option(config_file, section, "option_int", "integer",
     "My option, type integer",
     "", 0, 100, "15", "15", 0,
     "", "",
     "", "",
     "", "")
 
-option3 = weechat.config_new_option(config_file, section, "option3", "integer",
-    "My option, type integer (with string values)",
-    "top|bottom|left|right",
-    0, 0, "bottom", "bottom", 0,
+option_str = weechat.config_new_option(config_file, section, "option_str", "string",
+    "My option, type string",
+    "", 0, 0, "test", "test", 1,
+    "option_str_check_value_cb", "",
+    "option_str_change_cb", "",
+    "option_str_delete_cb", "")
+
+option_col = weechat.config_new_option(config_file, section, "option_col", "color",
+    "My option, type color",
+    "", 0, 0, "lightblue", "lightblue", 0,
     "", "",
     "", "",
     "", "")
 
-option4 = weechat.config_new_option(config_file, section, "option4", "string",
-    "My option, type string",
-    "", 0, 0, "test", "test", 1,
-    "option4_check_value_cb", "",
-    "option4_change_cb", "",
-    "option4_delete_cb", "")
-
-option5 = weechat.config_new_option(config_file, section, "option5", "color",
-    "My option, type color",
-    "", 0, 0, "lightblue", "lightblue", 0,
+option_enum = weechat.config_new_option(config_file, section, "option_enum", "enum",
+    "My option, type enum",
+    "top|bottom|left|right",
+    0, 0, "bottom", "bottom", 0,
     "", "",
     "", "",
     "", "")
@@ -7039,7 +7619,7 @@ option5 = weechat.config_new_option(config_file, section, "option5", "color",
 [NOTE]
 In Ruby, the 3 callbacks + data (6 strings) must be given in an array of 6
 strings (due to a Ruby limitation of 15 arguments by function), see the
-link:++weechat_scripting.it.html#_ruby++[WeeChat Scripting Guide ^↗^,window=_blank]
+link:++weechat_scripting.it.html#_ruby++[WeeChat Scripting Guide ^↗^^]
 for more info _(fixed in version 0.4.1)_.
 
 ==== config_search_option
@@ -7321,7 +7901,7 @@ Argomenti:
 // TRANSLATION MISSING
 *** `toggle`: toggle the current value
 // TRANSLATION MISSING
-** _integer_ or _color_:
+** _integer_, _color_ or _enum_:
 // TRANSLATION MISSING
 *** `++N`: add `N` (any integer) to the current value
 // TRANSLATION MISSING
@@ -7563,6 +8143,7 @@ Argomenti:
 *** _integer_
 *** _string_
 *** _color_
+*** _enum_
 ** _description_: option description
 
 Valore restituito:
@@ -7739,6 +8320,7 @@ Return value, depending on the option type:
 * _integer_: 0
 * _string_: 0
 * _color_: 0
+* _enum_: 0
 
 Esempio in C:
 
@@ -7790,6 +8372,7 @@ Return value, depending on the option type:
 * _integer_: 0
 * _string_: 0
 * _color_: 0
+* _enum_: 0
 
 Esempio in C:
 
@@ -7819,6 +8402,50 @@ if weechat.config_boolean_default(option):
     # ...
 ----
 
+// TRANSLATION MISSING
+==== config_boolean_inherited
+
+_WeeChat ≥ 4.3.0._
+
+Return inherited boolean value of option: value of option if not NULL,
+or value of the parent option (if option inherits from another option). +
+If the parent option is not found, return the default value of the option. +
+If the parent value is NULL, return the default value of the parent option.
+
+Prototipo:
+
+[source,c]
+----
+int weechat_config_boolean_inherited (struct t_config_option *option);
+----
+
+Argomenti:
+
+* _option_: puntatore all'opzione
+
+Return value: see functions <<_config_boolean,config_boolean>> and
+<<_config_boolean_default,config_boolean_default>>.
+
+Esempio in C:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("irc.server.libera.autoconnect");
+int autoconnect = weechat_config_boolean_inherited (option);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def config_boolean_inherited(option: str) -> int: ...
+
+# esempio
+option = weechat.config_get("irc.server.libera.autoconnect")
+autoconnect = weechat.config_boolean_inherited(option)
+----
+
 ==== config_integer
 
 Restituisce il valore intero di un'opzione.
@@ -7841,6 +8468,7 @@ Return value, depending on the option type:
 * _integer_: integer value of option
 * _string_: 0
 * _color_: color index
+* _enum_: integer value of option (index of enum value)
 
 Esempio in C:
 
@@ -7884,6 +8512,7 @@ Return value, depending on the option type:
 * _integer_: default integer value of option
 * _string_: 0
 * _color_: default color index
+* _enum_: default integer value of option (index of enum value)
 
 Esempio in C:
 
@@ -7905,6 +8534,50 @@ option = weechat.config_get("plugin.section.option")
 value = weechat.config_integer_default(option)
 ----
 
+// TRANSLATION MISSING
+==== config_integer_inherited
+
+_WeeChat ≥ 4.3.0._
+
+Return inherited integer value of option: value of option if not NULL,
+or value of the parent option (if option inherits from another option). +
+If the parent option is not found, return the default value of the option. +
+If the parent value is NULL, return the default value of the parent option.
+
+Prototipo:
+
+[source,c]
+----
+int weechat_config_integer_inherited (struct t_config_option *option);
+----
+
+Argomenti:
+
+* _option_: puntatore all'opzione
+
+Return value: see functions <<_config_integer,config_integer>> and
+<<_config_integer_default,config_integer_default>>.
+
+Esempio in C:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("irc.server.libera.autojoin_delay");
+int delay = weechat_config_integer_inherited (option);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def config_integer_inherited(option: str) -> int: ...
+
+# esempio
+option = weechat.config_get("irc.server.libera.autojoin_delay")
+delay = weechat.config_integer_inherited(option)
+----
+
 ==== config_string
 
 Restituisce il valore stringa di un'opzione.
@@ -7924,10 +8597,10 @@ Argomenti:
 Return value, depending on the option type:
 
 * _boolean_: "on" if value is true, otherwise "off"
-* _integer_: string value if the option is an integer with string values,
-  otherwise NULL
+* _integer_: NULL
 * _string_: string value of option
 * _color_: name of color
+* _enum_: string value of option
 
 Esempio in C:
 
@@ -7968,10 +8641,10 @@ Argomenti:
 Return value, depending on the option type:
 
 * _boolean_: "on" if default value is true, otherwise "off"
-* _integer_: default string value if the option is an integer with string
-  values, otherwise NULL
+* _integer_: NULL
 * _string_: default string value of option
 * _color_: name of default color
+* _enum_: default string value of option
 
 Esempio in C:
 
@@ -7991,6 +8664,50 @@ def config_string_default(option: str) -> str: ...
 # esempio
 option = weechat.config_get("plugin.section.option")
 value = weechat.config_string_default(option)
+----
+
+// TRANSLATION MISSING
+==== config_string_inherited
+
+_WeeChat ≥ 4.3.0._
+
+Return inherited string value of option: value of option if not NULL,
+or value of the parent option (if option inherits from another option). +
+If the parent option is not found, return the default value of the option. +
+If the parent value is NULL, return the default value of the parent option.
+
+Prototipo:
+
+[source,c]
+----
+const char *weechat_config_string_inherited (struct t_config_option *option);
+----
+
+Argomenti:
+
+* _option_: puntatore all'opzione
+
+Return value: see functions <<_config_string,config_string>> and
+<<_config_string_default,config_string_default>>.
+
+Esempio in C:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("irc.server.libera.msg_quit");
+const char *msg_quit = weechat_config_string_inherited (option);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def config_string_inherited(option: str) -> str: ...
+
+# esempio
+option = weechat.config_get("irc.server.libera.msg_quit")
+msg_quit = weechat.config_string_inherited(option)
 ----
 
 ==== config_color
@@ -8015,6 +8732,7 @@ Return value, depending on the option type:
 * _integer_: NULL
 * _string_: NULL
 * _color_: name of color
+* _enum_: NULL
 
 Esempio in C:
 
@@ -8033,7 +8751,7 @@ def config_color(option: str) -> str: ...
 
 # esempio
 option = weechat.config_get("plugin.section.option")
-value = weechat.config_color(option)
+color = weechat.config_color(option)
 ----
 
 ==== config_color_default
@@ -8058,6 +8776,7 @@ Return value, depending on the option type:
 * _integer_: NULL
 * _string_: NULL
 * _color_: name of default color
+* _enum_:  NULL
 
 Esempio in C:
 
@@ -8076,7 +8795,187 @@ def config_color_default(option: str) -> str: ...
 
 # esempio
 option = weechat.config_get("plugin.section.option")
-value = weechat.config_color_default(option)
+color = weechat.config_color_default(option)
+----
+
+// TRANSLATION MISSING
+==== config_color_inherited
+
+_WeeChat ≥ 4.3.0._
+
+Return inherited color value of option: value of option if not NULL,
+or value of the parent option (if option inherits from another option). +
+If the parent option is not found, return the default value of the option. +
+If the parent value is NULL, return the default value of the parent option.
+
+Prototipo:
+
+[source,c]
+----
+const char *weechat_config_color_inherited (struct t_config_option *option);
+----
+
+Argomenti:
+
+* _option_: puntatore all'opzione
+
+Return value: see functions <<_config_color,config_color>> and
+<<_config_color_default,config_color_default>>.
+
+Esempio in C:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("plugin.section.option");
+const char *color = weechat_config_color_inherited (option);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def config_color_inherited(option: str) -> str: ...
+
+# esempio
+option = weechat.config_get("plugin.section.option")
+color = weechat.config_color_inherited(option)
+----
+
+// TRANSLATION MISSING
+==== config_enum
+
+_WeeChat ≥ 4.1.0._
+
+Return enum value of option, as integer.
+
+Prototype:
+
+[source,c]
+----
+int weechat_config_enum (struct t_config_option *option);
+----
+
+Arguments:
+
+* _option_: option pointer
+
+Return value, depending on the option type:
+
+* _boolean_: boolean value of option (0 or 1)
+* _integer_: integer value of option
+* _string_: 0
+* _color_: color index
+* _enum_: integer value of option (index of enum value)
+
+C example:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("plugin.section.option");
+int value = weechat_config_enum (option);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototype
+def config_enum(option: str) -> int: ...
+
+# example
+option = weechat.config_get("plugin.section.option")
+value = weechat.config_enum(option)
+----
+
+// TRANSLATION MISSING
+==== config_enum_default
+
+_WeeChat ≥ 4.1.0._
+
+Return default enum value of option, as integer.
+
+Prototype:
+
+[source,c]
+----
+int weechat_config_enum_default (struct t_config_option *option);
+----
+
+Arguments:
+
+* _option_: option pointer
+
+Return value, depending on the option type:
+
+* _boolean_: default boolean value of option (0 or 1)
+* _integer_: default integer value of option
+* _string_: 0
+* _color_: default color index
+* _enum_: integer value of option (index of enum value)
+
+C example:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("plugin.section.option");
+int value = weechat_config_enum_default (option);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototype
+def config_enum_default(option: str) -> int: ...
+
+# example
+option = weechat.config_get("plugin.section.option")
+value = weechat.config_enum_default(option)
+----
+
+// TRANSLATION MISSING
+==== config_enum_inherited
+
+_WeeChat ≥ 4.3.0._
+
+Return inherited enum value of option: value of option if not NULL,
+or value of the parent option (if option inherits from another option). +
+If the parent option is not found, return the default value of the option. +
+If the parent value is NULL, return the default value of the parent option.
+
+Prototipo:
+
+[source,c]
+----
+int weechat_config_enum_inherited (struct t_config_option *option);
+----
+
+Argomenti:
+
+* _option_: puntatore all'opzione
+
+Return value: see functions <<_config_enum,config_enum>> and
+<<_config_enum_default,config_enum_default>>.
+
+Esempio in C:
+
+[source,c]
+----
+struct t_config_option *option = weechat_config_get ("irc.server.libera.sasl_fail");
+int sasl_fail = weechat_config_enum_inherited (option);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def config_enum_inherited(option: str) -> int: ...
+
+# esempio
+option = weechat.config_get("irc.server.libera.sasl_fail")
+sasl_fail = weechat.config_enum_inherited(option)
 ----
 
 ==== config_write_option
@@ -9086,13 +9985,13 @@ void weechat_printf (struct t_gui_buffer *buffer, const char *message, ...);
 ----
 
 // TRANSLATION MISSING
-This function is a shortcut for function printf_date_tags. These two calls give
-exactly same result:
+This function is a shortcut for function printf_datetime_tags. +
+These two calls give exactly same result:
 
 [source,c]
 ----
 weechat_printf (buffer, "message");
-weechat_printf_date_tags (buffer, 0, NULL, "message");
+weechat_printf_datetime_tags (buffer, 0, 0, NULL, "message");
 ----
 
 Argomenti:
@@ -9158,6 +10057,16 @@ void weechat_printf_date_tags (struct t_gui_buffer *buffer, time_t date,
                                const char *tags, const char *message, ...);
 ----
 
+// TRANSLATION MISSING
+This function is a shortcut for function printf_datetime_tags. +
+These two calls give exactly same result:
+
+[source,c]
+----
+weechat_printf_date_tags (buffer, 0, NULL, "message");
+weechat_printf_datetime_tags (buffer, 0, 0, NULL, "message");
+----
+
 Argomenti:
 
 * _buffer_: puntatore al buffer, se NULL il messaggio viene visualizzato
@@ -9168,7 +10077,7 @@ Argomenti:
 * _message_: messaggio da visualizzare
 
 // TRANSLATION MISSING
-See the link:weechat_user.it.html#lines_tags[WeeChat user's guide / Lines tags ^↗^,window=_blank]
+See the link:weechat_user.it.html#lines_tags[WeeChat user's guide / Lines tags ^↗^^]
 for a list of commonly used tags in WeeChat.
 
 Esempio in C:
@@ -9195,6 +10104,67 @@ weechat.prnt_date_tags("", time - 120, "notify_message",
 [NOTE]
 La funzione è chiamata "print_date_tags" negli script ("prnt_date_tags" in Python).
 
+==== printf_datetime_tags
+
+_WeeChat ≥ 4.2.0._
+
+// TRANSLATION MISSING
+Display a message on a buffer, using a custom date/time (with microseconds)
+and tags.
+
+Prototipo:
+
+[source,c]
+----
+void weechat_printf_datetime_tags (struct t_gui_buffer *buffer, time_t date,
+                                   int date_usec, const char *tags, const char *message, ...);
+----
+
+Argomenti:
+
+* _buffer_: puntatore al buffer, se NULL il messaggio viene visualizzato
+  sul buffer di WeeChat
+* _date_: data per il messaggio (0 indica data/ora corrente)
+// TRANSLATION MISSING
+* _date_usec_: microseconds of date (between 0 and 999999)
+// TRANSLATION MISSING
+* _tags_: lista di tag separati da virgole (NULL means no tags)
+* _message_: messaggio da visualizzare
+
+// TRANSLATION MISSING
+See the link:weechat_user.it.html#lines_tags[WeeChat user's guide / Lines tags ^↗^^]
+for a list of commonly used tags in WeeChat.
+
+Esempio in C:
+
+[source,c]
+----
+struct timeval tv_now;
+
+gettimeofday (&tv_now, NULL);
+weechat_printf_datetime_tags (NULL, tv_now.tv_sec - 120, tv_now.tv_usec,
+                              "notify_message",
+                              "Messaggio 2 minuti fa, con tag 'notify_message'");
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def prnt_datetime_tags(buffer: str, date: int, date_usec: int, tags: str, message: str) -> int: ...
+
+# esempio
+now = time.time()
+time_sec = int(now)
+time_usec = int((now * 1000000) % 1000000)
+weechat.prnt_datetime_tags("", time_sec - 120, time_usec, "notify_message",
+                           "Messaggio 2 minuti fa, con tag 'notify_message'")
+----
+
+[NOTE]
+La funzione è chiamata "print_datetime_tags" negli script ("prnt_datetime_tags" in Python).
+
 ==== printf_y
 
 Visualizza un messaggio sulla riga di un buffer con contenuto libero.
@@ -9203,8 +10173,17 @@ Prototipo:
 
 [source,c]
 ----
-void weechat_printf_y (struct t_gui_buffer *buffer, int y,
-                       const char *message, ...);
+void weechat_printf_y (struct t_gui_buffer *buffer, int y, const char *message, ...);
+----
+
+// TRANSLATION MISSING
+This function is a shortcut for function printf_y_datetime_tags. +
+These two calls give exactly same result:
+
+[source,c]
+----
+weechat_printf_y (buffer, 0, "message");
+weechat_printf_y_datetime_tags (buffer, 0, 0, 0, NULL, "message");
 ----
 
 Argomenti:
@@ -9254,6 +10233,16 @@ void weechat_printf_y_date_tags (struct t_gui_buffer *buffer, int y, time_t date
                                  const char *tags, const char *message, ...);
 ----
 
+// TRANSLATION MISSING
+This function is a shortcut for function printf_y_datetime_tags. +
+These two calls give exactly same result:
+
+[source,c]
+----
+weechat_printf_y_date_tags (buffer, 0, 0, NULL, "message");
+weechat_printf_y_datetime_tags (buffer, 0, 0, 0, NULL, "message");
+----
+
 Argomenti:
 
 * _buffer_: puntatore al buffer
@@ -9287,6 +10276,58 @@ weechat.prnt_y_date_tags("", 2, 0, "my_tag", "My message on third line with a ta
 
 [NOTE]
 La funzione è chiamata "print_y_date_tags" negli script ("prnt_y_date_tags in Python).
+
+==== printf_y_datetime_tags
+
+_WeeChat ≥ 4.2.0._
+
+// TRANSLATION MISSING
+Display a message on a line of a buffer with free content, using a custom
+date/time (with microseconds) and tags.
+
+Prototipo:
+
+[source,c]
+----
+void weechat_printf_y_datetime_tags (struct t_gui_buffer *buffer, int y, time_t date,
+                                     int date_usec, const char *tags, const char *message, ...);
+----
+
+Argomenti:
+
+* _buffer_: puntatore al buffer
+// TRANSLATION MISSING
+* _y_: numero di riga (la prima riga è 0); a negative value adds a line after
+  last line displayed: absolute value of _y_ is the number of lines after last
+  line (for example -1 is immediately after last line, -2 is 2 lines after last
+  line)
+* _date_: data per il messaggio (0 indica data/ora corrente)
+// TRANSLATION MISSING
+* _date_usec_: microseconds of date (between 0 and 999999)
+// TRANSLATION MISSING
+* _tags_: lista di tag separati da virgole (NULL means no tags)
+* _message_: messaggio da visualizzare
+
+Esempio in C:
+
+[source,c]
+----
+weechat_printf_y_datetime_tags (buffer, 2, 0, 0, "my_tag", "My message on third line with a tag");
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def prnt_y_datetime_tags(buffer: str, y: int, date: int, date_usec: int, tags: str, message: str) -> int: ...
+
+# esempio
+weechat.prnt_y_datetime_tags("", 2, 0, 0, "my_tag", "My message on third line with a tag")
+----
+
+[NOTE]
+La funzione è chiamata "print_y_datetime_tags" negli script ("prnt_y_datetime_tags in Python).
 
 ==== log_printf
 
@@ -9354,7 +10395,7 @@ C examples:
 [source,c]
 ----
 /* hook per il modificatore con priorità = 2000 */
-/* high priority: called before other modifier calbacks */
+/* high priority: called before other modifier callbacks */
 weechat_hook_modifier ("2000|input_text_display", &modifier_cb, NULL, NULL);
 
 /* hook two signals with priority = 3000 */
@@ -9440,7 +10481,7 @@ Argomenti:
 
 I codici predefiniti per il completamento sono:
 
-include::includes/autogen_api_completions.it.adoc[tag=completions]
+include::{autogendir}/autogen_api_completions.it.adoc[tag=completions]
 
 Codici speciali:
 
@@ -9825,7 +10866,7 @@ Argomenti:
 * _flag_write_: 1 = cattura l'evento scrittura (write), 0 = ignora
 // TRANSLATION MISSING
 * _flag_exception_: 1 = cattura l'eccezione evento (event), 0 = ignora
-  (_WeeChat ≥ 1.3_: this argument is ignored and not used any more)
+  (_WeeChat ≥ 1.3_: this argument is ignored and not used anymore)
 * _callback_: funzione che chiama un evento selezionato che si verifica
   per un file (o un socket), argomenti e valore restituito:
 ** _const void *pointer_: puntatore
@@ -9893,7 +10934,7 @@ Hook su un processo (lanciato con un fork), e cattura l'output.
 
 [NOTE]
 // TRANSLATION MISSING
-Since version 0.3.9.2, the shell is not used any more to execute the command.
+Since version 0.3.9.2, the shell is not used anymore to execute the command.
 WeeChat makes an automatic split of command and arguments (like the shell does).
 If the split is not correct (according to quotes in your command), or if you
 want to use shell, you can use function
@@ -9915,7 +10956,6 @@ struct t_hook *weechat_hook_process (const char *command,
                                      const void *callback_pointer,
                                      void *callback_data);
 ----
-
 
 Argomenti:
 
@@ -9983,7 +11023,7 @@ In scripting API, the function _name_ is called directly and its result
 // TRANSLATION MISSING
 If you want to retrieve infos about WeeChat (like current stable version,
 latest git commit, etc.), you can use URLs on
-https://weechat.org/dev/info/[this page ^↗^,window=_blank].
+https://weechat.org/dev/info/[this page ^↗^^].
 
 [NOTE]
 La dimensione del buffer per l'invio dei dati alla callback è di 64KB (ci sono
@@ -10186,25 +11226,8 @@ available:
   _/dev/null_.
 |===
 
-Per il comando "url:..." sono disponibili le seguenti opzioni (consultare
-`+man curl_easy_setopt+` per la descrizione di ogni opzione):
-
-include::includes/autogen_api_url_options.it.adoc[tag=url_options]
-
 // TRANSLATION MISSING
-[NOTE]
-^(1)^ Per le opzioni con il tipo "mask" il formato è: "value1+value2+value3";
-for options with type "list", the list items must be separated by a newline
-(`\n`). +
-^(2)^ Quando sono disponibili le costanti, esse vanno usate come valore per
-l'opzione.
-
-Per un URL, sono consentite due opzioni aggiuntive (stringhe) per il file in
-input/output:
-
-* _file_in_: file da leggere e inviare con gli URL (invio del file "post")
-* _file_out_: scrive URL scaricato/file in questo file (invece dello standard
-* output)
+For command "url:...", see available options in function <<_hook_url,hook_url>>.
 
 Valore restituito:
 
@@ -10364,10 +11387,163 @@ hook4 = weechat.hook_process_hashtable("sh",
                                        20000, "my_process_cb", "")
 ----
 
+// TRANSLATION MISSING
+==== hook_url
+
+_WeeChat ≥ 4.1.0._
+
+URL transfer.
+
+Prototipo:
+
+[source,c]
+----
+struct t_hook *weechat_hook_url (const char *url,
+                                 struct t_hashtable *options,
+                                 int timeout,
+                                 int (*callback)(const void *pointer,
+                                                 void *data,
+                                                 const char *url,
+                                                 struct t_hashtable *options,
+                                                 struct t_hashtable *output),
+                                 const void *callback_pointer,
+                                 void *callback_data);
+----
+
+Argomenti:
+
+* _url_: URL
+* _options_: options for URL transfer (see below); la tabella hash è duplicata
+  nella funzione, per cui è possibile liberarla dopo questa chiamata
+* _timeout_: timeout for URL transfer (in milliseconds): after this timeout,
+  the transfer is stopped (0 means no timeout)
+* _callback_: function called when the transfer has ended, arguments and return
+  value:
+** _const void *pointer_: pointer
+** _void *data_: pointer
+** _const char *url_: URL
+** _struct t_hashtable *options_: options
+** _struct t_hashtable *output_: result (keys and values are strings), which may
+   contain the following keys:
+*** _response_code_: HTTP response code
+*** _headers_: HTTP headers in response
+*** _output_: standard output (set only if _file_out_ was not set in options)
+*** _error_: error message (set only in case of error)
+** return value:
+*** _WEECHAT_RC_OK_
+*** _WEECHAT_RC_ERROR_
+* _callback_pointer_: puntatore fornito alla callback quando chiamata da WeeChat
+* _callback_data_: puntatore fornito alla callback quando chiamata da WeeChat;
+  if not NULL, it must have been allocated with malloc (or similar function)
+  and it is automatically freed when the hook is deleted
+
+The following Curl options are available (see `+man curl_easy_setopt+` for
+a description of each option):
+
+include::{autogendir}/autogen_api_url_options.it.adoc[tag=url_options]
+
+// TRANSLATION MISSING
+[NOTE]
+^(1)^ Per le opzioni con il tipo "mask" il formato è: "value1+value2+value3";
+for options with type "list", the list items must be separated by a newline
+(`\n`). +
+^(2)^ Quando sono disponibili le costanti, esse vanno usate come valore per
+l'opzione.
+
+These two extra options (strings) are allowed for input/output file:
+
+[width="100%",cols="2,^1,7",options="header"]
+|===
+| Option   | Type   | Description
+| file_in  | string | file da leggere e inviare con gli URL (invio del file "post")
+| file_out | string | scrive URL scaricato/file in questo file (invece dello standard output)
+|===
+
+Valore restituito:
+
+* puntatore al nuovo hook, NULL in caso di errore
+
+Esempio in C:
+
+[source,c]
+----
+int
+my_url_cb (const void *pointer, void *data, const char *url,
+           struct t_hashtable *options, struct t_hashtable *output)
+{
+    weechat_printf (NULL, "response_code: %s", weechat_hashtable_get (output, "response_code"));
+    weechat_printf (NULL, "headers: %s", weechat_hashtable_get (output, "headers"));
+    weechat_printf (NULL, "output: %s", weechat_hashtable_get (output, "output"));
+    weechat_printf (NULL, "error: %s", weechat_hashtable_get (output, "error"));
+    return WEECHAT_RC_OK;
+}
+
+/* example 1: output to a file */
+struct t_hashtable *options_url1 = weechat_hashtable_new (8,
+                                                          WEECHAT_HASHTABLE_STRING,
+                                                          WEECHAT_HASHTABLE_STRING,
+                                                          NULL,
+                                                          NULL);
+if (options_url1)
+{
+    weechat_hashtable_set (options_url1, "file_out", "/tmp/weechat.org.html");
+    struct t_hook *my_url_hook = weechat_hook_url ("https://weechat.org/",
+                                                   options_url1,
+                                                   20000,
+                                                   &my_url_cb, NULL, NULL);
+    weechat_hashtable_free (options_url1);
+}
+
+/* example 2: custom HTTP headers, output sent to callback */
+struct t_hashtable *options_url2 = weechat_hashtable_new (8,
+                                                          WEECHAT_HASHTABLE_STRING,
+                                                          WEECHAT_HASHTABLE_STRING,
+                                                          NULL,
+                                                          NULL);
+if (options_url2)
+{
+    weechat_hashtable_set (options_url2, "httpheader",
+                           "Header1: value1\n"
+                           "Header2: value2");
+    struct t_hook *my_url_hook = weechat_hook_url ("http://localhost:8080/",
+                                                   options_url2,
+                                                   20000,
+                                                   &my_url_cb, NULL, NULL);
+    weechat_hashtable_free (options_url2);
+}
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def hook_url(url: str, options: Dict[str, str], timeout: int, callback: str, callback_data: str) -> str: ...
+
+# esempio
+def my_url_cb(data: str, url: str, options: Dict[str, str], output: Dict[str, str]) -> int:
+    weechat.prnt("", "output: %s" % output)
+    return weechat.WEECHAT_RC_OK
+
+# example 1: output to a file
+hook1 = weechat.hook_url("https://weechat.org/",
+                         {"file_out": "/tmp/weechat.org.html"},
+                         20000, "my_url_cb", "")
+
+# example 2: custom HTTP headers, output sent to callback
+options = {
+    "httpheader": "\n".join([
+        "Header1: value1",
+        "Header2: value2",
+    ]),
+}
+hook2 = weechat.hook_url("http://localhost:8080/", options, 20000, "my_url_cb", "")
+----
+
 ==== hook_connect
 
 // TRANSLATION MISSING
-_Updated in 1.5, 2.0._
+_Updated in 1.5, 2.0, 4.4.0._
 
 Hook su una connessione (connessione in secondo piano ad un host remoto).
 
@@ -10403,7 +11579,13 @@ Argomenti:
 * _address_: nome o indirizzo IP al quale connettersi
 * _port_: numero della porta
 // TRANSLATION MISSING
-* _ipv6_: 1 to use IPv6 (with fallback to IPv4), 0 to use only IPv4
+* _ipv6_:
+// TRANSLATION MISSING
+** `WEECHAT_HOOK_CONNECT_IPV6_DISABLE` ^(1)^: disable IPv6 (use only IPv4)
+// TRANSLATION MISSING
+** `WEECHAT_HOOK_CONNECT_IPV6_AUTO` ^(1)^: use IPv6 with fallback to IPv4
+// TRANSLATION MISSING
+** `WEECHAT_HOOK_CONNECT_IPV6_FORCE` ^(1)^: force IPv6 (do not use IPv4) _(WeeChat ≥ 4.4.0)_
 // TRANSLATION MISSING
 * _retry_: retry count, used to fallback to IPv4 hosts if IPv6 hosts connect
   but then fail to accept the client
@@ -10426,7 +11608,7 @@ Argomenti:
   successo oppure no, argomenti e valore restituito:
 ** _const void *pointer_: puntatore
 ** _void *data_: puntatore
-** _int status_: stato della connessione:
+** _int status_: stato della connessione ^(2)^:
 *** _WEECHAT_HOOK_CONNECT_OK_: connessione avvenuta con successo
 *** _WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND_: indirizzo non trovato
 *** _WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND_: indirizzo IP non trovato
@@ -10438,8 +11620,8 @@ Argomenti:
 *** _WEECHAT_HOOK_CONNECT_MEMORY_ERROR_: memoria insufficiente
 *** _WEECHAT_HOOK_CONNECT_TIMEOUT_: timeout
 *** _WEECHAT_HOOK_CONNECT_SOCKET_ERROR_: errore nella creazione socket
-** _gnutls_rc_: valore del risultato di _gnutls_handshake()_
-** _sock_: socket utilizzato per la connessione
+** _gnutls_rc_: valore del risultato di _gnutls_handshake()_ ^(2)^
+** _sock_: socket utilizzato per la connessione ^(2)^
 ** _const char *error_: valore del risultato di _gnutls_strerror(gnutls_rc)_
 ** _const char *ip_address_: indirizzo IP trovato
 ** valore restituito:
@@ -10451,16 +11633,19 @@ Argomenti:
   if not NULL, it must have been allocated with malloc (or similar function)
   and it is automatically freed when the hook is deleted
 
-Valore restituito:
-
-* puntatore al nuovo hook, NULL in caso di errore
-
 // TRANSLATION MISSING
-[IMPORTANT]
-In scripts, with WeeChat ≥ 2.0, the callback arguments _status_, _gnutls_rc_
+[NOTE]
+^(1)^ Constants for parameter _ipv6_ are available since WeeChat 4.4.0. +
+For older releases, allowed values are `1` (use IPv6 with fallback to IPv4) and
+`0` (disable IPv6, use only IPv4). +
+^(2)^ In scripts, with WeeChat ≥ 2.0, the callback arguments _status_, _gnutls_rc_
 and _sock_ are integers (with WeeChat ≤ 1.9, they were strings). +
 To be compatible with all versions, it is recommended to convert the argument
 to integer before using it, for example in Python: `int(sock)`.
+
+Valore restituito:
+
+* puntatore al nuovo hook, NULL in caso di errore
 
 Esempio in C:
 
@@ -10511,7 +11696,8 @@ my_connect_cb (const void *pointer, void *data, int status, int gnutls_rc,
 
 struct t_hook *my_connect_hook = weechat_hook_connect (NULL,
                                                        "my.server.org", 1234,
-                                                       1, 0,
+                                                       WEECHAT_HOOK_CONNECT_IPV6_AUTO,
+                                                       0,
                                                        NULL, NULL, 0,  /* GnuTLS */
                                                        NULL,
                                                        &my_connect_cb, NULL, NULL);
@@ -10527,38 +11713,39 @@ def hook_connect(proxy: str, address: str, port: int, ipv6: int, retry: int, loc
 
 # esempio
 def my_connect_cb(data: str, status: int, gnutls_rc: int, sock: int, error: str, ip_address: str) -> int:
-    if status == WEECHAT_HOOK_CONNECT_OK:
+    if status == weechat.WEECHAT_HOOK_CONNECT_OK:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_PROXY_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_PROXY_ERROR:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_MEMORY_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_MEMORY_ERROR:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_TIMEOUT:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_TIMEOUT:
         # ...
-    elif status == WEECHAT_HOOK_CONNECT_SOCKET_ERROR:
+    elif status == weechat.WEECHAT_HOOK_CONNECT_SOCKET_ERROR:
         # ...
     return weechat.WEECHAT_RC_OK
 
-hook = weechat.hook_connect("", "my.server.org", 1234, 1, 0, "",
+hook = weechat.hook_connect("", "my.server.org", 1234,
+                            weechat.WEECHAT_HOOK_CONNECT_IPV6_AUTO, 0, "",
                             "my_connect_cb", "")
 ----
 
 // TRANSLATION MISSING
 ==== hook_line
 
-_WeeChat ≥ 2.3, updated in 3.7._
+_WeeChat ≥ 2.3, updated in 4.2.0._
 
 Hook a line to be printed in a buffer.
 
@@ -10657,10 +11844,20 @@ Line data sent to the callback is a hashtable, with following values
 | N/A ("0").
 | `+1533792000+`
 
+| date_usec
+| Microseconds of line date (between 0 and 999999).
+| N/A ("0").
+| `+123456+`
+
 | date_printed
 | Date when line was displayed (timestamp).
 | N/A ("0").
 | `+1533792012+`
+
+| date_usec_printed
+| Microseconds of date when line was displayed (between 0 and 999999).
+| N/A ("0").
+| `+654321+`
 
 | str_time
 | Date for display (possible color codes inside).
@@ -10748,10 +11945,21 @@ in this hashtable):
 | The date is set to this value. +
   The value of `+str_time+` is updated accordingly.
 
+| date_usec
+| Integer ("0" to "999999").
+| N/A.
+| The microseconds of line date is set to this value. +
+  The value of `+str_time+` is updated accordingly.
+
 | date_printed
 | Timestamp.
 | N/A.
 | The printed date is set to this timestamp (not displayed).
+
+| date_usec_printed
+| Integer ("0" to "999999").
+| N/A.
+| The microseconds of printed date is set to this value.
 
 | str_time
 | String.
@@ -10796,7 +12004,7 @@ Esempio in C:
 [source,c]
 ----
 int
-my_line_cb (const void *pointer, void *data, struct t_hasbtable *line)
+my_line_cb (const void *pointer, void *data, struct t_hashtable *line)
 {
     struct t_hashtable *hashtable;
 
@@ -10834,7 +12042,7 @@ hook = weechat.hook_line("", "", "irc_join", "my_line_cb", "")
 ==== hook_print
 
 // TRANSLATION MISSING
-_Updated in 0.4.3, 1.0, 1.5._
+_Updated in 0.4.3, 1.0, 1.5, 4.2.0._
 
 // TRANSLATION MISSING
 Hook su un messaggio stampato. It is called when a line has been added in
@@ -10856,6 +12064,7 @@ struct t_hook *weechat_hook_print (struct t_gui_buffer *buffer,
                                                    void *data,
                                                    struct t_gui_buffer *buffer,
                                                    time_t date,
+                                                   int date_usec,
                                                    int tags_count,
                                                    const char **tags,
                                                    int displayed,
@@ -10889,6 +12098,8 @@ Argomenti:
 ** _void *data_: puntatore
 ** _struct t_gui_buffer *buffer_: puntatore al buffer
 ** _time_t date_: data
+// TRANSLATION MISSING
+** _int date_usec_: microseconds of date
 ** _int tags_count_: numero di tag per riga
 ** _const char **tags_: array con tag per riga
 ** _int displayed_: 1 se la riga è visualizzata, 0 se filtrata (nascosta)
@@ -10921,7 +12132,7 @@ Esempio in C:
 ----
 int
 my_print_cb (const void *pointer, void *data, struct t_gui_buffer *buffer,
-             time_t date, int tags_count, const char **tags,
+             time_t date, int date_usec, int tags_count, const char **tags,
              int displayed, int highlight,
              const char *prefix, const char *message)
 {
@@ -11418,6 +12629,11 @@ List of signals sent by WeeChat and plugins:
 | Puntatore: riga.
 | Riga aggiunta in un buffer.
 
+// TRANSLATION MISSING
+| weechat | [[hook_signal_buffer_line_data_changed]] buffer_line_data_changed | 4.4.0
+| Pointer: line data.
+| Line data has been updated in a buffer.
+
 | weechat | [[hook_signal_buffer_lines_hidden]] buffer_lines_hidden |
 | Puntatore: buffer.
 | Righe nascoste nel buffer.
@@ -11460,6 +12676,16 @@ List of signals sent by WeeChat and plugins:
 | Puntatore: buffer.
 | Titolo del buffer modificato.
 
+// TRANSLATION MISSING
+| weechat | [[hook_signal_buffer_modes_changed]] buffer_modes_changed | 4.3.0
+| Pointer: buffer.
+| Modes of buffer changed.
+
+// TRANSLATION MISSING
+| weechat | [[hook_signal_buffer_time_for_each_line_changed]] buffer_time_for_each_line_changed | 4.4.0
+| Pointer: buffer.
+| Display time for each line changed.
+
 | weechat | [[hook_signal_buffer_type_changed]] buffer_type_changed |
 | Puntatore: buffer.
 | Tipo di buffer modificato.
@@ -11479,7 +12705,7 @@ List of signals sent by WeeChat and plugins:
 | String: text sent to buffer.
 | Text sent to a user buffer as input (sent only for buffers created with `/buffer add`). +
   If the return code of a callback is _WEECHAT_RC_OK_EAT_, then the string "q"
-  can not be used any more to close the buffer.
+  cannot be used anymore to close the buffer.
 
 // TRANSLATION MISSING
 | weechat | [[hook_signal_buffer_user_closing_xxx]] buffer_user_closing_xxx ^(2)^ | 3.8
@@ -11542,6 +12768,11 @@ List of signals sent by WeeChat and plugins:
 | Puntatore: buffer.
 | Ricerca testo nel buffer.
 
+// TRANSLATION MISSING
+| weechat | [[hook_signal_input_prompt_changed]] input_prompt_changed | 4.3.0
+| Pointer: buffer.
+| Input prompt changed.
+
 | weechat | [[hook_signal_input_text_changed]] input_text_changed |
 | Puntatore: buffer.
 | Testo in input modificato.
@@ -11578,6 +12809,16 @@ List of signals sent by WeeChat and plugins:
 | weechat | [[hook_signal_key_combo_cursor]] key_combo_cursor | 1.0
 | String: key combo.
 | Key combo in _cursor_ context.
+
+// TRANSLATION MISSING
+| weechat | [[hook_signal_layout_buffers_applied]] layout_buffers_applied | 4.4.0
+| String: layout name.
+| Layout applied for buffers.
+
+// TRANSLATION MISSING
+| weechat | [[hook_signal_layout_windows_applied]] layout_windows_applied | 4.4.0
+| String: layout name.
+| Layout applied for windows.
 
 // TRANSLATION MISSING
 | weechat | [[hook_signal_mouse_enabled]] mouse_enabled | 1.1
@@ -12515,6 +13756,19 @@ List of modifiers used by WeeChat and plugins:
 | Modificatore | Min WeeChat | Dati modificatore | Stringa | Output
 
 // TRANSLATION MISSING
+| [[hook_modifier_irc_batch]] irc_batch | 4.0.0
+| Server name + "," + batch type + "," + batch parameters
+| Content of multiple messages, separated by a newline char ("\n").
+| New content of messages (number can be different), an empty string discards
+  all messages in the batch.
+
+// TRANSLATION MISSING
+| [[hook_modifier_irc_cap_sync_req]] irc_cap_sync_req | 4.0.0
+| Server name + "," + supported capabilities on server (separated by spaces)
+| Capabilities to request (separated by spaces).
+| New content of capabilities to request (separated by spaces).
+
+// TRANSLATION MISSING
 | [[hook_modifier_irc_in_xxx]] irc_in_xxx ^(1)^ |
 | Nome server
 | Contenuto del messaggio ricevuto dal server IRC (prima della codifica del set caratteri). +
@@ -12541,6 +13795,26 @@ List of modifiers used by WeeChat and plugins:
 | Content of message about to be sent to IRC server after automatic split
   (to fit in 512 bytes by default).
 | Nuovo contenuto del messaggio.
+
+// TRANSLATION MISSING
+| [[hook_modifier_relay_client_irc_in]] relay_client_irc_in | 4.0.0
+| String with relay client pointer (eg: "0x1234abcd")
+| Content of message received from relay IRC client.
+| New content of message.
+
+// TRANSLATION MISSING
+| [[hook_modifier_relay_client_irc_out1]] relay_client_irc_out1 | 4.0.0
+| String with relay client pointer (eg: "0x1234abcd")
+| Content of message about to be sent to relay IRC client before automatic split
+  (to fit in 512 bytes by default).
+| New content of message.
+
+// TRANSLATION MISSING
+| [[hook_modifier_relay_client_irc_out]] relay_client_irc_out | 4.0.0
+| String with relay client pointer (eg: "0x1234abcd")
+| Content of message about to be sent to relay IRC client after automatic split
+  (to fit in 512 bytes by default).
+| New content of message.
 
 // TRANSLATION MISSING
 | [[hook_modifier_bar_condition_yyy]] bar_condition_yyy ^(2)^ |
@@ -12712,14 +13986,21 @@ List of modifiers defined by WeeChat and plugins that can be used:
 | -
 | Any string.
 | String with IRC tag value escaped,
-  see https://ircv3.net/specs/extensions/message-tags#escaping-values[this page ^↗^,window=_blank].
+  see https://ircv3.net/specs/extensions/message-tags#escaping-values[this page ^↗^^].
 
 // TRANSLATION MISSING
 | [[hook_modifier_irc_tag_unescape_value]] irc_tag_unescape_value | 3.3
 | -
 | Any string.
 | String with IRC tag value unescaped,
-  see https://ircv3.net/specs/extensions/message-tags#escaping-values[this page ^↗^,window=_blank].
+  see https://ircv3.net/specs/extensions/message-tags#escaping-values[this page ^↗^^].
+
+// TRANSLATION MISSING
+| [[hook_modifier_color_decode]] color_decode | 4.3.0
+| Replacement string for colors removed
+| Any string.
+| String with WeeChat colors converted to a replacement string
+  (colors stripped if the replacement string is empty).
 
 // TRANSLATION MISSING
 | [[hook_modifier_color_decode_ansi]] color_decode_ansi | 1.0
@@ -13097,7 +14378,7 @@ Questa funzione non è disponibile nelle API per lo scripting.
 ==== hook_focus
 
 // TRANSLATION MISSING
-_Updated in 1.5._
+_Updated in 1.5, 4.0.0, 4.1.0._
 
 Hook sul foucus: evento del mouse o tasto premuto nella modalità cursore
 (movimento libero del cursore).
@@ -13198,8 +14479,16 @@ Contenuto della tabella hash inviata alla callback (tasti e valori sono di tipo
 | _chat_line_date | Riga con data/ora.
 | "1313237175" | "0"
 
+// TRANSLATION MISSING
+| _chat_line_date_usec | Microseconds of line date/time.
+| "123456" | "0"
+
 | _chat_line_date_printed | Riga con data/ora ^(4)^.
 | "1313237175" | "0"
+
+// TRANSLATION MISSING
+| _chat_line_date_usec_printed | Microseconds of line printed date/time ^(4)^.
+| "123456" | "0"
 
 | _chat_line_time | Ora visualizzata.
 | "14:06:15" | ""
@@ -13216,15 +14505,27 @@ Contenuto della tabella hash inviata alla callback (tasti e valori sono di tipo
 | _chat_line_message | Messaggio della riga.
 | "Hello world!" | ""
 
+// TRANSLATION MISSING
+| _chat_focused_line | Line at (x, y) _(WeeChat ≥ 4.0.0)_.
+| "Hello world!" | ""
+
+// TRANSLATION MISSING
+| _chat_focused_line_bol | Text from beginning of line to (x-1, y) _(WeeChat ≥ 4.1.0)_.
+| "Hello" | ""
+
+// TRANSLATION MISSING
+| _chat_focused_line_eol | Text from (x, y) to end of line _(WeeChat ≥ 4.1.0)_.
+| "llo world!" | ""
+
 | _chat_word | Parola a (x,y).
 | "Hello" | ""
 
 // TRANSLATION MISSING
-| _chat_bol | Text from beginning of line to (x-1, y).
+| _chat_bol | Text from beginning of message to (x-1, y).
 | "He" | ""
 
 // TRANSLATION MISSING
-| _chat_eol | Text from (x, y) to the end of line.
+| _chat_eol | Text from (x, y) to the end of message.
 | "llo world!" | ""
 
 | _bar_name | Nome della barra.
@@ -13759,9 +15060,10 @@ weechat.prnt(weechat.current_buffer(), "Testo sul buffer corrente")
 ==== buffer_search
 
 // TRANSLATION MISSING
-_Updated in 1.0._
+_Updated in 1.0, 4.3.0._
 
-Cerca un buffer tramite plugin e/o nome.
+// TRANSLATION MISSING
+Search a buffer by plugin/name, full name or unique identifier (`id`).
 
 Prototipo:
 
@@ -13774,14 +15076,16 @@ struct t_gui_buffer *weechat_buffer_search (const char *plugin,
 Argomenti:
 
 // TRANSLATION MISSING
-* _plugin_: name of plugin, following special value is allowed:
+* _plugin_: name of plugin, following special values are allowed:
 ** `+==+`: the name used is the buffer full name (for example:
    `irc.libera.#weechat` instead of `libera.#weechat`)
    _(WeeChat ≥ 1.0)_
 // TRANSLATION MISSING
+** `+==id+`: the name used is the buffer unique identifier (`id`) _(WeeChat ≥ 4.3.0)_
+// TRANSLATION MISSING
 * _name_: name of buffer, if it is NULL or empty string, the current buffer is
   returned (buffer displayed by current window); if the name starts with
-  `(?i)`, the search is case insensitive _(WeeChat ≥ 1.0)_
+  `(?i)`, the search is case-insensitive _(WeeChat ≥ 1.0)_
 
 Valore restituito:
 
@@ -13793,6 +15097,7 @@ Esempio in C:
 ----
 struct t_gui_buffer *buffer1 = weechat_buffer_search ("irc", "libera.#weechat");
 struct t_gui_buffer *buffer2 = weechat_buffer_search ("==", "irc.libera.#test");  /* WeeChat ≥ 1.0 */
+struct t_gui_buffer *buffer3 = weechat_buffer_search ("==id", "1709797810942688");  /* WeeChat ≥ 4.3.0 */
 ----
 
 Script (Python):
@@ -14013,58 +15318,57 @@ Argomenti:
 
 * _buffer_: puntatore al buffer
 * _property_: nome della proprietà:
+// TRANSLATION MISSING
+** _opening_: 1 if buffer is opening, otherwise 0 _(WeeChat ≥ 4.2.0)_
 ** _number_: numero del buffer (inizia da 1)
 ** _layout_number_: numero del buffer salvato nel layout
 ** _layout_number_merge_order_: ordine di unione per i layout
-** _short_name_is_set_: 1 se il nome breve è impostato, 0 in caso contrario
 ** _type_: tipo dibuffer (0: formattato, 1: contenuto libero)
 ** _notify_: livello di notifica per il buffer
 ** _num_displayed_: numero delle finestre che visualizzano il buffer
 // TRANSLATION MISSING
-** _active_: 2 if buffer is the only active (merged), 1 se il buffer è attivo,
-   0 se il buffer è unito e non selezionato
+** _active_: 2 if buffer is the only active (merged), 1 se il buffer è attivo, 0 se il buffer è unito e non selezionato
 // TRANSLATION MISSING
-** _hidden_: 1 if buffer is hidden, otherwise 0
-   _(WeeChat ≥ 1.0)_
+** _hidden_: 1 if buffer is hidden, otherwise 0 _(WeeChat ≥ 1.0)_
 // TRANSLATION MISSING
-** _zoomed_: 1 if buffer is merged and zoomed, otherwise 0
-   _(WeeChat ≥ 1.0)_
-** _print_hooks_enabled_: 1 se gli hook sulla stampa sono abilitati,
-   altrimenti 0
+** _zoomed_: 1 if buffer is merged and zoomed, otherwise 0 _(WeeChat ≥ 1.0)_
+** _print_hooks_enabled_: 1 se gli hook sulla stampa sono abilitati, altrimenti 0
 // TRANSLATION MISSING
-** _day_change_: 1 if messages for the day change are displayed, otherwise 0
-   _(WeeChat ≥ 0.4.3)_
+** _day_change_: 1 if messages for the day change are displayed, otherwise 0 _(WeeChat ≥ 0.4.3)_
 // TRANSLATION MISSING
-** _clear_: 1 if buffer can be cleared with command `/buffer clear`, otherwise 0
-   _(WeeChat ≥ 1.0)_
+** _clear_: 1 if buffer can be cleared with command `/buffer clear`, otherwise 0 _(WeeChat ≥ 1.0)_
 // TRANSLATION MISSING
-** _filter_: 1 if filters are enabled on buffer, otherwise 0
-   _(WeeChat ≥ 1.0)_
-** _lines_hidden_: 1 se almeno una riga è nascosta sul buffer (filtrata),
-   oppure 0 se vengono visualizzate tutte le righe
+** _filter_: 1 if filters are enabled on buffer, otherwise 0 _(WeeChat ≥ 1.0)_
+// TRANSLATION MISSING
+** _closing_: 1 if buffer is closing, otherwise 0 _(WeeChat ≥ 1.0)_
+** _lines_hidden_: 1 se almeno una riga è nascosta sul buffer (filtrata), oppure 0 se vengono visualizzate tutte le righe
 ** _prefix_max_length_: lunghezza massima del prefisso in questo buffer
-** _time_for_each_line_: 1 se l'ora è visualizzata per ogni riga nel buffer
-   (predefinito), altrimenti 0
+// TRANSLATION MISSING
+** _next_line_id_: next line id in buffer _(WeeChat ≥ 3.8)_
+** _time_for_each_line_: 1 se l'ora è visualizzata per ogni riga nel buffer (predefinito), altrimenti 0
 ** _nicklist_: 1 se la lista nick è abilitata, altrimenti 0
-** _nicklist_case_sensitive_: 1 se i nick sono sensibili alle maiuscole,
-   altrimenti 0
+** _nicklist_case_sensitive_: 1 se i nick sono sensibili alle maiuscole, altrimenti 0
 ** _nicklist_max_length_: lunghezza massima per un nick
 ** _nicklist_display_groups_: 1 se i gruppi vengono visualizzati, altrimenti 0
 // TRANSLATION MISSING
 ** _nicklist_count_: number of nicks and groups in nicklist
 // TRANSLATION MISSING
+** _nicklist_visible_count_: numero di nick/gruppi visualizzati
 ** _nicklist_groups_count_: number of groups in nicklist
 // TRANSLATION MISSING
+** _nicklist_groups_visible_count_: number of groups displayed
+// TRANSLATION MISSING
 ** _nicklist_nicks_count_: number of nicks in nicklist
-** _nicklist_visible_count_: numero di nick/gruppi visualizzati
+// TRANSLATION MISSING
+** _nicklist_nicks_visible_count_: number of nicks displayed
 ** _input_: 1 se l'input è abilitato, altrimenti 0
-** _input_get_unknown_commands_: 1 se i comandi sconosciuti vengono inviati
-   alla callback di input, altrimenti 0
+// TRANSLATION MISSING
+** _input_get_any_user_data_: 1 if any user data, including commands, are sent to input callback, otherwise 0
+** _input_get_unknown_commands_: 1 se i comandi sconosciuti vengono inviati alla callback di input, altrimenti 0
 // TRANSLATION MISSING
 ** _input_get_empty_: 1 if empty input is sent to input callback, otherwise 0
 // TRANSLATION MISSING
-** _input_multiline_: 1 if multiple lines are sent as one message to input
-   callback, otherwise 0
+** _input_multiline_: 1 if multiple lines are sent as one message to input callback, otherwise 0
 ** _input_size_: dimensione per l'input (in byte)
 ** _input_length_: lunghezza dell'input (numero di caratteri)
 ** _input_pos_: posizione del cursore nell'input del buffer
@@ -14072,9 +15376,33 @@ Argomenti:
 ** _num_history_: numero di comandi nella cronologia
 ** _text_search_: tipo di ricerca nel testo:
 *** 0: nessuna ricerca in questo momento
-*** 1: ricerca all'indietro (direzione: messaggi più vecchi)
-*** 2: ricerca in avanti (direzione: messaggi più nuovi)
+// TRANSLATION MISSING
+*** 1: search in buffer lines
+// TRANSLATION MISSING
+*** 2: search in commands history
+// TRANSLATION MISSING
+** _text_search_direction_: direction for search:
+// TRANSLATION MISSING
+*** 0: backward search (direction: oldest messages/commands)
+// TRANSLATION MISSING
+*** 1: forward search (direction: newest messages/commands)
 ** _text_search_exact_: 1 se la ricerca testo è esatta
+// TRANSLATION MISSING
+** _text_search_regex_: 1 if searching with a regular expression
+** _text_search_where_:
+*** 0: nessuna ricerca in questo momento
+// TRANSLATION MISSING
+*** 1: search in message
+// TRANSLATION MISSING
+*** 2: search in prefix
+// TRANSLATION MISSING
+*** 3: search in prefix and message
+** _text_search_history_:
+*** 0: nessuna ricerca in questo momento
+// TRANSLATION MISSING
+*** 1: search in buffer local history
+// TRANSLATION MISSING
+*** 2: search in global history
 ** _text_search_found_: 1 se il testo viene trovato, altrimenti 0
 
 Valore restituito:
@@ -14116,14 +15444,23 @@ Argomenti:
 
 * _buffer_: puntatore al buffer
 * _property_: nome proprietà:
-** _plugin_: nome del plugin che ha creato questo buffer ("core"
-   per il buffer principale di WeeChat)
+// TRANSLATION MISSING
+** _id_: unique identifier _(WeeChat ≥ 4.3.0)_
+** _plugin_: nome del plugin che ha creato questo buffer ("core" per il buffer principale di WeeChat)
 ** _name_: nome del buffer
 ** _full_name_: nome completo del buffer ("plugin.nome") _(WeeChat ≥ 0.3.7)_
-** _short_name_: nome breve del buffer (nota: usato solo per il display e può
-   essere cambiato dall'utente, questo nome non va usato per trovare il nome del
-   buffer, utilizzare invece _name_, _fullname_ o la variabile locale _channel_)
+// TRANSLATION MISSING
+** _old_full_name_: old full name of buffer ("plugin.name"), set before the buffer is renamed _(WeeChat ≥ 2.8)_
+** _short_name_: nome breve del buffer (nota: usato solo per il display e può essere cambiato dall'utente, questo nome non va usato per trovare il nome del buffer, utilizzare invece _name_, _fullname_ o la variabile locale _channel_)
+// TRANSLATION MISSING
+** _type_: type of buffer: "formatted" or "free" _(WeeChat ≥ 4.2.0)_
 ** _title_: titolo del buffer
+// TRANSLATION MISSING
+** _modes_: modes _(WeeChat ≥ 4.3.0)_
+// TRANSLATION MISSING
+** _nicklist_last_id_assigned_: last unique identifier used in this buffer for a group or nick _(WeeChat ≥ 4.3.0)_
+// TRANSLATION MISSING
+** _input_prompt_: input prompt _(WeeChat ≥ 4.3.0)_
 ** _input_: testo in ingresso
 ** _text_search_input_: input salvato prima della ricerca nel testo
 ** _highlight_words_: elenco di parole da evidenziare
@@ -14136,8 +15473,7 @@ Argomenti:
 // TRANSLATION MISSING
 ** _highlight_tags_: force highlight on messages with these tags
 ** _hotlist_max_level_nicks_: livello massimo della hotlist per alcuni nick
-** _localvar_xxx_: ottiene il contenuto della variabile locale "xxx"
-   (sostituire "xxx" con il nome della variabile da leggere)
+** _localvar_xxx_: ottiene il contenuto della variabile locale "xxx" (sostituire "xxx" con il nome della variabile da leggere)
 
 Valore restituito:
 
@@ -14181,8 +15517,11 @@ Argomenti:
 
 * _buffer_: puntatore al buffer
 * _property_: nome proprietà:
-** _plugin_: puntatore al plugin che ha creato questo buffer (NULL
-   per il buffer principale di WeeChat)
+** _plugin_: puntatore al plugin che ha creato questo buffer (NULL per il buffer principale di WeeChat)
+// TRANSLATION MISSING
+** _text_search_regex_compiled_: compiled regular expression
+// TRANSLATION MISSING
+** _text_search_ptr_history_: history found
 ** _highlight_disable_regex_compiled_: espressione regolare _highlight_disable_regex_ compilata
 ** _highlight_regex_compiled_: espressione regolare _highlight_regex_ compilata
 
@@ -14194,7 +15533,7 @@ Esempio in C:
 
 [source,c]
 ----
-weechat_printf (NULL, "plugin pointer of my buffer: %lx",
+weechat_printf (NULL, "plugin pointer of my buffer: %p",
                 weechat_buffer_get_pointer (my_buffer, "plugin"));
 ----
 
@@ -14240,11 +15579,14 @@ Properties:
 // TRANSLATION MISSING
 | hotlist | | "+", "-", WEECHAT_HOTLIST_LOW, WEECHAT_HOTLIST_MESSAGE,
   WEECHAT_HOTLIST_PRIVATE, WEECHAT_HOTLIST_HIGHLIGHT, "-1"
+// TRANSLATION MISSING
 | "+": abilita hotlist (impostazione globale , il puntatore al buffer pointer non
   è utilizzato) +
   "-": disabilita hotlist (impostazione globale, il puntatore al buffer non è
   utilizzato) +
-  priorità: aggiunge il buffer alla hotlist con questa proprietà +
+  priorità: aggiunge il buffer alla hotlist con questa proprietà
+  (conditions defined in option _weechat.look.hotlist_add_conditions_
+  are *NOT* checked) +
   "-1": remove buffer from hotlist _(WeeChat ≥ 1.0)_.
 
 // TRANSLATION MISSING
@@ -14254,8 +15596,13 @@ Properties:
   "1": do not stop completion when command line is updated
   (impostazione globale, il puntatore al buffer non è utilizzato).
 
-| unread | | -
-| Imposta l'evidenziatore di lettura dopo l'ultima riga del buffer.
+// TRANSLATION MISSING
+| unread | | empty string, "0", "+N", "-N" or "N" (N is integer)
+| empty string: set unread marker after last line of buffer +
+  "0": remove unread marker from buffer +
+  "N": move the unread marker N lines from the end towards the first line of buffer +
+  "-N": move the unread marker N lines towards the first line of buffer +
+  "+N": move the unread marker N lines towards the last line of buffer.
 
 | display | | "1" oppure "auto"
 | "1": passa a questo buffer nella finestra corrente +
@@ -14310,6 +15657,10 @@ Properties:
 
 | title | | qualsiasi stringa
 | Imposta nuovo titolo per il buffer.
+
+// TRANSLATION MISSING
+| modes | 4.3.0 | any string
+| Set new modes for buffer.
 
 | time_for_each_line | | "0" oppure "1"
 | "0" per nascondere l'orario in tutte le righe del buffer, "1" per
@@ -14382,11 +15733,20 @@ Properties:
 | key_unbind_xxx | | -
 | Rimuove l'assegnazione del tasto _xxx_ per questo buffer.
 
+// TRANSLATION MISSING
+| input_prompt | 4.3.0 | any string
+| Set new value for input prompt.
+
 | input | | qualsiasi stringa
 | Imposta un nuovo valore per l'input del buffer.
 
 | input_pos | | posizione
 | Imposta la posizione del cursore per l'input del buffer.
+
+// TRANSLATION MISSING
+| input_get_any_user_data | 4.3.0 | "0" or "1"
+| "0" to get only user messages (default behavior), "1" to get everything,
+  including commands.
 
 | input_get_unknown_commands | | "0" oppure "1"
 | "0" per disabilitare i comandi sconosciuti per questo buffer (comportamento
@@ -14566,7 +15926,8 @@ str = weechat.buffer_string_replace_local_var(my_buffer, "test with $toto")
 
 ==== buffer_match_list
 
-_WeeChat ≥ 0.3.5._
+// TRANSLATION MISSING
+_WeeChat ≥ 0.3.5, updated in 4.0.0._
 
 Verifica se il buffer corrisponde ad una lista di buffer.
 
@@ -14586,6 +15947,10 @@ Argomenti:
 // TRANSLATION MISSING
 ** wildcard `+*+` is allowed in name
 
+// TRANSLATION MISSING
+[NOTE]
+Since version 4.0.0, comparison of buffer names is case-sensitive.
+
 Valore restituito:
 
 * 1 se il buffer coincide con la lista, altrimenti 0
@@ -14599,7 +15964,7 @@ if (buffer)
 {
     weechat_printf (NULL, "%d", weechat_buffer_match_list (buffer, "*"));                    /* 1 */
     weechat_printf (NULL, "%d", weechat_buffer_match_list (buffer, "*,!*#weechat*"));        /* 0 */
-    weechat_printf (NULL, "%d", weechat_buffer_match_list (buffer, "irc.libera.*"));       /* 1 */
+    weechat_printf (NULL, "%d", weechat_buffer_match_list (buffer, "irc.libera.*"));         /* 1 */
     weechat_printf (NULL, "%d", weechat_buffer_match_list (buffer, "irc.oftc.*,python.*"));  /* 0 */
 }
 ----
@@ -14616,8 +15981,52 @@ buffer = weechat.buffer_search("irc", "libera.#weechat")
 if buffer:
     weechat.prnt("", "%d" % weechat.buffer_match_list(buffer, "*"))                    # 1
     weechat.prnt("", "%d" % weechat.buffer_match_list(buffer, "*,!*#weechat*"))        # 0
-    weechat.prnt("", "%d" % weechat.buffer_match_list(buffer, "irc.libera.*"))       # 1
+    weechat.prnt("", "%d" % weechat.buffer_match_list(buffer, "irc.libera.*"))         # 1
     weechat.prnt("", "%d" % weechat.buffer_match_list(buffer, "irc.oftc.*,python.*"))  # 0
+----
+
+// TRANSLATION MISSING
+[[buffer_lines]]
+=== Buffer lines
+
+// TRANSLATION MISSING
+Functions for buffer lines.
+
+==== line_search_by_id
+
+_WeeChat ≥ 4.4.0._
+
+// TRANSLATION MISSING
+Search line in buffer by identifier.
+
+Prototipo:
+
+[source,c]
+----
+struct t_gui_line *weechat_line_search_by_id (struct t_gui_buffer *buffer, int id);
+----
+
+Valore restituito:
+
+// TRANSLATION MISSING
+* pointer to line found, NULL if not found
+
+Esempio in C:
+
+[source,c]
+----
+struct t_gui_line *line = weechat_line_search_by_id (buffer, 123);
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def line_search_by_id(buffer: str, line_id: int) -> str: ...
+
+# esempio
+line = weechat.line_search_by_id(buffer, 123)
 ----
 
 [[windows]]
@@ -14685,7 +16094,7 @@ Esempio in C:
 [source,c]
 ----
 weechat_printf (NULL,
-                "window displaying core buffer: %lx",
+                "window displaying core buffer: %p",
                 weechat_window_search_with_buffer (weechat_buffer_search_main ()));
 ----
 
@@ -14825,7 +16234,7 @@ Esempio in C:
 [source,c]
 ----
 weechat_printf (NULL,
-                "buffer displayed in current window: %lx",
+                "buffer displayed in current window: %p",
                 weechat_window_get_pointer (weechat_current_window (), "buffer"));
 ----
 
@@ -14950,7 +16359,11 @@ group = weechat.nicklist_add_group(my_buffer, my_parent_group, "test_group",
 
 ==== nicklist_search_group
 
-Cerca un gruppo in una lista nick.
+// TRANSLATION MISSING
+_Updated in 4.3.0._
+
+// TRANSLATION MISSING
+Search a group in a nicklist by name or unique identifier (`id`).
 
 Prototipo:
 
@@ -14966,7 +16379,9 @@ Argomenti:
 * _buffer_: puntatore al buffer
 * _from_group_: ricerca solo da questo gruppo, se NULL, allora la cerca in
   tutta la lista nick
-* _name_: nome gruppo da cercare
+// TRANSLATION MISSING
+* _name_: group name to search; with WeeChat ≥ 4.3.0, a unique identifier can
+  be given with the format: `==id:xxx` (where `xxx` is the identifier)
 
 Valore restituito:
 
@@ -14976,8 +16391,10 @@ Esempio in C:
 
 [source,c]
 ----
-struct t_gui_nick_group *ptr_group = weechat_nicklist_search_group (my_buffer,
-                                                                    NULL, "test_group");
+struct t_gui_nick_group *ptr_group1 = weechat_nicklist_search_group (my_buffer,
+                                                                     NULL, "test_group");
+struct t_gui_nick_group *ptr_group2 = weechat_nicklist_search_group (my_buffer,
+                                                                     NULL, "==id:1714382231198764");
 ----
 
 Script (Python):
@@ -14988,7 +16405,8 @@ Script (Python):
 def nicklist_search_group(buffer: str, from_group: str, name: str) -> str: ...
 
 # esempio
-group = weechat.nicklist_search_group(my_buffer, "", "test_group")
+group1 = weechat.nicklist_search_group(my_buffer, "", "test_group")
+group2 = weechat.nicklist_search_group(my_buffer, "", "==id:1714382231198764")
 ----
 
 ==== nicklist_add_nick
@@ -14999,13 +16417,13 @@ Prototipo:
 
 [source,c]
 ----
-struct t_gui_nick_group *weechat_nicklist_add_nick (struct t_gui_buffer *buffer,
-                                                    struct t_gui_nick_group *group,
-                                                    const char *name,
-                                                    const char *color,
-                                                    const char *prefix,
-                                                    const char *prefix_color,
-                                                    int visible);
+struct t_gui_nick *weechat_nicklist_add_nick (struct t_gui_buffer *buffer,
+                                              struct t_gui_nick_group *group,
+                                              const char *name,
+                                              const char *color,
+                                              const char *prefix,
+                                              const char *prefix_color,
+                                              int visible);
 ----
 
 Argomenti:
@@ -15065,7 +16483,11 @@ nick = weechat.nicklist_add_nick(my_buffer, my_group, "test_nick", color, "@", "
 
 ==== nicklist_search_nick
 
-Cerca un nick nella lista nick.
+// TRANSLATION MISSING
+_Updated in 4.3.0._
+
+// TRANSLATION MISSING
+Search a nick in a nicklist by name or unique identifier (`id`).
 
 Prototipo:
 
@@ -15081,7 +16503,9 @@ Argomenti:
 * _buffer_: puntatore al buffer
 * _from_group_: cerca solo da questo gruppo, se NULL, allora cerca
   nell'intera lista nick
-* _name_: nick da cercare
+// TRANSLATION MISSING
+* _name_: nick name to search; with WeeChat ≥ 4.3.0, a unique identifier can
+  be given with the format: `==id:xxx` (where `xxx` is the identifier)
 
 Valore restituito:
 
@@ -15091,8 +16515,10 @@ Esempio in C:
 
 [source,c]
 ----
-struct t_gui_nick *ptr_nick = weechat_nicklist_search_nick (my_buffer,
-                                                            NULL, "test_nick");
+struct t_gui_nick *ptr_nick1 = weechat_nicklist_search_nick (my_buffer,
+                                                             NULL, "test_nick");
+struct t_gui_nick *ptr_nick2 = weechat_nicklist_search_nick (my_buffer,
+                                                             NULL, "==id:1714382252187496");
 ----
 
 Script (Python):
@@ -15103,7 +16529,8 @@ Script (Python):
 def nicklist_search_nick(buffer: str, from_group: str, name: str) -> str: ...
 
 # esempio
-nick = weechat.nicklist_search_nick(my_buffer, "", "test_nick")
+nick1 = weechat.nicklist_search_nick(my_buffer, "", "test_nick")
+nick2 = weechat.nicklist_search_nick(my_buffer, "", "==id:1714382252187496")
 ----
 
 ==== nicklist_remove_group
@@ -15326,6 +16753,8 @@ Argomenti:
 * _buffer_: puntatore al buffer
 * _group_: puntatore al gruppo
 * _property_: nome della proprietà:
+// TRANSLATION MISSING
+** _id_: unique identifier _(WeeChat ≥ 4.3.0)_
 ** _name_: nome del gruppo
 ** _color_: colore del gruppo nella lista nick
 
@@ -15397,7 +16826,8 @@ parent = weechat.nicklist_group_get_pointer(buffer, group, "parent")
 
 ==== nicklist_group_set
 
-_WeeChat ≥ 0.3.4._
+// TRANSLATION MISSING
+_WeeChat ≥ 0.3.4, updated in 4.3.0._
 
 Imposta il valore stringa della proprietà di un gruppo.
 
@@ -15423,15 +16853,21 @@ Argomenti:
 // TRANSLATION MISSING
 Properties:
 
-[width="100%",cols="^2,4,8",options="header"]
+[width="100%",cols="^2,^1,4,8",options="header"]
 |===
-| Nome | Valore | Descrizione
+// TRANSLATION MISSING
+| Nome | Min WeeChat | Valore | Descrizione
 
-| color | nome per l'opzione del colore per WeeChat
+// TRANSLATION MISSING
+| id | 4.3.0 | long long integer ≥ 0
+| New id for the group (it must be unique in the buffer). +
+  Note: it is not recommended to change this identifier.
+
+| color | | nome per l'opzione del colore per WeeChat
 | Consultare l'argomento "color" della funzione
   <<_nicklist_add_group,nicklist_add_group>>.
 
-| visible | "0", "1"
+| visible | | "0", "1"
 | "0" = gruppo nascosto, "1" = gruppo visibile.
 |===
 
@@ -15532,6 +16968,8 @@ Argomenti:
 * _buffer_: puntatore al buffer
 * _nick_: puntatore al nick
 * _property_: nome della proprietà:
+// TRANSLATION MISSING
+** _id_: unique identifier _(WeeChat ≥ 4.3.0)_
 ** _name_: nome del nick
 ** _color_: colore del nick nella lista nick
 ** _prefix_: prefisso del nick
@@ -15605,7 +17043,8 @@ group = weechat.nicklist_nick_get_pointer(buffer, nick, "group")
 
 ==== nicklist_nick_set
 
-_WeeChat ≥ 0.3.4._
+// TRANSLATION MISSING
+_WeeChat ≥ 0.3.4, updated in 4.3.0._
 
 Imposta il valore stringa della proprietà di un nick.
 
@@ -15631,22 +17070,28 @@ Argomenti:
 // TRANSLATION MISSING
 Properties:
 
-[width="100%",cols="^2,4,8",options="header"]
+[width="100%",cols="^2,^1,4,8",options="header"]
 |===
-| Nome | Valore | Descrizione
+// TRANSLATION MISSING
+| Nome | Min WeeChat | Valore | Descrizione
 
-| color | nome per l'opzione del colore di WeeChat
+// TRANSLATION MISSING
+| id | 4.3.0 | long long integer ≥ 0
+| New id for the nick (it must be unique in the buffer). +
+  Note: it is not recommended to change this identifier.
+
+| color | | nome per l'opzione del colore di WeeChat
 | Consultare l'argomento "color" della funzione
   <<_nicklist_add_nick,nicklist_add_nick>>.
 
-| prefix | qualsiasi stringa
+| prefix | | qualsiasi stringa
 | Prefisso del nick.
 
-| prefix_color | nome per l'opzione del colore di WeeChat
+| prefix_color | | nome per l'opzione del colore di WeeChat
 | Consultare l'argomento "prefix_color" della funzione
   <<_nicklist_add_nick,nicklist_add_nick>>.
 
-| visible | "0", "1"
+| visible | | "0", "1"
 | "0" = nick nascosto, "1" = nick visibile.
 |===
 
@@ -15937,7 +17382,7 @@ bar = weechat.bar_search("mybar")
 ==== bar_new
 
 // TRANSLATION MISSING
-_Updated in 2.9._
+_Updated in 2.9, 4.0.0._
 
 Crea una nuova barra.
 
@@ -15979,7 +17424,7 @@ Argomenti:
 ** _nicklist_: la barra viene visualizzata nelle finestre con liste nick
 // TRANSLATION MISSING
 ** evaluated expression: see the
-   link:weechat_user.it.html#bar_conditions[WeeChat user's guide / Bar conditions ^↗^,window=_blank]
+   link:weechat_user.it.html#bar_conditions[WeeChat user's guide / Bar conditions ^↗^^]
 * _position_: _top_, _bottom_, _left_ o _right_
 * _filling_top_bottom_:
 ** _horizontal_: gli elementi sono posizionati in orizzontale
@@ -16019,26 +17464,19 @@ Valore restituito:
 
 * puntatore alla nuova barra, NULL in caso di errore
 
+// TRANSLATION MISSING
+[NOTE]
+Since version 4.0.0, if the bar already exists, WeeChat sets the values received
+as default values for bar options and returns the bar pointer instead of NULL.
+
 Esempio in C:
 
 [source,c]
 ----
-struct t_gui_bar *my_bar = weechat_bar_new ("mybar",
-                                            "off",
-                                            "100",
-                                            "window",
-                                            "",
-                                            "top",
-                                            "horizontal",
-                                            "vertical",
-                                            "0",
-                                            "5",
-                                            "default",
-                                            "cyan",
-                                            "blue",
-                                            "darkgray",
-                                            "off",
-                                            "time,buffer_number+buffer_name");
+struct t_gui_bar *my_bar = weechat_bar_new (
+    "mybar", "off", "100", "window", "", "top", "horizontal", "vertical",
+    "0", "5", "default", "cyan", "blue", "darkgray", "off",
+    "time,buffer_number+buffer_name");
 ----
 
 Script (Python):
@@ -16061,7 +17499,7 @@ bar = weechat.bar_new("mybar", "off", "100", "window", "", "top", "horizontal", 
 With WeeChat ≥ 2.9, in Ruby, the 4 colors (color_fg, color_delim, color_bg,
 color_bg_inactive) must be given in an array of 4 strings (due to a Ruby
 limitation of 15 arguments by function), see the
-link:++weechat_scripting.it.html#_ruby++[WeeChat scripting guide ^↗^,window=_blank]
+link:++weechat_scripting.it.html#_ruby++[WeeChat scripting guide ^↗^^]
 for more info.
 
 ==== bar_set
@@ -16180,7 +17618,7 @@ Funzioni per eseguire comandi di WeeChat.
 ==== command
 
 // TRANSLATION MISSING
-_Updated in 1.1._
+_Updated in 1.1, 4.0.0._
 
 // TRANSLATION MISSING
 Execute a command or send text to buffer.
@@ -16198,6 +17636,11 @@ Argomenti:
   utilizzare NULL per il buffer corrente)
 * _command_: comando da eseguire (se preceduto da "/"), oppure il testo
   viene inviato sul buffer
+
+// TRANSLATION MISSING
+[NOTE]
+On buffer with `input_multiline` set to `0` (default), only the first command
+is executed (before the first newline char: `\n`).
 
 Valori restituiti _(WeeChat ≥ 1.1)_:
 
@@ -16226,7 +17669,8 @@ rc = weechat.command(weechat.buffer_search("irc", "libera.#weechat"), "/whois Fl
 
 ==== command_options
 
-_WeeChat ≥ 2.5._
+// TRANSLATION MISSING
+_WeeChat ≥ 2.5, updated in 4.0.0, 4.5.0._
 
 // TRANSLATION MISSING
 Execute a command or send text to buffer with options.
@@ -16243,15 +17687,20 @@ Argomenti:
 
 * _buffer_: puntatore al buffer (il comando viene eseguito su questo buffer,
   utilizzare NULL per il buffer corrente)
-* _command_: comando da eseguire (se preceduto da "/"), oppure il testo
-  viene inviato sul buffer
+// TRANSLATION MISSING
+* _command_: comando da eseguire (if beginning with a `/` or a command char),
+   oppure il testo viene inviato sul buffer
 // TRANSLATION MISSING
 * _options_: a hashtable with some options (keys and values must be string)
   (can be NULL):
+// TRANSLATION MISSING
 ** _commands_: a comma-separated list of commands allowed to be executed during
-   this call; see function <<_string_match_list,string_match_list>> for the
-   format
+   this call (see function <<_string_match_list,string_match_list>> for the
+   format); the special value `-` (hyphen-minus) disables the execution of commands
+   and the string in _command_ is sent as-is to the buffer (_WeeChat ≥ 4.5.0_)
 ** _delay_: delay to execute command, in milliseconds
+// TRANSLATION MISSING
+** _split_newline_: `1` to split commands on newline char (`\n`) (_WeeChat ≥ 4.0.0_)
 
 Valori restituiti:
 
@@ -16284,7 +17733,7 @@ Script (Python):
 def command_options(buffer: str, command: str, options: Dict[str, str]) -> int: ...
 
 # example: allow any command except /exec
-rc = weechat.command("", "/some_command arguments", {"commands": "*,!exec"})
+rc = weechat.command_options("", "/some_command arguments", {"commands": "*,!exec", "delay": "2000"})
 ----
 
 // TRANSLATION MISSING
@@ -16669,7 +18118,7 @@ With WeeChat ≥ 2.5, the value returned is an allocated string
 // TRANSLATION MISSING
 Infos:
 
-include::includes/autogen_api_infos.it.adoc[tag=infos]
+include::{autogendir}/autogen_api_infos.it.adoc[tag=infos]
 
 Esempio in C:
 
@@ -16726,12 +18175,14 @@ Argomenti:
 
 Valore restituito:
 
-* tabella hash con la info richiesta, NULL in caso di errore
+// TRANSLATION MISSING
+* tabella hash con la info richiesta, NULL in caso di errore (must be
+  freed by calling <<_hashtable_free,hashtable_free>> after use)
 
 // TRANSLATION MISSING
 Infos:
 
-include::includes/autogen_api_infos_hashtable.it.adoc[tag=infos_hashtable]
+include::{autogendir}/autogen_api_infos_hashtable.it.adoc[tag=infos_hashtable]
 
 Esempio in C:
 
@@ -16780,7 +18231,7 @@ if (hashtable_in)
 
 // TRANSLATION MISSING
 [NOTE]
-See the link:weechat_scripting.it.html#irc_message_parse[Guida allo Scripting di WeeChat / Verifica messaggio ^↗^,window=_blank]
+See the link:weechat_scripting.it.html#irc_message_parse[Guida allo Scripting di WeeChat / Verifica messaggio ^↗^^]
 for more info about "irc_message_parse" output.
 
 Script (Python):
@@ -17136,7 +18587,7 @@ Valore restituito:
 // TRANSLATION MISSING
 Infolists:
 
-include::includes/autogen_api_infolists.it.adoc[tag=infolists]
+include::{autogendir}/autogen_api_infolists.it.adoc[tag=infolists]
 
 Esempio in C:
 
@@ -17492,8 +18943,7 @@ Esempio in C:
 
 [source,c]
 ----
-weechat_printf (NULL, "pointer = 0x%lx",
-                weechat_infolist_pointer (infolist, "my_pointer"));
+weechat_printf (NULL, "pointer = %p", weechat_infolist_pointer (infolist, "my_pointer"));
 ----
 
 Script (Python):
@@ -17537,8 +18987,7 @@ Esempio in C:
 ----
 int size;
 void *pointer = weechat_infolist_buffer (infolist, "my_buffer", &size);
-weechat_printf (NULL, "buffer = 0x%lx, size = %d",
-                pointer, size);
+weechat_printf (NULL, "buffer = %p, size = %d", pointer, size);
 ----
 
 [NOTE]
@@ -17581,7 +19030,7 @@ Script (Python):
 def infolist_time(infolist: str, var: str) -> int: ...
 
 # esempio
-weechat.prnt("", "time = %ld" % weechat.infolist_time(infolist, "my_time"))
+weechat.prnt("", "time = %d" % weechat.infolist_time(infolist, "my_time"))
 ----
 
 ==== infolist_free
@@ -17701,7 +19150,7 @@ Questa funzione non è disponibile nelle API per lo scripting.
 ==== hdata_new_var
 
 // TRANSLATION MISSING
-_WeeChat ≥ 0.3.6, updated in 0.3.7, 0.3.9, 0.4.3, 3.4_
+_WeeChat ≥ 0.3.6, updated in 0.3.7, 0.3.9, 0.4.3, 3.4, 4.3.0_
 
 Crea una nuova variabile in hdata.
 
@@ -17722,6 +19171,7 @@ Argomenti:
 ** _WEECHAT_HDATA_CHAR_
 ** _WEECHAT_HDATA_INTEGER_
 ** _WEECHAT_HDATA_LONG_
+** _WEECHAT_HDATA_LONGLONG_ (_WeeChat ≥ 4.3.0_)
 ** _WEECHAT_HDATA_STRING_
 ** _WEECHAT_HDATA_SHARED_STRING_ (_WeeChat ≥ 0.4.3_)
 ** _WEECHAT_HDATA_POINTER_
@@ -17913,7 +19363,7 @@ Valore restituito:
 // TRANSLATION MISSING
 List of hdata:
 
-include::includes/autogen_api_hdata.it.adoc[tag=hdata]
+include::{autogendir}/autogen_api_hdata.it.adoc[tag=hdata]
 
 Esempio in C:
 
@@ -17953,7 +19403,7 @@ Argomenti:
 
 Valore restituito:
 
-* offset della variabile, 0 in caso di errore
+* offset della variabile, -1 in caso di errore
 
 Esempio in C:
 
@@ -18009,6 +19459,9 @@ switch (type)
         /* ... */
         break;
     case WEECHAT_HDATA_LONG:
+        /* ... */
+        break;
+    case WEECHAT_HDATA_LONGLONG:
         /* ... */
         break;
     case WEECHAT_HDATA_STRING:
@@ -18469,7 +19922,7 @@ Argomenti:
 * _search_: expression to evaluate, default pointer in expression is the name of
   hdata (and this pointer changes for each element in list); for help on
   expression, see the
-  link:weechat_user.it.html#command_weechat_eval[WeeChat user's guide / Command /eval ^↗^,window=_blank]
+  link:weechat_user.it.html#command_weechat_eval[WeeChat user's guide / Command /eval ^↗^^]
 // TRANSLATION MISSING
 * _pointers_: hashtable for call to function
   <<_string_eval_expression,string_eval_expression>>
@@ -18634,7 +20087,7 @@ weechat.prnt("", "number = %d" % weechat.hdata_integer(hdata, buffer, "number"))
 
 _WeeChat ≥ 0.3.6._
 
-Restituisce il valore della variabile long della struttura usando hdata.
+Restituisce il valore della variabile "long" della struttura usando hdata.
 
 Prototipo:
 
@@ -18671,7 +20124,53 @@ Script (Python):
 def hdata_long(hdata: str, pointer: str, name: str) -> int: ...
 
 # esempio
-weechat.prnt("", "longvar = %ld" % weechat.hdata_long(hdata, pointer, "longvar"))
+weechat.prnt("", "longvar = %d" % weechat.hdata_long(hdata, pointer, "longvar"))
+----
+
+==== hdata_longlong
+
+_WeeChat ≥ 4.3.0._
+
+// TRANSLATION MISSING
+Return value of "long long" variable in structure using hdata.
+
+Prototipo:
+
+[source,c]
+----
+long long weechat_hdata_longlong (struct t_hdata *hdata, void *pointer, const char *name);
+----
+
+Argomenti:
+
+* _hdata_: puntatore hdata
+* _pointer_: puntatore all'oggetto di WeeChat/plugin
+// TRANSLATION MISSING
+* _name_: nome della variabile (deve essere di tipo "long long"); for arrays,
+  the name can be "N|name" where N is the index in array (starting at 0),
+  for example: "2|name"
+
+Valore restituito:
+
+// TRANSLATION MISSING
+* "long long" value of variable
+
+Esempio in C:
+
+[source,c]
+----
+weechat_printf (NULL, "longlongvar = %lld", weechat_hdata_longlong (hdata, pointer, "longlongvar"));
+----
+
+Script (Python):
+
+[source,python]
+----
+# prototipo
+def hdata_longlong(hdata: str, pointer: str, name: str) -> int: ...
+
+# esempio
+weechat.prnt("", "longlongvar = %d" % weechat.hdata_longlong(hdata, pointer, "longlongvar"))
 ----
 
 ==== hdata_string
@@ -18754,7 +20253,7 @@ Esempio in C:
 ----
 struct t_hdata *hdata = weechat_hdata_get ("buffer");
 struct t_gui_buffer *buffer = weechat_buffer_search_main ();
-weechat_printf (NULL, "lines = %lx", weechat_hdata_pointer (hdata, buffer, "lines"));
+weechat_printf (NULL, "lines = %p", weechat_hdata_pointer (hdata, buffer, "lines"));
 ----
 
 Script (Python):
@@ -18767,7 +20266,7 @@ def hdata_pointer(hdata: str, pointer: str, name: str) -> str: ...
 # esempio
 hdata = weechat.hdata_get("buffer")
 buffer = weechat.buffer_search_main()
-weechat.prnt("", "lines = %lx" % weechat.hdata_pointer(hdata, buffer, "lines"))
+weechat.prnt("", "lines = %x" % weechat.hdata_pointer(hdata, buffer, "lines"))
 ----
 
 ==== hdata_time
@@ -18897,7 +20396,7 @@ for key in hash:
 // TRANSLATION MISSING
 ==== hdata_compare
 
-_WeeChat ≥ 1.9._
+_WeeChat ≥ 1.9, updated in 4.1.0._
 
 Compare a hdata variable of two objects.
 
@@ -18913,9 +20412,9 @@ Argomenti:
 * _hdata_: hdata pointer
 * _pointer1_: pointer to first WeeChat/plugin object
 * _pointer2_: pointer to second WeeChat/plugin object
-* _name_: variable name; for arrays, the name can be "N|name" where N is
-  the index in array (starting at 0), for example: "2|name"
-* _case_sensitive_: 1 for case sensitive comparison of strings, otherwise 0
+* _name_: variable name or path to a variable name; for arrays, the name can be
+  "N|name" where N is the index in array (starting at 0), for example: "2|name"
+* _case_sensitive_: 1 for case-sensitive comparison of strings, otherwise 0
 
 Valore restituito:
 
@@ -18930,8 +20429,12 @@ Esempio in C:
 struct t_hdata *hdata = weechat_hdata_get ("buffer");
 struct t_gui_buffer *buffer1 = weechat_buffer_search ("irc", "libera.#weechat");
 struct t_gui_buffer *buffer2 = weechat_buffer_search ("irc", "libera.#weechat-fr");
-weechat_printf (NULL, "number comparison = %d",
+weechat_printf (NULL, "comparison of buffer number = %d",
                 weechat_hdata_compare (hdata, buffer1, buffer2, "number", 0));
+weechat_printf (NULL, "comparison of number of lines = %d",
+                weechat_hdata_compare (hdata, buffer1, buffer2, "own_lines.lines_count", 0));
+weechat_printf (NULL, "comparison of local variable = %d",
+                weechat_hdata_compare (hdata, buffer1, buffer2, "local_variables.myvar", 0));
 ----
 
 Script (Python):
@@ -18945,7 +20448,9 @@ def hdata_compare(hdata: str, pointer1: str, pointer2: str, name: str, case_sens
 hdata = weechat.hdata_get("buffer")
 buffer1 = weechat.buffer_search("irc", "libera.#weechat")
 buffer2 = weechat.buffer_search("irc", "libera.#weechat-fr")
-weechat.prnt("", "number comparison = %d" % weechat.hdata_compare(hdata, buffer1, buffer2, "number", 0))
+weechat.prnt("", "comparison of buffer number = %d" % weechat.hdata_compare(hdata, buffer1, buffer2, "number", 0))
+weechat.prnt("", "comparison of number of lines = %d" % weechat.hdata_compare(hdata, buffer1, buffer2, "own_lines.lines_count", 0))
+weechat.prnt("", "comparison of local variable = %d" % weechat.hdata_compare(hdata, buffer1, buffer2, "local_variables.myvar", 0))
 ----
 
 // TRANSLATION MISSING

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -20,7 +20,6 @@
 #ifndef WEECHAT_PLUGIN_LOGGER_BACKLOG_H
 #define WEECHAT_PLUGIN_LOGGER_BACKLOG_H
 
-extern int logger_backlog_check_conditions (struct t_gui_buffer *buffer);
 extern int logger_backlog_signal_cb (const void *pointer, void *data,
                                      const char *signal,
                                      const char *type_data, void *signal_data);

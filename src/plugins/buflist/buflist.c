@@ -1,7 +1,7 @@
 /*
  * buflist.c - Bar with list of buffers
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -28,6 +28,7 @@
 #include "buflist.h"
 #include "buflist-bar-item.h"
 #include "buflist-command.h"
+#include "buflist-completion.h"
 #include "buflist-config.h"
 #include "buflist-info.h"
 #include "buflist-mouse.h"
@@ -38,7 +39,7 @@ WEECHAT_PLUGIN_DESCRIPTION(N_("Buffers list"));
 WEECHAT_PLUGIN_AUTHOR("Sébastien Helleu <flashcode@flashtux.org>");
 WEECHAT_PLUGIN_VERSION(WEECHAT_VERSION);
 WEECHAT_PLUGIN_LICENSE(WEECHAT_LICENSE);
-WEECHAT_PLUGIN_PRIORITY(10000);
+WEECHAT_PLUGIN_PRIORITY(BUFLIST_PLUGIN_PRIORITY);
 
 struct t_weechat_plugin *weechat_buflist_plugin = NULL;
 
@@ -141,7 +142,7 @@ buflist_buffer_get_irc_pointers (struct t_gui_buffer *buffer,
  * Buffers are sorted so that the active buffer and buffers immediately after
  * this one are first in list, followed by the buffers before the active one.
  * This sort respects the order of next active buffers that can be selected
- * with ctrl-X.
+ * with ctrl-x.
  *
  * For example with such list of merged buffers:
  *
@@ -424,21 +425,13 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
     int i;
     char str_key[256];
     char *default_keys[][2] = {
-        { /* m-B    */ "meta-B",         "/buflist toggle" },
-        { /* <f1>   */ "meta-OP",        "/bar scroll buflist * -100%" },
-        { /* <f1>   */ "meta2-11~",      "/bar scroll buflist * -100%" },
-        { /* <f2>   */ "meta-OQ",        "/bar scroll buflist * +100%" },
-        { /* <f2>   */ "meta2-12~",      "/bar scroll buflist * +100%" },
-        { /* c-<f1> */ "meta2-11^",      "/bar scroll buflist * -100%" },
-        { /* c-<f1> */ "meta2-1;5P",     "/bar scroll buflist * -100%" },
-        { /* c-<f2> */ "meta2-12^",      "/bar scroll buflist * +100%" },
-        { /* c-<f2> */ "meta2-1;5Q",     "/bar scroll buflist * +100%" },
-        { /* m-<f1> */ "meta-meta-OP",   "/bar scroll buflist * b"     },
-        { /* m-<f1> */ "meta-meta2-11~", "/bar scroll buflist * b"     },
-        { /* m-<f1> */ "meta2-1;3P",     "/bar scroll buflist * b"     },
-        { /* m-<f2> */ "meta-meta-OQ",   "/bar scroll buflist * e"     },
-        { /* m-<f2> */ "meta-meta2-12~", "/bar scroll buflist * e"     },
-        { /* m-<f2> */ "meta2-1;3Q",     "/bar scroll buflist * e"     },
+        { "meta-B",  "/buflist toggle"             },
+        { "f1",      "/bar scroll buflist * -100%" },
+        { "f2",      "/bar scroll buflist * +100%" },
+        { "ctrl-f1", "/bar scroll buflist * -100%" },
+        { "ctrl-f2", "/bar scroll buflist * +100%" },
+        { "meta-f1", "/bar scroll buflist * b"     },
+        { "meta-f2", "/bar scroll buflist * e"     },
         { NULL, NULL },
     };
 
@@ -466,10 +459,11 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
     buflist_config_change_sort (NULL, NULL, NULL);
 
     buflist_command_init ();
+    buflist_completion_init ();
 
     buflist_add_bar ();
 
-    buflist_bar_item_update (0);
+    buflist_bar_item_update (-1, 0);
 
     buflist_mouse_init ();
 
@@ -486,6 +480,7 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
             weechat_hashtable_set (keys,
                                    default_keys[i][0], default_keys[i][1]);
         }
+        weechat_hashtable_set (keys, "__quiet", "1");
         weechat_key_bind ("default", keys);
 
         /* default mouse actions */
@@ -538,6 +533,13 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
 
     buflist_config_write ();
     buflist_config_free ();
+
+    buflist_hdata_window = NULL;
+    buflist_hdata_buffer = NULL;
+    buflist_hdata_hotlist = NULL;
+    buflist_hdata_bar = NULL;
+    buflist_hdata_bar_item = NULL;
+    buflist_hdata_bar_window = NULL;
 
     return WEECHAT_RC_OK;
 }

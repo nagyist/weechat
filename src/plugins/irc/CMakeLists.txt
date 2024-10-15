@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -20,6 +20,7 @@
 add_library(irc MODULE
   irc.c irc.h
   irc-bar-item.c irc-bar-item.h
+  irc-batch.c irc-batch.h
   irc-buffer.c irc-buffer.h
   irc-channel.c irc-channel.h
   irc-color.c irc-color.h
@@ -31,6 +32,7 @@ add_library(irc MODULE
   irc-ignore.c irc-ignore.h
   irc-info.c irc-info.h
   irc-input.c irc-input.h
+  irc-list.c irc-list.h
   irc-join.c irc-join.h
   irc-message.c irc-message.h
   irc-mode.c irc-mode.h
@@ -51,10 +53,9 @@ set_target_properties(irc PROPERTIES PREFIX "")
 
 set(LINK_LIBS)
 
-include_directories(${GNUTLS_INCLUDE_PATH})
-list(APPEND LINK_LIBS ${GNUTLS_LIBRARY})
+list(APPEND LINK_LIBS ${GNUTLS_LDFLAGS})
 
-list(APPEND LINK_LIBS ${GCRYPT_LDFLAGS})
+list(APPEND LINK_LIBS ${LIBGCRYPT_LDFLAGS})
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   # link with resolv lib on macOS
@@ -63,4 +64,4 @@ endif()
 
 target_link_libraries(irc ${LINK_LIBS} coverage_config)
 
-install(TARGETS irc LIBRARY DESTINATION ${WEECHAT_LIBDIR}/plugins)
+install(TARGETS irc LIBRARY DESTINATION "${WEECHAT_LIBDIR}/plugins")

@@ -1,7 +1,7 @@
 /*
  * trigger-buffer.c - debug buffer for triggers
  *
- * Copyright (C) 2014-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2014-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -57,7 +57,7 @@ trigger_buffer_match_filters (struct t_trigger *trigger)
         {
             /* check if the hook matches the filter */
             if (weechat_strcasecmp (
-                    trigger_hook_type_string[weechat_config_integer (trigger->options[TRIGGER_OPTION_HOOK])],
+                    trigger_hook_type_string[weechat_config_enum (trigger->options[TRIGGER_OPTION_HOOK])],
                     trigger_buffer_filters[i] + 1) == 0)
             {
                 return 1;
@@ -110,7 +110,7 @@ trigger_buffer_set_title ()
     const char *ptr_filter;
     char title[1024];
 
-    ptr_filter = weechat_buffer_get_string (trigger_buffer, "localvar_trigger_filter");
+    ptr_filter = weechat_buffer_get_string (trigger_buffer, "localvar_filter");
     snprintf (title, sizeof (title),
               _("Trigger monitor (filter: %s) | Input: q=close, words=filter"),
               (ptr_filter) ? ptr_filter : "*");
@@ -140,11 +140,11 @@ trigger_buffer_input_cb (const void *pointer, void *data,
 
     /* set filters */
     if (strcmp (input_data, "*") == 0)
-        weechat_buffer_set (buffer, "localvar_del_trigger_filter", "");
+        weechat_buffer_set (buffer, "localvar_del_filter", "");
     else
-        weechat_buffer_set (buffer, "localvar_set_trigger_filter", input_data);
+        weechat_buffer_set (buffer, "localvar_set_filter", input_data);
     trigger_buffer_set_filter (weechat_buffer_get_string (buffer,
-                                                          "localvar_trigger_filter"));
+                                                          "localvar_filter"));
     trigger_buffer_set_title ();
 
     return WEECHAT_RC_OK;
@@ -188,7 +188,7 @@ trigger_buffer_set_callbacks ()
         weechat_buffer_set_pointer (trigger_buffer, "input_callback",
                                     &trigger_buffer_input_cb);
         trigger_buffer_set_filter (weechat_buffer_get_string (trigger_buffer,
-                                                              "localvar_trigger_filter"));
+                                                              "localvar_filter"));
     }
 }
 
@@ -199,41 +199,48 @@ trigger_buffer_set_callbacks ()
 void
 trigger_buffer_open (const char *filter, int switch_to_buffer)
 {
+    struct t_hashtable *buffer_props;
+
     if (!trigger_buffer)
     {
         if (!weechat_buffer_search (TRIGGER_PLUGIN_NAME, TRIGGER_BUFFER_NAME))
         {
-            trigger_buffer = weechat_buffer_new (
+            buffer_props = weechat_hashtable_new (32,
+                                                  WEECHAT_HASHTABLE_STRING,
+                                                  WEECHAT_HASHTABLE_STRING,
+                                                  NULL, NULL);
+            if (buffer_props)
+            {
+                weechat_hashtable_set (
+                    buffer_props, "short_name", TRIGGER_BUFFER_NAME);
+                weechat_hashtable_set (
+                    buffer_props, "localvar_set_type", "debug");
+                weechat_hashtable_set (
+                    buffer_props, "localvar_set_server", TRIGGER_BUFFER_NAME);
+                weechat_hashtable_set (
+                    buffer_props, "localvar_set_channel", TRIGGER_BUFFER_NAME);
+                weechat_hashtable_set (
+                    buffer_props, "localvar_set_no_log", "1");
+                /* disable all highlights on this buffer */
+                weechat_hashtable_set (buffer_props, "highlight_words", "-");
+            }
+            trigger_buffer = weechat_buffer_new_props (
                 TRIGGER_BUFFER_NAME,
+                buffer_props,
                 &trigger_buffer_input_cb, NULL, NULL,
                 &trigger_buffer_close_cb, NULL, NULL);
+            weechat_hashtable_free (buffer_props);
         }
 
         /* failed to create buffer ? then return */
         if (!trigger_buffer)
             return;
-
-        if (!weechat_buffer_get_integer (trigger_buffer, "short_name_is_set"))
-            weechat_buffer_set (trigger_buffer, "short_name", TRIGGER_BUFFER_NAME);
-        weechat_buffer_set (trigger_buffer, "localvar_set_type", "debug");
-        weechat_buffer_set (trigger_buffer, "localvar_set_server", TRIGGER_BUFFER_NAME);
-        weechat_buffer_set (trigger_buffer, "localvar_set_channel", TRIGGER_BUFFER_NAME);
-        weechat_buffer_set (trigger_buffer, "localvar_set_no_log", "1");
-
-        /* disable all highlights on this buffer */
-        weechat_buffer_set (trigger_buffer, "highlight_words", "-");
     }
 
     if (filter && filter[0])
-    {
-        weechat_buffer_set (trigger_buffer,
-                            "localvar_set_trigger_filter", filter);
-    }
+        weechat_buffer_set (trigger_buffer, "localvar_set_filter", filter);
     else
-    {
-        weechat_buffer_set (trigger_buffer,
-                            "localvar_del_trigger_filter", "");
-    }
+        weechat_buffer_set (trigger_buffer, "localvar_del_filter", "");
     trigger_buffer_set_filter (filter);
 
     trigger_buffer_set_title ();
@@ -278,14 +285,13 @@ trigger_buffer_hashtable_map_cb (void *data,
             weechat_color ("reset"),
             (value_no_color) ? value_no_color : (const char *)value,
             weechat_color ("chat_delimiters"));
-        if (value_no_color)
-            free (value_no_color);
+        free (value_no_color);
     }
     else if (strcmp (value_type, "pointer") == 0)
     {
         weechat_printf_date_tags (
             trigger_buffer, 0, "no_trigger",
-            "%s%lu\t    %s: 0x%lx",
+            "%s%lu\t    %s: %p",
             weechat_color (weechat_config_string (trigger_config_color_identifier)),
             context->id,
             (char *)key,
@@ -340,8 +346,8 @@ trigger_buffer_display_trigger (struct t_trigger *trigger,
         "--> %s%lu\t%s: %s%s %s(%s%s%s)%s",
         weechat_color (weechat_config_string (trigger_config_color_identifier)),
         context->id,
-        trigger_hook_type_string[weechat_config_integer (trigger->options[TRIGGER_OPTION_HOOK])],
-        weechat_color (weechat_config_string (trigger_config_color_trigger)),
+        trigger_hook_type_string[weechat_config_enum (trigger->options[TRIGGER_OPTION_HOOK])],
+        weechat_color ("chat_status_enabled"),
         trigger->name,
         weechat_color ("chat_delimiters"),
         weechat_color ("reset"),
@@ -379,6 +385,12 @@ trigger_buffer_display_trigger (struct t_trigger *trigger,
 void
 trigger_buffer_end ()
 {
+    if (trigger_buffer)
+    {
+        weechat_buffer_close (trigger_buffer);
+        trigger_buffer = NULL;
+    }
+
     if (trigger_buffer_filters)
     {
         weechat_string_free_split (trigger_buffer_filters);

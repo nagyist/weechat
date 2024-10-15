@@ -2,7 +2,7 @@
  * weechat-php.c - PHP plugin for WeeChat
  *
  * Copyright (C) 2006-2017 Adam Saponara <as@php.net>
- * Copyright (C) 2017-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2017-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -53,7 +53,7 @@ WEECHAT_PLUGIN_DESCRIPTION(N_("Support of PHP scripts"));
 WEECHAT_PLUGIN_AUTHOR("Adam Saponara <as@php.net>");
 WEECHAT_PLUGIN_VERSION(WEECHAT_VERSION);
 WEECHAT_PLUGIN_LICENSE(WEECHAT_LICENSE);
-WEECHAT_PLUGIN_PRIORITY(4003);
+WEECHAT_PLUGIN_PRIORITY(PHP_PLUGIN_PRIORITY);
 
 struct t_weechat_plugin *weechat_php_plugin = NULL;
 
@@ -143,6 +143,7 @@ const zend_function_entry weechat_functions[] = {
     PHP_FE(weechat_list_remove_all, arginfo_weechat_list_remove_all)
     PHP_FE(weechat_list_free, arginfo_weechat_list_free)
     PHP_FE(weechat_config_new, arginfo_weechat_config_new)
+    PHP_FE(weechat_config_set_version, arginfo_weechat_config_set_version)
     PHP_FE(weechat_config_new_section, arginfo_weechat_config_new_section)
     PHP_FE(weechat_config_search_section, arginfo_weechat_config_search_section)
     PHP_FE(weechat_config_new_option, arginfo_weechat_config_new_option)
@@ -153,16 +154,25 @@ const zend_function_entry weechat_functions[] = {
     PHP_FE(weechat_config_option_set_null, arginfo_weechat_config_option_set_null)
     PHP_FE(weechat_config_option_unset, arginfo_weechat_config_option_unset)
     PHP_FE(weechat_config_option_rename, arginfo_weechat_config_option_rename)
+    PHP_FE(weechat_config_option_get_string, arginfo_weechat_config_option_get_string)
+    PHP_FE(weechat_config_option_get_pointer, arginfo_weechat_config_option_get_pointer)
     PHP_FE(weechat_config_option_is_null, arginfo_weechat_config_option_is_null)
     PHP_FE(weechat_config_option_default_is_null, arginfo_weechat_config_option_default_is_null)
     PHP_FE(weechat_config_boolean, arginfo_weechat_config_boolean)
     PHP_FE(weechat_config_boolean_default, arginfo_weechat_config_boolean_default)
+    PHP_FE(weechat_config_boolean_inherited, arginfo_weechat_config_boolean_inherited)
     PHP_FE(weechat_config_integer, arginfo_weechat_config_integer)
     PHP_FE(weechat_config_integer_default, arginfo_weechat_config_integer_default)
+    PHP_FE(weechat_config_integer_inherited, arginfo_weechat_config_integer_inherited)
     PHP_FE(weechat_config_string, arginfo_weechat_config_string)
     PHP_FE(weechat_config_string_default, arginfo_weechat_config_string_default)
+    PHP_FE(weechat_config_string_inherited, arginfo_weechat_config_string_inherited)
     PHP_FE(weechat_config_color, arginfo_weechat_config_color)
     PHP_FE(weechat_config_color_default, arginfo_weechat_config_color_default)
+    PHP_FE(weechat_config_color_inherited, arginfo_weechat_config_color_inherited)
+    PHP_FE(weechat_config_enum, arginfo_weechat_config_enum)
+    PHP_FE(weechat_config_enum_default, arginfo_weechat_config_enum_default)
+    PHP_FE(weechat_config_enum_inherited, arginfo_weechat_config_enum_inherited)
     PHP_FE(weechat_config_write_option, arginfo_weechat_config_write_option)
     PHP_FE(weechat_config_write_line, arginfo_weechat_config_write_line)
     PHP_FE(weechat_config_write, arginfo_weechat_config_write)
@@ -184,8 +194,10 @@ const zend_function_entry weechat_functions[] = {
     PHP_FE(weechat_color, arginfo_weechat_color)
     PHP_FE(weechat_print, arginfo_weechat_print)
     PHP_FE(weechat_print_date_tags, arginfo_weechat_print_date_tags)
+    PHP_FE(weechat_print_datetime_tags, arginfo_weechat_print_datetime_tags)
     PHP_FE(weechat_print_y, arginfo_weechat_print_y)
     PHP_FE(weechat_print_y_date_tags, arginfo_weechat_print_y_date_tags)
+    PHP_FE(weechat_print_y_datetime_tags, arginfo_weechat_print_y_datetime_tags)
     PHP_FE(weechat_log_print, arginfo_weechat_log_print)
     PHP_FE(weechat_hook_command, arginfo_weechat_hook_command)
     PHP_FE(weechat_hook_completion, arginfo_weechat_hook_completion)
@@ -196,6 +208,7 @@ const zend_function_entry weechat_functions[] = {
     PHP_FE(weechat_hook_fd, arginfo_weechat_hook_fd)
     PHP_FE(weechat_hook_process, arginfo_weechat_hook_process)
     PHP_FE(weechat_hook_process_hashtable, arginfo_weechat_hook_process_hashtable)
+    PHP_FE(weechat_hook_url, arginfo_weechat_hook_url)
     PHP_FE(weechat_hook_connect, arginfo_weechat_hook_connect)
     PHP_FE(weechat_hook_line, arginfo_weechat_hook_line)
     PHP_FE(weechat_hook_print, arginfo_weechat_hook_print)
@@ -228,6 +241,7 @@ const zend_function_entry weechat_functions[] = {
     PHP_FE(weechat_buffer_set, arginfo_weechat_buffer_set)
     PHP_FE(weechat_buffer_string_replace_local_var, arginfo_weechat_buffer_string_replace_local_var)
     PHP_FE(weechat_buffer_match_list, arginfo_weechat_buffer_match_list)
+    PHP_FE(weechat_line_search_by_id, arginfo_weechat_line_search_by_id)
     PHP_FE(weechat_current_window, arginfo_weechat_current_window)
     PHP_FE(weechat_window_search_with_buffer, arginfo_weechat_window_search_with_buffer)
     PHP_FE(weechat_window_get_integer, arginfo_weechat_window_get_integer)
@@ -297,6 +311,7 @@ const zend_function_entry weechat_functions[] = {
     PHP_FE(weechat_hdata_char, arginfo_weechat_hdata_char)
     PHP_FE(weechat_hdata_integer, arginfo_weechat_hdata_integer)
     PHP_FE(weechat_hdata_long, arginfo_weechat_hdata_long)
+    PHP_FE(weechat_hdata_longlong, arginfo_weechat_hdata_longlong)
     PHP_FE(weechat_hdata_string, arginfo_weechat_hdata_string)
     PHP_FE(weechat_hdata_pointer, arginfo_weechat_hdata_pointer)
     PHP_FE(weechat_hdata_time, arginfo_weechat_hdata_time)
@@ -315,78 +330,33 @@ const zend_function_entry weechat_functions[] = {
 
 PHP_MINIT_FUNCTION(weechat)
 {
+    int i;
+
     /* make C compiler happy */
     (void) type;
 
-    /* Register integer constants */
-    #define PHP_WEECHAT_CONSTANT(NAME) \
-        zend_register_long_constant(#NAME, sizeof(#NAME)-1, (NAME), CONST_CS | CONST_PERSISTENT, module_number)
-    PHP_WEECHAT_CONSTANT(WEECHAT_RC_OK);
-    PHP_WEECHAT_CONSTANT(WEECHAT_RC_OK_EAT);
-    PHP_WEECHAT_CONSTANT(WEECHAT_RC_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_READ_OK);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_READ_MEMORY_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_READ_FILE_NOT_FOUND);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_WRITE_OK);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_WRITE_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_WRITE_MEMORY_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_OPTION_SET_OK_CHANGED);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_OPTION_SET_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_OPTION_SET_OPTION_NOT_FOUND);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_OPTION_UNSET_OK_NO_RESET);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_OPTION_UNSET_OK_RESET);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_OPTION_UNSET_OK_REMOVED);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_OPTION_UNSET_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HDATA_OTHER);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HDATA_CHAR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HDATA_INTEGER);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HDATA_LONG);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HDATA_STRING);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HDATA_POINTER);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HDATA_TIME);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HDATA_HASHTABLE);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HDATA_SHARED_STRING);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HDATA_LIST_CHECK_POINTERS);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_PROCESS_RUNNING);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_PROCESS_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_PROCESS_CHILD);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_OK);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_PROXY_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_MEMORY_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_TIMEOUT);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_SOCKET_ERROR);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_GNUTLS_CB_VERIFY_CERT);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_CONNECT_GNUTLS_CB_SET_CERT);
-    #undef PHP_WEECHAT_CONSTANT
-
-    /* Register string constants */
-    #define PHP_WEECHAT_CONSTANT(NAME) \
-        zend_register_string_constant(#NAME, sizeof(#NAME)-1, (NAME), CONST_CS | CONST_PERSISTENT, module_number)
-    PHP_WEECHAT_CONSTANT(WEECHAT_PLUGIN_API_VERSION);
-    PHP_WEECHAT_CONSTANT(WEECHAT_CONFIG_OPTION_NULL);
-    PHP_WEECHAT_CONSTANT(WEECHAT_LIST_POS_SORT);
-    PHP_WEECHAT_CONSTANT(WEECHAT_LIST_POS_BEGINNING);
-    PHP_WEECHAT_CONSTANT(WEECHAT_LIST_POS_END);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HASHTABLE_INTEGER);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HASHTABLE_STRING);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HASHTABLE_POINTER);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HASHTABLE_BUFFER);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HASHTABLE_TIME);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOTLIST_LOW);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOTLIST_MESSAGE);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOTLIST_PRIVATE);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOTLIST_HIGHLIGHT);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_SIGNAL_STRING);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_SIGNAL_INT);
-    PHP_WEECHAT_CONSTANT(WEECHAT_HOOK_SIGNAL_POINTER);
-    #undef PHP_WEECHAT_CONSTANT
+    /* interface constants */
+    for (i = 0; weechat_script_constants[i].name; i++)
+    {
+        if (weechat_script_constants[i].value_string)
+        {
+            zend_register_string_constant(
+                weechat_script_constants[i].name,
+                strlen (weechat_script_constants[i].name),
+                weechat_script_constants[i].value_string,
+                CONST_CS | CONST_PERSISTENT,
+                module_number);
+        }
+        else
+        {
+            zend_register_long_constant(
+                weechat_script_constants[i].name,
+                strlen (weechat_script_constants[i].name),
+                weechat_script_constants[i].value_integer,
+                CONST_CS | CONST_PERSISTENT,
+                module_number);
+        }
+    }
     return SUCCESS;
 }
 
@@ -545,7 +515,6 @@ weechat_php_exec (struct t_plugin_script *script, int ret_type,
     zval *params;
     zval zretval;
     void *ret_value;
-    int *ret_i;
     zend_fcall_info fci;
     zend_fcall_info_cache fci_cache;
     struct t_plugin_script *old_php_current_script;
@@ -558,14 +527,12 @@ weechat_php_exec (struct t_plugin_script *script, int ret_type,
     /* Build func args */
     if (!format || !format[0])
     {
-        argc = 0;
         params = NULL;
     }
     else
     {
         argc = strlen (format);
         params = safe_emalloc (sizeof (zval), argc, 0);
-
         for (i = 0; i < argc; i++)
         {
             switch (format[i])
@@ -596,7 +563,7 @@ weechat_php_exec (struct t_plugin_script *script, int ret_type,
     if (zfunc && zend_fcall_info_init (zfunc, 0, &fci, &fci_cache, NULL, NULL) == SUCCESS)
     {
         fci.params = params;
-        fci.param_count = argc;
+        fci.param_count = (format) ? strlen (format) : 0;
         fci.retval = &zretval;
     }
 
@@ -619,9 +586,8 @@ weechat_php_exec (struct t_plugin_script *script, int ret_type,
             else if (ret_type == WEECHAT_SCRIPT_EXEC_INT)
             {
                 convert_to_long (&zretval);
-                ret_i = malloc (sizeof (*ret_i));
-                *ret_i = Z_LVAL(zretval);
-                ret_value = ret_i;
+                ret_value = malloc (sizeof (int));
+                *((int *)ret_value) = Z_LVAL(zretval);
             }
             else if (ret_type == WEECHAT_SCRIPT_EXEC_HASHTABLE)
             {
@@ -662,6 +628,7 @@ weechat_php_exec (struct t_plugin_script *script, int ret_type,
     /* Cleanup */
     if (params)
     {
+        argc = (format) ? strlen (format) : 0;
         for (i = 0; i < argc; i++)
         {
             zval_ptr_dtor (&params[i]);
@@ -707,7 +674,7 @@ weechat_php_load (const char *filename, const char *code)
     memset (&file_handle, 0, sizeof (file_handle));
     file_handle.type = ZEND_HANDLE_FILENAME;
 #if PHP_VERSION_ID >= 80100
-    file_handle.filename = zend_string_init(filename, strlen(filename), 0);
+    file_handle.filename = zend_string_init (filename, strlen(filename), 0);
 #else
     file_handle.filename = filename;
 #endif
@@ -781,8 +748,7 @@ weechat_php_unload (struct t_plugin_script *script)
                                       WEECHAT_SCRIPT_EXEC_INT,
                                       script->shutdown_func,
                                       NULL, NULL);
-        if (rc)
-            free (rc);
+        free (rc);
     }
 
     filename = strdup (script->filename);
@@ -795,8 +761,7 @@ weechat_php_unload (struct t_plugin_script *script)
 
     (void) weechat_hook_signal_send ("php_script_unloaded",
                                      WEECHAT_HOOK_SIGNAL_STRING, filename);
-    if (filename)
-        free (filename);
+    free (filename);
 }
 
 /*
@@ -808,7 +773,7 @@ weechat_php_unload_name (const char *name)
 {
     struct t_plugin_script *ptr_script;
 
-    ptr_script = plugin_script_search (weechat_php_plugin, php_scripts, name);
+    ptr_script = plugin_script_search (php_scripts, name);
     if (ptr_script)
     {
         weechat_php_unload (ptr_script);
@@ -850,7 +815,7 @@ weechat_php_reload_name (const char *name)
     struct t_plugin_script *ptr_script;
     char *filename;
 
-    ptr_script = plugin_script_search (weechat_php_plugin, php_scripts, name);
+    ptr_script = plugin_script_search (php_scripts, name);
     if (ptr_script)
     {
         filename = strdup (ptr_script->filename);
@@ -906,7 +871,7 @@ weechat_php_command_cb (const void *pointer, void *data,
                         int argc, char **argv, char **argv_eol)
 {
     char *ptr_name, *ptr_code, *path_script;
-    int i, send_to_buffer_as_input, exec_commands;
+    int i, send_to_buffer_as_input, exec_commands, old_php_quiet;
 
     /* make C compiler happy */
     (void) pointer;
@@ -919,30 +884,30 @@ weechat_php_command_cb (const void *pointer, void *data,
     }
     else if (argc == 2)
     {
-        if (weechat_strcasecmp (argv[1], "list") == 0)
+        if (weechat_strcmp (argv[1], "list") == 0)
         {
             plugin_script_display_list (weechat_php_plugin, php_scripts,
                                         NULL, 0);
         }
-        else if (weechat_strcasecmp (argv[1], "listfull") == 0)
+        else if (weechat_strcmp (argv[1], "listfull") == 0)
         {
             plugin_script_display_list (weechat_php_plugin, php_scripts,
                                         NULL, 1);
         }
-        else if (weechat_strcasecmp (argv[1], "autoload") == 0)
+        else if (weechat_strcmp (argv[1], "autoload") == 0)
         {
             plugin_script_auto_load (weechat_php_plugin, &weechat_php_load_cb);
         }
-        else if (weechat_strcasecmp (argv[1], "reload") == 0)
+        else if (weechat_strcmp (argv[1], "reload") == 0)
         {
             weechat_php_unload_all ();
             plugin_script_auto_load (weechat_php_plugin, &weechat_php_load_cb);
         }
-        else if (weechat_strcasecmp (argv[1], "unload") == 0)
+        else if (weechat_strcmp (argv[1], "unload") == 0)
         {
             weechat_php_unload_all ();
         }
-        else if (weechat_strcasecmp (argv[1], "version") == 0)
+        else if (weechat_strcmp (argv[1], "version") == 0)
         {
             plugin_script_display_interpreter (weechat_php_plugin, 0);
         }
@@ -951,20 +916,21 @@ weechat_php_command_cb (const void *pointer, void *data,
     }
     else
     {
-        if (weechat_strcasecmp (argv[1], "list") == 0)
+        if (weechat_strcmp (argv[1], "list") == 0)
         {
             plugin_script_display_list (weechat_php_plugin, php_scripts,
                                         argv_eol[2], 0);
         }
-        else if (weechat_strcasecmp (argv[1], "listfull") == 0)
+        else if (weechat_strcmp (argv[1], "listfull") == 0)
         {
             plugin_script_display_list (weechat_php_plugin, php_scripts,
                                         argv_eol[2], 1);
         }
-        else if ((weechat_strcasecmp (argv[1], "load") == 0)
-                 || (weechat_strcasecmp (argv[1], "reload") == 0)
-                 || (weechat_strcasecmp (argv[1], "unload") == 0))
+        else if ((weechat_strcmp (argv[1], "load") == 0)
+                 || (weechat_strcmp (argv[1], "reload") == 0)
+                 || (weechat_strcmp (argv[1], "unload") == 0))
         {
+            old_php_quiet = php_quiet;
             ptr_name = argv_eol[2];
             if (strncmp (ptr_name, "-q ", 3) == 0)
             {
@@ -975,29 +941,28 @@ weechat_php_command_cb (const void *pointer, void *data,
                     ptr_name++;
                 }
             }
-            if (weechat_strcasecmp (argv[1], "load") == 0)
+            if (weechat_strcmp (argv[1], "load") == 0)
             {
                 /* load PHP script */
                 path_script = plugin_script_search_path (weechat_php_plugin,
-                                                         ptr_name);
+                                                         ptr_name, 1);
                 weechat_php_load ((path_script) ? path_script : ptr_name,
                                   NULL);
-                if (path_script)
-                    free (path_script);
+                free (path_script);
             }
-            else if (weechat_strcasecmp (argv[1], "reload") == 0)
+            else if (weechat_strcmp (argv[1], "reload") == 0)
             {
                 /* reload one PHP script */
                 weechat_php_reload_name (ptr_name);
             }
-            else if (weechat_strcasecmp (argv[1], "unload") == 0)
+            else if (weechat_strcmp (argv[1], "unload") == 0)
             {
                 /* unload PHP script */
                 weechat_php_unload_name (ptr_name);
             }
-            php_quiet = 0;
+            php_quiet = old_php_quiet;
         }
-        else if (weechat_strcasecmp (argv[1], "eval") == 0)
+        else if (weechat_strcmp (argv[1], "eval") == 0)
         {
             send_to_buffer_as_input = 0;
             exec_commands = 0;
@@ -1116,7 +1081,7 @@ weechat_php_infolist_cb (const void *pointer, void *data,
     if (!infolist_name || !infolist_name[0])
         return NULL;
 
-    if (weechat_strcasecmp (infolist_name, "php_script") == 0)
+    if (strcmp (infolist_name, "php_script") == 0)
     {
         return plugin_script_infolist_list_scripts (weechat_php_plugin,
                                                     php_scripts, obj_pointer,
@@ -1141,8 +1106,7 @@ weechat_php_signal_debug_dump_cb (const void *pointer, void *data,
     (void) signal;
     (void) type_data;
 
-    if (!signal_data
-        || (weechat_strcasecmp ((char *)signal_data, PHP_PLUGIN_NAME) == 0))
+    if (!signal_data || (strcmp ((char *)signal_data, PHP_PLUGIN_NAME) == 0))
     {
         plugin_script_print_log (weechat_php_plugin, php_scripts);
     }
@@ -1305,7 +1269,18 @@ php_weechat_log_message (char *message)
 int
 weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
 {
+    int old_php_quiet;
+
+    /* make C compiler happy */
+    (void) argc;
+    (void) argv;
+
     weechat_php_plugin = plugin;
+
+    php_quiet = 0;
+    php_eval_mode = 0;
+    php_eval_send_input = 0;
+    php_eval_exec_commands = 0;
 
     /* set interpreter name and version */
     weechat_hashtable_set (plugin->variables, "interpreter_name",
@@ -1331,6 +1306,7 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
     php_data.callback_signal_debug_dump = &weechat_php_signal_debug_dump_cb;
     php_data.callback_signal_script_action = &weechat_php_signal_script_action_cb;
     php_data.callback_load_file = &weechat_php_load_cb;
+    php_data.init_before_autoload = NULL;
     php_data.unload_all = &weechat_php_unload_all;
 
     php_embed_module.startup = php_weechat_startup;
@@ -1343,9 +1319,10 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
 
     PG(report_zend_debug) = 0;  /* Turn off --enable-debug output */
 
+    old_php_quiet = php_quiet;
     php_quiet = 1;
-    plugin_script_init (weechat_php_plugin, argc, argv, &php_data);
-    php_quiet = 0;
+    plugin_script_init (weechat_php_plugin, &php_data);
+    php_quiet = old_php_quiet;
 
     plugin_script_display_short_list (weechat_php_plugin,
                                       php_scripts);
@@ -1361,7 +1338,10 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
 int
 weechat_plugin_end (struct t_weechat_plugin *plugin)
 {
+    int old_php_quiet;
+
     /* unload all scripts */
+    old_php_quiet = php_quiet;
     php_quiet = 1;
     if (php_script_eval)
     {
@@ -1369,7 +1349,7 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
         php_script_eval = NULL;
     }
     plugin_script_end (plugin, &php_data);
-    php_quiet = 0;
+    php_quiet = old_php_quiet;
 
     if (weechat_php_func_map)
     {
@@ -1381,11 +1361,20 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
     php_embed_shutdown ();
 
     if (php_action_install_list)
+    {
         free (php_action_install_list);
+        php_action_install_list = NULL;
+    }
     if (php_action_remove_list)
+    {
         free (php_action_remove_list);
+        php_action_remove_list = NULL;
+    }
     if (php_action_autoload_list)
+    {
         free (php_action_autoload_list);
+        php_action_autoload_list = NULL;
+    }
     /* weechat_string_dyn_free (php_buffer_output, 1); */
 
     return WEECHAT_RC_OK;

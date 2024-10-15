@@ -2,7 +2,7 @@
  * spell-speller.c - speller management for spell checker plugin
  *
  * Copyright (C) 2006 Emmanuel Bouthenot <kolter@openics.org>
- * Copyright (C) 2006-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2006-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -265,7 +265,7 @@ spell_speller_remove_unused_cb (void *data,
 
     used_spellers = (struct t_hashtable *)data;
 
-    /* if speller is not in "used_spellers", remove it (not used any more) */
+    /* if speller is not in "used_spellers", remove it (not used anymore) */
     if (!weechat_hashtable_has_key (used_spellers, key))
         weechat_hashtable_remove (hashtable, key);
 }
@@ -416,8 +416,7 @@ spell_speller_buffer_new (struct t_gui_buffer *buffer)
                 new_speller_buffer->spellers[num_dicts] = NULL;
             }
         }
-        if (dicts)
-            weechat_string_free_split (dicts);
+        weechat_string_free_split (dicts);
     }
 
     weechat_hashtable_set (spell_speller_buffer,
@@ -446,12 +445,9 @@ spell_speller_buffer_free_value_cb (struct t_hashtable *hashtable,
 
     ptr_speller_buffer = (struct t_spell_speller_buffer *)value;
 
-    if (ptr_speller_buffer->spellers)
-        free (ptr_speller_buffer->spellers);
-    if (ptr_speller_buffer->modifier_string)
-        free (ptr_speller_buffer->modifier_string);
-    if (ptr_speller_buffer->modifier_result)
-        free (ptr_speller_buffer->modifier_result);
+    free (ptr_speller_buffer->spellers);
+    free (ptr_speller_buffer->modifier_string);
+    free (ptr_speller_buffer->modifier_result);
 
     free (ptr_speller_buffer);
 }
@@ -501,5 +497,8 @@ void
 spell_speller_end ()
 {
     weechat_hashtable_free (spell_spellers);
+    spell_spellers = NULL;
+
     weechat_hashtable_free (spell_speller_buffer);
+    spell_speller_buffer = NULL;
 }

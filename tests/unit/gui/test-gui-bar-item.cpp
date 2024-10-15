@@ -1,7 +1,7 @@
 /*
  * test-gui-bar-item.cpp - test bar item functions
  *
- * Copyright (C) 2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2022-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -51,6 +51,21 @@ TEST(GuiBarItem, Valid)
     LONGS_EQUAL(1, gui_bar_item_valid (gui_bar_items));
 
     LONGS_EQUAL(0, gui_bar_item_valid (gui_bar_items + 1));
+}
+
+/*
+ * Tests functions:
+ *   gui_bar_item_search_default
+ */
+
+TEST(GuiBarItem, SearchDefault)
+{
+    LONGS_EQUAL(-1, gui_bar_item_search_default (NULL));
+    LONGS_EQUAL(-1, gui_bar_item_search_default (""));
+    LONGS_EQUAL(-1, gui_bar_item_search_default ("zzz"));
+
+    CHECK(gui_bar_item_search_default ("scroll") >= 0);
+    CHECK(gui_bar_item_search_default ("time") >= 0);
 }
 
 /*
@@ -173,7 +188,8 @@ TEST(GuiBarItem, Update)
 
 TEST(GuiBarItem, Free)
 {
-    /* TODO: write tests */
+    /* test free of NULL bar item */
+    gui_bar_item_free (NULL);
 }
 
 /*

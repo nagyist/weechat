@@ -1,7 +1,7 @@
 /*
  * irc-notify.c - notify lists for IRC plugin
  *
- * Copyright (C) 2010-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2010-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -149,8 +149,7 @@ irc_notify_set_server_option (struct t_irc_server *server)
                 str2 = realloc (str, total_length);
                 if (!str2)
                 {
-                    if (str)
-                        free (str);
+                    free (str);
                     return;
                 }
                 str = str2;
@@ -298,8 +297,7 @@ irc_notify_build_message_with_nicks (struct t_irc_server *server,
         message2 = realloc (message, total_length);
         if (!message2)
         {
-            if (message)
-                free (message);
+            free (message);
             message = NULL;
             break;
         }
@@ -352,8 +350,7 @@ irc_notify_send_monitor (struct t_irc_server *server)
             weechat_hashtable_free (hashtable);
         }
     }
-    if (message)
-        free (message);
+    free (message);
 }
 
 /*
@@ -464,8 +461,7 @@ irc_notify_free (struct t_irc_server *server, struct t_irc_notify *notify,
         }
         free (notify->nick);
     }
-    if (notify->away_message)
-        free (notify->away_message);
+    free (notify->away_message);
 
     /* remove notify from list */
     if (notify->prev_notify)
@@ -629,7 +625,8 @@ irc_notify_get_tags (struct t_config_option *option, const char *type,
 
     tags = weechat_config_string (option);
 
-    snprintf (string, sizeof (string), "irc_notify,irc_notify_%s,nick_%s%s%s",
+    snprintf (string, sizeof (string),
+              "irc_notify,irc_notify_%s,nick_%s%s%s,log3",
               type,
               nick,
               (tags && tags[0]) ? "," : "",
@@ -666,8 +663,46 @@ irc_notify_send_signal (struct t_irc_notify *notify,
 
     (void) weechat_hook_signal_send (signal, WEECHAT_HOOK_SIGNAL_STRING, data);
 
-    if (data)
-        free (data);
+    free (data);
+}
+
+/*
+ * Display message about nick: "is connected", "is offline", "has connected",
+ * "has quit".
+ *
+ * If "notify" is NULL, only "is connected" or "is offline" can be displayed.
+ */
+
+void
+irc_notify_display_is_on (struct t_irc_server *server,
+                          const char *nick,
+                          const char *host,
+                          struct t_irc_notify *notify,
+                          int is_on_server)
+{
+    weechat_printf_date_tags (
+        server->buffer,
+        0,
+        irc_notify_get_tags (irc_config_look_notify_tags_ison,
+                             (is_on_server) ? "join" : "quit",
+                             nick),
+        (!notify || (notify->is_on_server < 0)) ?
+        ((is_on_server) ?
+         _("%snotify: %s%s%s%s%s%s%s%s%s is connected") :
+         _("%snotify: %s%s%s%s%s%s%s%s%s is offline")) :
+        ((is_on_server) ?
+         _("%snotify: %s%s%s%s%s%s%s%s%s has connected") :
+         _("%snotify: %s%s%s%s%s%s%s%s%s has quit")),
+        weechat_prefix ("network"),
+        irc_nick_color_for_msg (server, 1, NULL, nick),
+        nick,
+        (host && host[0]) ? IRC_COLOR_CHAT_DELIMITERS : "",
+        (host && host[0]) ? " (" : "",
+        (host && host[0]) ? IRC_COLOR_CHAT_HOST : "",
+        (host && host[0]) ? host : "",
+        (host && host[0]) ? IRC_COLOR_CHAT_DELIMITERS : "",
+        (host && host[0]) ? ")" : "",
+        (is_on_server) ? IRC_COLOR_MESSAGE_JOIN : IRC_COLOR_MESSAGE_QUIT);
 }
 
 /*
@@ -686,29 +721,9 @@ irc_notify_set_is_on_server (struct t_irc_notify *notify, const char *host,
     if (notify->is_on_server == is_on_server)
         return;
 
-    weechat_printf_date_tags (
-        notify->server->buffer,
-        0,
-        irc_notify_get_tags (irc_config_look_notify_tags_ison,
-                             (is_on_server) ? "join" : "quit",
-                             notify->nick),
-        (notify->is_on_server < 0) ?
-        ((is_on_server) ?
-         _("%snotify: %s%s%s%s%s%s%s%s%s is connected") :
-         _("%snotify: %s%s%s%s%s%s%s%s%s is offline")) :
-        ((is_on_server) ?
-         _("%snotify: %s%s%s%s%s%s%s%s%s has connected") :
-         _("%snotify: %s%s%s%s%s%s%s%s%s has quit")),
-        weechat_prefix ("network"),
-        irc_nick_color_for_msg (notify->server, 1, NULL, notify->nick),
-        notify->nick,
-        (host && host[0]) ? IRC_COLOR_CHAT_DELIMITERS : "",
-        (host && host[0]) ? " (" : "",
-        (host && host[0]) ? IRC_COLOR_CHAT_HOST : "",
-        (host && host[0]) ? host : "",
-        (host && host[0]) ? IRC_COLOR_CHAT_DELIMITERS : "",
-        (host && host[0]) ? ")" : "",
-        (is_on_server) ? IRC_COLOR_MESSAGE_JOIN : IRC_COLOR_MESSAGE_QUIT);
+    irc_notify_display_is_on (notify->server, notify->nick, host,
+                              notify, is_on_server);
+
     irc_notify_send_signal (notify, (is_on_server) ? "join" : "quit", NULL);
 
     notify->is_on_server = is_on_server;
@@ -777,8 +792,7 @@ irc_notify_set_away_message (struct t_irc_notify *notify,
         irc_notify_send_signal (notify, "still_away", away_message);
     }
 
-    if (notify->away_message)
-        free (notify->away_message);
+    free (notify->away_message);
     notify->away_message = (away_message) ? strdup (away_message) : NULL;
 }
 
@@ -1017,10 +1031,8 @@ irc_notify_hsignal_cb (const void *pointer, void *data, const char *signal,
                             }
                         }
                     }
-                    if (irc_cmd)
-                        free (irc_cmd);
-                    if (arguments)
-                        free (arguments);
+                    free (irc_cmd);
+                    free (arguments);
                 }
             }
             if (!away_message_updated && !no_such_nick)
@@ -1086,8 +1098,7 @@ irc_notify_timer_ison_cb (const void *pointer, void *data, int remaining_calls)
                     weechat_hashtable_free (hashtable);
                 }
             }
-            if (message)
-                free (message);
+            free (message);
         }
     }
 
@@ -1222,15 +1233,15 @@ irc_notify_print_log (struct t_irc_server *server)
          ptr_notify = ptr_notify->next_notify)
     {
         weechat_log_printf ("");
-        weechat_log_printf ("  => notify (addr:0x%lx):", ptr_notify);
-        weechat_log_printf ("       server. . . . . . . : 0x%lx", ptr_notify->server);
-        weechat_log_printf ("       nick. . . . . . . . : '%s'",  ptr_notify->nick);
-        weechat_log_printf ("       check_away. . . . . : %d",    ptr_notify->check_away);
-        weechat_log_printf ("       is_on_server. . . . : %d",    ptr_notify->is_on_server);
-        weechat_log_printf ("       away_message. . . . : '%s'",  ptr_notify->away_message);
-        weechat_log_printf ("       ison_received . . . : %d",    ptr_notify->ison_received);
-        weechat_log_printf ("       prev_notify . . . . : 0x%lx", ptr_notify->prev_notify);
-        weechat_log_printf ("       next_notify . . . . : 0x%lx", ptr_notify->next_notify);
+        weechat_log_printf ("  => notify (addr:%p):", ptr_notify);
+        weechat_log_printf ("       server. . . . . . . : %p", ptr_notify->server);
+        weechat_log_printf ("       nick. . . . . . . . : '%s'", ptr_notify->nick);
+        weechat_log_printf ("       check_away. . . . . : %d", ptr_notify->check_away);
+        weechat_log_printf ("       is_on_server. . . . : %d", ptr_notify->is_on_server);
+        weechat_log_printf ("       away_message. . . . : '%s'", ptr_notify->away_message);
+        weechat_log_printf ("       ison_received . . . : %d", ptr_notify->ison_received);
+        weechat_log_printf ("       prev_notify . . . . : %p", ptr_notify->prev_notify);
+        weechat_log_printf ("       next_notify . . . . : %p", ptr_notify->next_notify);
     }
 }
 
@@ -1241,9 +1252,7 @@ irc_notify_print_log (struct t_irc_server *server)
 void
 irc_notify_hook_timer_ison ()
 {
-    if (irc_notify_timer_ison)
-        weechat_unhook (irc_notify_timer_ison);
-
+    weechat_unhook (irc_notify_timer_ison);
     irc_notify_timer_ison = weechat_hook_timer (
         60 * 1000 * weechat_config_integer (irc_config_network_notify_check_ison),
         0, 0, &irc_notify_timer_ison_cb, NULL, NULL);
@@ -1256,9 +1265,7 @@ irc_notify_hook_timer_ison ()
 void
 irc_notify_hook_timer_whois ()
 {
-    if (irc_notify_timer_whois)
-        weechat_unhook (irc_notify_timer_whois);
-
+    weechat_unhook (irc_notify_timer_whois);
     irc_notify_timer_whois = weechat_hook_timer (
         60 * 1000 * weechat_config_integer (irc_config_network_notify_check_whois),
         0, 0, &irc_notify_timer_whois_cb, NULL, NULL);
@@ -1287,9 +1294,18 @@ void
 irc_notify_end ()
 {
     if (irc_notify_timer_ison)
+    {
         weechat_unhook (irc_notify_timer_ison);
+        irc_notify_timer_ison = NULL;
+    }
     if (irc_notify_timer_whois)
+    {
         weechat_unhook (irc_notify_timer_whois);
+        irc_notify_timer_whois = NULL;
+    }
     if (irc_notify_hsignal)
+    {
         weechat_unhook (irc_notify_hsignal);
+        irc_notify_hsignal = NULL;
+    }
 }

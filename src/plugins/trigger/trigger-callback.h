@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2014-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -54,7 +54,7 @@ struct t_trigger_context
     trigger->hook_count_cb++;                                   \
     trigger->hook_running = 1;                                  \
     trigger_rc = trigger_return_code[                           \
-        weechat_config_integer (                                \
+        weechat_config_enum (                                   \
             trigger->options[TRIGGER_OPTION_RETURN_CODE])];
 
 #define TRIGGER_CALLBACK_CB_NEW_POINTERS                        \
@@ -88,7 +88,7 @@ struct t_trigger_context
     if (ctx.vars_updated)                                       \
         weechat_list_free (ctx.vars_updated);                   \
     trigger->hook_running = 0;                                  \
-    switch (weechat_config_integer (                            \
+    switch (weechat_config_enum (                               \
                 trigger->options[TRIGGER_OPTION_POST_ACTION]))  \
     {                                                           \
         case TRIGGER_POST_ACTION_DISABLE:                       \
@@ -105,6 +105,8 @@ struct t_trigger_context
     }                                                           \
     return __rc;
 
+extern unsigned long trigger_context_id;
+
 extern int trigger_callback_signal_cb (const void *pointer, void *data,
                                        const char *signal,
                                        const char *type_data,
@@ -120,10 +122,10 @@ extern struct t_hashtable *trigger_callback_line_cb  (const void *pointer, void 
                                                       struct t_hashtable *line);
 extern int trigger_callback_print_cb  (const void *pointer, void *data,
                                        struct t_gui_buffer *buffer,
-                                       time_t date, int tags_count,
-                                       const char **tags, int displayed,
-                                       int highlight, const char *prefix,
-                                       const char *message);
+                                       time_t date, int date_usec,
+                                       int tags_count, const char **tags,
+                                       int displayed, int highlight,
+                                       const char *prefix, const char *message);
 extern int trigger_callback_command_cb  (const void *pointer,
                                          void *data,
                                          struct t_gui_buffer *buffer,

@@ -1,7 +1,7 @@
 /*
  * irc-upgrade.c - save/restore IRC plugin data when upgrading WeeChat
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -30,6 +30,7 @@
 #include "irc-channel.h"
 #include "irc-config.h"
 #include "irc-input.h"
+#include "irc-list.h"
 #include "irc-modelist.h"
 #include "irc-nick.h"
 #include "irc-notify.h"
@@ -41,6 +42,7 @@
 struct t_irc_server *irc_upgrade_current_server = NULL;
 struct t_irc_channel *irc_upgrade_current_channel = NULL;
 struct t_irc_modelist *irc_upgrade_current_modelist = NULL;
+int irc_upgrading = 0;
 
 
 /*
@@ -323,6 +325,15 @@ irc_upgrade_set_buffer_callbacks ()
                                                     ptr_server);
                     }
                 }
+                if (type && (strcmp (type, "list") == 0))
+                {
+                    ptr_server = irc_server_search (
+                        weechat_buffer_get_string (ptr_buffer,
+                                                   "localvar_server"));
+                    if (ptr_server)
+                        ptr_server->list->buffer = ptr_buffer;
+                    irc_list_buffer_refresh (ptr_server, 1);
+                }
                 if (strcmp (weechat_infolist_string (infolist, "name"),
                             IRC_RAW_BUFFER_NAME) == 0)
                 {
@@ -416,8 +427,26 @@ irc_upgrade_read_cb (const void *pointer, void *data,
                             irc_upgrade_current_server,
                             NULL);
                     }
+                    /*
+                     * "authentication_method" and "sasl_mechanism_used" are
+                     * new in WeeChat 4.0.0
+                     */
+                    if (weechat_infolist_search_var (infolist, "authentication_method"))
+                    {
+                        irc_upgrade_current_server->authentication_method = weechat_infolist_integer (infolist, "authentication_method");
+                        irc_upgrade_current_server->sasl_mechanism_used = weechat_infolist_integer (infolist, "sasl_mechanism_used");
+                    }
+                    else
+                    {
+                        irc_upgrade_current_server->authentication_method = IRC_SERVER_AUTH_METHOD_NONE;
+                        irc_upgrade_current_server->sasl_mechanism_used = -1;
+                    }
                     irc_upgrade_current_server->is_connected = weechat_infolist_integer (infolist, "is_connected");
-                    irc_upgrade_current_server->ssl_connected = weechat_infolist_integer (infolist, "ssl_connected");
+                    /* "tls_connected" replaces "ssl_connected" in WeeChat 4.0.0 */
+                    if (weechat_infolist_search_var (infolist, "tls_connected"))
+                        irc_upgrade_current_server->tls_connected = weechat_infolist_integer (infolist, "tls_connected");
+                    else
+                        irc_upgrade_current_server->tls_connected = weechat_infolist_integer (infolist, "ssl_connected");
                     irc_upgrade_current_server->disconnected = weechat_infolist_integer (infolist, "disconnected");
                     str = weechat_infolist_string (infolist, "unterminated_message");
                     if (str)
@@ -460,7 +489,7 @@ irc_upgrade_read_cb (const void *pointer, void *data,
                     if (str)
                         irc_upgrade_current_server->isupport = strdup (str);
                     /*
-                     * "prefix" is not any more in this infolist (since
+                     * "prefix" is not anymore in this infolist (since
                      * WeeChat 0.3.4), but we read it to keep compatibility
                      * with old WeeChat versions, on /upgrade)
                      */
@@ -471,17 +500,33 @@ irc_upgrade_read_cb (const void *pointer, void *data,
                     str = weechat_infolist_string (infolist, "prefix_modes");
                     if (str)
                     {
-                        if (irc_upgrade_current_server->prefix_modes)
-                            free (irc_upgrade_current_server->prefix_modes);
+                        free (irc_upgrade_current_server->prefix_modes);
                         irc_upgrade_current_server->prefix_modes = strdup (str);
                     }
                     /* "prefix_chars" is new in WeeChat 0.3.4 */
                     str = weechat_infolist_string (infolist, "prefix_chars");
                     if (str)
                     {
-                        if (irc_upgrade_current_server->prefix_chars)
-                            free (irc_upgrade_current_server->prefix_chars);
+                        free (irc_upgrade_current_server->prefix_chars);
                         irc_upgrade_current_server->prefix_chars = strdup (str);
+                    }
+                    /* "msg_max_length" is new in WeeChat 4.0.0 */
+                    if (weechat_infolist_search_var (infolist, "msg_max_length"))
+                    {
+                        irc_upgrade_current_server->msg_max_length = weechat_infolist_integer (infolist, "msg_max_length");
+                    }
+                    else
+                    {
+                        /* WeeChat <= 3.8 */
+                        str = irc_server_get_isupport_value (irc_upgrade_current_server,
+                                                             "LINELEN");
+                        if (str)
+                        {
+                            error = NULL;
+                            number = strtol (str, &error, 10);
+                            if (error && !error[0])
+                                irc_upgrade_current_server->msg_max_length = (int)number;
+                        }
                     }
                     irc_upgrade_current_server->nick_max_length = weechat_infolist_integer (infolist, "nick_max_length");
                     /* "user_max_length" is new in WeeChat 2.6 */
@@ -538,6 +583,20 @@ irc_upgrade_read_cb (const void *pointer, void *data,
                                 irc_upgrade_current_server->utf8mapping = utf8mapping;
                         }
                     }
+                    /* "utf8only" is new in WeeChat 4.0.0 */
+                    if (weechat_infolist_search_var (infolist, "utf8only"))
+                    {
+                        irc_upgrade_current_server->utf8only = weechat_infolist_integer (infolist, "utf8only");
+                    }
+                    else
+                    {
+                        /* WeeChat <= 3.8 */
+                        irc_upgrade_current_server->utf8only = (
+                            irc_server_get_isupport_value (
+                                irc_upgrade_current_server,
+                                "UTF8ONLY")) ?
+                            1 : 0;
+                    }
                     str = weechat_infolist_string (infolist, "chantypes");
                     if (str)
                         irc_upgrade_current_server->chantypes = strdup (str);
@@ -589,7 +648,8 @@ irc_upgrade_read_cb (const void *pointer, void *data,
                     irc_upgrade_current_server->reconnect_delay = weechat_infolist_integer (infolist, "reconnect_delay");
                     irc_upgrade_current_server->reconnect_start = weechat_infolist_time (infolist, "reconnect_start");
                     irc_upgrade_current_server->command_time = weechat_infolist_time (infolist, "command_time");
-                    irc_upgrade_current_server->reconnect_join = weechat_infolist_integer (infolist, "reconnect_join");
+                    irc_upgrade_current_server->autojoin_time = weechat_infolist_time (infolist, "autojoin_time");
+                    irc_upgrade_current_server->autojoin_done = weechat_infolist_integer (infolist, "autojoin_done");
                     irc_upgrade_current_server->disable_autojoin = weechat_infolist_integer (infolist, "disable_autojoin");
                     irc_upgrade_current_server->is_away = weechat_infolist_integer (infolist, "is_away");
                     str = weechat_infolist_string (infolist, "away_message");
@@ -603,7 +663,6 @@ irc_upgrade_read_cb (const void *pointer, void *data,
                         memcpy (&(irc_upgrade_current_server->lag_check_time), buf, size);
                     irc_upgrade_current_server->lag_next_check = weechat_infolist_time (infolist, "lag_next_check");
                     irc_upgrade_current_server->lag_last_refresh = weechat_infolist_time (infolist, "lag_last_refresh");
-                    irc_upgrade_current_server->last_user_message = weechat_infolist_time (infolist, "last_user_message");
                     irc_upgrade_current_server->last_away_check = weechat_infolist_time (infolist, "last_away_check");
                     irc_upgrade_current_server->last_data_purge = weechat_infolist_time (infolist, "last_data_purge");
                 }
@@ -735,18 +794,19 @@ irc_upgrade_read_cb (const void *pointer, void *data,
             case IRC_UPGRADE_TYPE_NICK:
                 if (irc_upgrade_current_server && irc_upgrade_current_channel)
                 {
-                    ptr_nick = irc_nick_new (irc_upgrade_current_server,
-                                             irc_upgrade_current_channel,
-                                             weechat_infolist_string (infolist, "name"),
-                                             weechat_infolist_string (infolist, "host"),
-                                             weechat_infolist_string (infolist, "prefixes"),
-                                             weechat_infolist_integer (infolist, "away"),
-                                             weechat_infolist_string (infolist, "account"),
-                                             weechat_infolist_string (infolist, "realname"));
+                    ptr_nick = irc_nick_new_in_channel (
+                        irc_upgrade_current_server,
+                        irc_upgrade_current_channel,
+                        weechat_infolist_string (infolist, "name"),
+                        weechat_infolist_string (infolist, "host"),
+                        weechat_infolist_string (infolist, "prefixes"),
+                        weechat_infolist_integer (infolist, "away"),
+                        weechat_infolist_string (infolist, "account"),
+                        weechat_infolist_string (infolist, "realname"));
                     if (ptr_nick)
                     {
                         /*
-                         * "flags" is not any more in this infolist (since
+                         * "flags" is not anymore in this infolist (since
                          * WeeChat 0.3.4), but we read it to keep compatibility
                          * with old WeeChat versions, on /upgrade)
                          * We try to restore prefixes with old flags, but
@@ -910,6 +970,7 @@ irc_upgrade_read_cb (const void *pointer, void *data,
                     {
                         irc_raw_message_add_to_list (
                             weechat_infolist_time (infolist, "date"),
+                            weechat_infolist_integer (infolist, "date_usec"),
                             ptr_server,
                             weechat_infolist_integer (infolist, "flags"),
                             weechat_infolist_string (infolist, "message"));
@@ -920,6 +981,35 @@ irc_upgrade_read_cb (const void *pointer, void *data,
     }
 
     return WEECHAT_RC_OK;
+}
+
+/*
+ * Set buffer properties on IRC buffers after upgrade:
+ *   - "input_prompt" (introduced in WeeChat 4.3.0)
+ *   - "modes" (introduced in WeeChat 4.3.0)
+ */
+
+void
+irc_upgrade_set_buffer_properties ()
+{
+    struct t_irc_server *ptr_server;
+    struct t_irc_channel *ptr_channel;
+
+    for (ptr_server = irc_servers; ptr_server;
+         ptr_server = ptr_server->next_server)
+    {
+        /* set input prompt on server and all channels */
+        if (ptr_server->buffer)
+            irc_server_set_buffer_input_prompt (ptr_server);
+
+        /* set modes on all channels */
+        for (ptr_channel = ptr_server->channels; ptr_channel;
+             ptr_channel = ptr_channel->next_channel)
+        {
+            if (ptr_channel->buffer)
+                irc_channel_set_buffer_modes (ptr_server, ptr_channel);
+        }
+    }
 }
 
 /*
@@ -944,7 +1034,9 @@ irc_upgrade_load ()
     if (!upgrade_file)
         return 0;
 
+    irc_upgrading = 1;
     rc = weechat_upgrade_read (upgrade_file);
+    irc_upgrading = 0;
 
     weechat_upgrade_close (upgrade_file);
 
@@ -955,6 +1047,8 @@ irc_upgrade_load ()
         irc_raw_filter_options (
             (ptr_filter && ptr_filter[0]) ? ptr_filter : "*");
     }
+
+    irc_upgrade_set_buffer_properties ();
 
     return rc;
 }

@@ -1,7 +1,7 @@
 /*
  * test-gui-bar-window.cpp - test bar window functions
  *
- * Copyright (C) 2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2022-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -382,7 +382,9 @@ TEST(GuiBarWindow, SetCurrentSize)
 
 TEST(GuiBarWindow, Free)
 {
-    /* TODO: write tests */
+    /* test free of NULL bar window */
+    gui_bar_window_free (NULL, gui_current_window);
+    gui_bar_window_free (NULL, NULL);
 }
 
 /*

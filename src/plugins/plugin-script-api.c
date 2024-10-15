@@ -1,7 +1,7 @@
 /*
  * script-api.c - script API functions, used by script plugins
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  * Copyright (C) 2012 Simon Arlott
  *
  * This file is part of WeeChat, the extensible chat client.
@@ -41,9 +41,7 @@ plugin_script_api_charset_set (struct t_plugin_script *script,
     if (!script)
         return;
 
-    if (script->charset)
-        free (script->charset);
-
+    free (script->charset);
     script->charset = (charset) ? strdup (charset) : NULL;
 }
 
@@ -74,8 +72,7 @@ plugin_script_api_string_match_list (struct t_weechat_plugin *weechat_plugin,
                                        (const char **)list_masks,
                                        case_sensitive);
 
-    if (list_masks)
-        weechat_string_free_split (list_masks);
+    weechat_string_free_split (list_masks);
 
     return match;
 }
@@ -110,13 +107,51 @@ plugin_script_api_config_new (struct t_weechat_plugin *weechat_plugin,
         script,
         function_and_data);
 
-    if (!new_config_file)
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+    if (!new_config_file && function_and_data)
+        free (function_and_data);
 
     return new_config_file;
+}
+
+/*
+ * Sets configuration file version and a callback to update config
+ * sections/options on-the-fly when the config is read.
+ *
+ * Returns pointer to new configuration file, NULL if error.
+ */
+
+int
+plugin_script_api_config_set_version (struct t_weechat_plugin *weechat_plugin,
+                                      struct t_plugin_script *script,
+                                      struct t_config_file *config_file,
+                                      int version,
+                                      struct t_hashtable *(*callback_update)(const void *pointer,
+                                                                             void *data,
+                                                                             struct t_config_file *config_file,
+                                                                             int version_read,
+                                                                             struct t_hashtable *data_read),
+                                      const char *function,
+                                      const char *data)
+{
+    char *function_and_data;
+    int rc;
+
+    if (!script)
+        return 0;
+
+    function_and_data = plugin_script_build_function_and_data (function, data);
+
+    rc = weechat_config_set_version (
+        config_file,
+        version,
+        (function_and_data) ? callback_update : NULL,
+        script,
+        function_and_data);
+
+    if (!rc && function_and_data)
+        free (function_and_data);
+
+    return rc;
 }
 
 /*
@@ -210,16 +245,11 @@ plugin_script_api_config_new_section (struct t_weechat_plugin *weechat_plugin,
 
     if (!new_section)
     {
-        if (function_and_data_read)
-            free (function_and_data_read);
-        if (function_and_data_write)
-            free (function_and_data_write);
-        if (function_and_data_write_default)
-            free (function_and_data_write_default);
-        if (function_and_data_create_option)
-            free (function_and_data_create_option);
-        if (function_and_data_delete_option)
-            free (function_and_data_delete_option);
+        free (function_and_data_read);
+        free (function_and_data_write);
+        free (function_and_data_write_default);
+        free (function_and_data_create_option);
+        free (function_and_data_delete_option);
     }
 
     return new_section;
@@ -290,12 +320,9 @@ plugin_script_api_config_new_option (struct t_weechat_plugin *weechat_plugin,
 
     if (!new_option)
     {
-        if (function_and_data_check_value)
-            free (function_and_data_check_value);
-        if (function_and_data_change)
-            free (function_and_data_change);
-        if (function_and_data_delete)
-            free (function_and_data_delete);
+        free (function_and_data_check_value);
+        free (function_and_data_change);
+        free (function_and_data_delete);
     }
 
     return new_option;
@@ -319,8 +346,7 @@ plugin_script_api_printf (struct t_weechat_plugin *weechat_plugin,
     buf2 = (script && script->charset && script->charset[0]) ?
         weechat_iconv_to_internal (script->charset, vbuffer) : NULL;
     weechat_printf (buffer, "%s", (buf2) ? buf2 : vbuffer);
-    if (buf2)
-        free (buf2);
+    free (buf2);
 
     free (vbuffer);
 }
@@ -346,8 +372,34 @@ plugin_script_api_printf_date_tags (struct t_weechat_plugin *weechat_plugin,
         weechat_iconv_to_internal (script->charset, vbuffer) : NULL;
     weechat_printf_date_tags (buffer, date, tags,
                               "%s", (buf2) ? buf2 : vbuffer);
-    if (buf2)
-        free (buf2);
+    free (buf2);
+
+    free (vbuffer);
+}
+
+/*
+ * Prints a message, with optional date/time (with microseconds) and tags.
+ */
+
+void
+plugin_script_api_printf_datetime_tags (struct t_weechat_plugin *weechat_plugin,
+                                        struct t_plugin_script *script,
+                                        struct t_gui_buffer *buffer,
+                                        time_t date, int date_usec,
+                                        const char *tags,
+                                        const char *format, ...)
+{
+    char *buf2;
+
+    weechat_va_format (format);
+    if (!vbuffer)
+        return;
+
+    buf2 = (script && script->charset && script->charset[0]) ?
+        weechat_iconv_to_internal (script->charset, vbuffer) : NULL;
+    weechat_printf_datetime_tags (buffer, date, date_usec, tags,
+                                  "%s", (buf2) ? buf2 : vbuffer);
+    free (buf2);
 
     free (vbuffer);
 }
@@ -371,8 +423,7 @@ plugin_script_api_printf_y (struct t_weechat_plugin *weechat_plugin,
     buf2 = (script && script->charset && script->charset[0]) ?
         weechat_iconv_to_internal (script->charset, vbuffer) : NULL;
     weechat_printf_y (buffer, y, "%s", (buf2) ? buf2 : vbuffer);
-    if (buf2)
-        free (buf2);
+    free (buf2);
 
     free (vbuffer);
 }
@@ -398,8 +449,35 @@ plugin_script_api_printf_y_date_tags (struct t_weechat_plugin *weechat_plugin,
         weechat_iconv_to_internal (script->charset, vbuffer) : NULL;
     weechat_printf_y_date_tags (buffer, y, date, tags,
                                 "%s", (buf2) ? buf2 : vbuffer);
-    if (buf2)
-        free (buf2);
+    free (buf2);
+
+    free (vbuffer);
+}
+
+/*
+ * Prints a message on a buffer with free content, with optional date/time
+ * (with microseconds) and tags.
+ */
+
+void
+plugin_script_api_printf_y_datetime_tags (struct t_weechat_plugin *weechat_plugin,
+                                          struct t_plugin_script *script,
+                                          struct t_gui_buffer *buffer, int y,
+                                          time_t date, int date_usec,
+                                          const char *tags,
+                                          const char *format, ...)
+{
+    char *buf2;
+
+    weechat_va_format (format);
+    if (!vbuffer)
+        return;
+
+    buf2 = (script && script->charset && script->charset[0]) ?
+        weechat_iconv_to_internal (script->charset, vbuffer) : NULL;
+    weechat_printf_y_datetime_tags (buffer, y, date, date_usec, tags,
+                                    "%s", (buf2) ? buf2 : vbuffer);
+    free (buf2);
 
     free (vbuffer);
 }
@@ -422,8 +500,7 @@ plugin_script_api_log_printf (struct t_weechat_plugin *weechat_plugin,
     buf2 = (script && script->charset && script->charset[0]) ?
         weechat_iconv_to_internal (script->charset, vbuffer) : NULL;
     weechat_log_printf ("%s", (buf2) ? buf2 : vbuffer);
-    if (buf2)
-        free (buf2);
+    free (buf2);
 
     free (vbuffer);
 }
@@ -461,14 +538,9 @@ plugin_script_api_hook_command (struct t_weechat_plugin *weechat_plugin,
                                      callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -502,14 +574,9 @@ plugin_script_api_hook_command_run (struct t_weechat_plugin *weechat_plugin,
                                          callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -542,14 +609,9 @@ plugin_script_api_hook_timer (struct t_weechat_plugin *weechat_plugin,
                                    callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -583,14 +645,9 @@ plugin_script_api_hook_fd (struct t_weechat_plugin *weechat_plugin,
                                 callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -629,14 +686,9 @@ plugin_script_api_hook_process_hashtable (struct t_weechat_plugin *weechat_plugi
                                                function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -664,6 +716,45 @@ plugin_script_api_hook_process (struct t_weechat_plugin *weechat_plugin,
     return plugin_script_api_hook_process_hashtable (weechat_plugin, script,
                                                      command, NULL, timeout,
                                                      callback, function, data);
+}
+
+/*
+ * Hooks a URL.
+ *
+ * Returns pointer to new hook, NULL if error.
+ */
+
+struct t_hook *
+plugin_script_api_hook_url (struct t_weechat_plugin *weechat_plugin,
+                            struct t_plugin_script *script,
+                            const char *url,
+                            struct t_hashtable *options,
+                            int timeout,
+                            int (*callback)(const void *pointer,
+                                            void *data,
+                                            const char *url,
+                                            struct t_hashtable *options,
+                                            struct t_hashtable *output),
+                            const char *function,
+                            const char *data)
+{
+    char *function_and_data;
+    struct t_hook *new_hook;
+
+    if (!script)
+        return NULL;
+
+    function_and_data = plugin_script_build_function_and_data (function, data);
+
+    new_hook = weechat_hook_url (url, options, timeout,
+                                 callback, script, function_and_data);
+
+    if (new_hook)
+        weechat_hook_set (new_hook, "subplugin", script->name);
+    else
+        free (function_and_data);
+
+    return new_hook;
 }
 
 /*
@@ -705,14 +796,9 @@ plugin_script_api_hook_connect (struct t_weechat_plugin *weechat_plugin,
                                      callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -747,14 +833,9 @@ plugin_script_api_hook_line (struct t_weechat_plugin *weechat_plugin,
                                   script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -775,6 +856,7 @@ plugin_script_api_hook_print (struct t_weechat_plugin *weechat_plugin,
                                               void *data,
                                               struct t_gui_buffer *buffer,
                                               time_t date,
+                                              int date_usec,
                                               int tags_count,
                                               const char **tags,
                                               int displayed, int highlight,
@@ -795,14 +877,9 @@ plugin_script_api_hook_print (struct t_weechat_plugin *weechat_plugin,
                                    callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -837,14 +914,9 @@ plugin_script_api_hook_signal (struct t_weechat_plugin *weechat_plugin,
                                     function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -878,14 +950,9 @@ plugin_script_api_hook_hsignal (struct t_weechat_plugin *weechat_plugin,
                                      function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -919,14 +986,9 @@ plugin_script_api_hook_config (struct t_weechat_plugin *weechat_plugin,
                                     function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -962,14 +1024,9 @@ plugin_script_api_hook_completion (struct t_weechat_plugin *weechat_plugin,
                                         callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -1004,14 +1061,9 @@ plugin_script_api_hook_modifier (struct t_weechat_plugin *weechat_plugin,
                                       callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -1047,14 +1099,9 @@ plugin_script_api_hook_info (struct t_weechat_plugin *weechat_plugin,
                                   callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -1094,14 +1141,9 @@ plugin_script_api_hook_info_hashtable (struct t_weechat_plugin *weechat_plugin,
                                             function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -1140,14 +1182,9 @@ plugin_script_api_hook_infolist (struct t_weechat_plugin *weechat_plugin,
                                       callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -1179,14 +1216,9 @@ plugin_script_api_hook_focus (struct t_weechat_plugin *weechat_plugin,
     new_hook = weechat_hook_focus (area, callback, script, function_and_data);
 
     if (new_hook)
-    {
         weechat_hook_set (new_hook, "subplugin", script->name);
-    }
     else
-    {
-        if (function_and_data)
-            free (function_and_data);
-    }
+        free (function_and_data);
 
     return new_hook;
 }
@@ -1249,10 +1281,8 @@ plugin_script_api_buffer_new_props (struct t_weechat_plugin *weechat_plugin,
     }
     else
     {
-        if (function_and_data_input)
-            free (function_and_data_input);
-        if (function_and_data_close)
-            free (function_and_data_close);
+        free (function_and_data_input);
+        free (function_and_data_close);
     }
 
     return new_buffer;
@@ -1365,8 +1395,7 @@ plugin_script_api_command_options (struct t_weechat_plugin *weechat_plugin,
                                   (command2) ? command2 : command,
                                   options);
 
-    if (command2)
-        free (command2);
+    free (command2);
 
     return rc;
 }

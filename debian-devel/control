@@ -6,8 +6,9 @@ Build-Depends:
     asciidoctor (>= 1.5.4),
     ruby-pygments.rb,
     debhelper (>= 12),
-    cmake, pkg-config,
-    libncursesw5-dev,
+    cmake,
+    pkgconf,
+    libncurses-dev,
     gem2deb,
     libperl-dev,
     python3-dev,
@@ -21,8 +22,9 @@ Build-Depends:
     libgcrypt20-dev,
     libgnutls28-dev,
     libzstd-dev,
-    zlib1g-dev
-Standards-Version: 4.6.0.1
+    zlib1g-dev,
+    libcjson-dev
+Standards-Version: 4.6.2
 Homepage: https://weechat.org/
 Vcs-Git: https://salsa.debian.org/kolter/weechat.git
 Vcs-Browser: https://salsa.debian.org/kolter/weechat

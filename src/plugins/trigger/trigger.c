@@ -1,7 +1,7 @@
 /*
  * trigger.c - trigger plugin for WeeChat
  *
- * Copyright (C) 2014-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2014-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -39,7 +39,7 @@ WEECHAT_PLUGIN_DESCRIPTION(N_("Text replacement and command execution on events 
 WEECHAT_PLUGIN_AUTHOR("Sébastien Helleu <flashcode@flashtux.org>");
 WEECHAT_PLUGIN_VERSION(WEECHAT_VERSION);
 WEECHAT_PLUGIN_LICENSE(WEECHAT_LICENSE);
-WEECHAT_PLUGIN_PRIORITY(13000);
+WEECHAT_PLUGIN_PRIORITY(TRIGGER_PLUGIN_PRIORITY);
 
 struct t_weechat_plugin *weechat_trigger_plugin = NULL;
 
@@ -102,7 +102,7 @@ trigger_search_option (const char *option_name)
 
     for (i = 0; i < TRIGGER_NUM_OPTIONS; i++)
     {
-        if (weechat_strcasecmp (trigger_option_string[i], option_name) == 0)
+        if (strcmp (trigger_option_string[i], option_name) == 0)
             return i;
     }
 
@@ -121,9 +121,12 @@ trigger_search_hook_type (const char *type)
 {
     int i;
 
+    if (!type)
+        return -1;
+
     for (i = 0; i < TRIGGER_NUM_HOOK_TYPES; i++)
     {
-        if (weechat_strcasecmp (trigger_hook_type_string[i], type) == 0)
+        if (strcmp (trigger_hook_type_string[i], type) == 0)
             return i;
     }
 
@@ -163,9 +166,12 @@ trigger_search_return_code (const char *return_code)
 {
     int i;
 
+    if (!return_code)
+        return -1;
+
     for (i = 0; i < TRIGGER_NUM_RETURN_CODES; i++)
     {
-        if (weechat_strcasecmp (trigger_return_code_string[i], return_code) == 0)
+        if (strcmp (trigger_return_code_string[i], return_code) == 0)
             return i;
     }
 
@@ -184,9 +190,12 @@ trigger_search_post_action (const char *post_action)
 {
     int i;
 
+    if (!post_action)
+        return -1;
+
     for (i = 0; i < TRIGGER_NUM_POST_ACTIONS; i++)
     {
-        if (weechat_strcasecmp (trigger_post_action_string[i], post_action) == 0)
+        if (strcmp (trigger_post_action_string[i], post_action) == 0)
             return i;
     }
 
@@ -211,7 +220,7 @@ trigger_search (const char *name)
     for (ptr_trigger = triggers; ptr_trigger;
          ptr_trigger = ptr_trigger->next_trigger)
     {
-        if (weechat_strcasecmp (ptr_trigger->name, name) == 0)
+        if (strcmp (ptr_trigger->name, name) == 0)
             return ptr_trigger;
     }
 
@@ -250,7 +259,7 @@ trigger_search_with_option (struct t_config_option *option)
     for (ptr_trigger = triggers; ptr_trigger;
          ptr_trigger = ptr_trigger->next_trigger)
     {
-        if (weechat_strncasecmp (ptr_trigger->name, ptr_name, num_chars) == 0)
+        if (weechat_strncmp (ptr_trigger->name, ptr_name, num_chars) == 0)
             break;
     }
 
@@ -270,8 +279,7 @@ trigger_unhook (struct t_trigger *trigger)
     {
         for (i = 0; i < trigger->hooks_count; i++)
         {
-            if (trigger->hooks[i])
-                weechat_unhook (trigger->hooks[i]);
+            weechat_unhook (trigger->hooks[i]);
         }
         free (trigger->hooks);
         trigger->hooks = NULL;
@@ -320,7 +328,7 @@ trigger_hook (struct t_trigger *trigger)
         0,
         NULL);
 
-    switch (weechat_config_integer (trigger->options[TRIGGER_OPTION_HOOK]))
+    switch (weechat_config_enum (trigger->options[TRIGGER_OPTION_HOOK]))
     {
         case TRIGGER_HOOK_SIGNAL:
             if (argv && (argc >= 1))
@@ -451,16 +459,11 @@ trigger_hook (struct t_trigger *trigger)
                         (eval_completion) ? eval_completion : "",
                         &trigger_callback_command_cb,
                         trigger, NULL);
-                    if (eval_desc)
-                        free (eval_desc);
-                    if (eval_args)
-                        free (eval_args);
-                    if (eval_desc_args)
-                        free (eval_desc_args);
-                    if (eval_completion)
-                        free (eval_completion);
-                    if (extra_vars)
-                        weechat_hashtable_free (extra_vars);
+                    free (eval_desc);
+                    free (eval_args);
+                    free (eval_desc_args);
+                    free (eval_completion);
+                    weechat_hashtable_free (extra_vars);
                 }
             }
             break;
@@ -595,10 +598,8 @@ trigger_hook (struct t_trigger *trigger)
                         trigger->name);
     }
 
-    if (argv)
-        weechat_string_free_split (argv);
-    if (argv_eol)
-        weechat_string_free_split (argv_eol);
+    weechat_string_free_split (argv);
+    weechat_string_free_split (argv_eol);
 }
 
 /*
@@ -617,19 +618,15 @@ trigger_regex_free (int *regex_count, struct t_trigger_regex **regex)
     {
         for (i = 0; i < *regex_count; i++)
         {
-            if ((*regex)[i].variable)
-                free ((*regex)[i].variable);
-            if ((*regex)[i].str_regex)
-                free ((*regex)[i].str_regex);
+            free ((*regex)[i].variable);
+            free ((*regex)[i].str_regex);
             if ((*regex)[i].regex)
             {
                 regfree ((*regex)[i].regex);
                 free ((*regex)[i].regex);
             }
-            if ((*regex)[i].replace)
-                free ((*regex)[i].replace);
-            if ((*regex)[i].replace_escaped)
-                free ((*regex)[i].replace_escaped);
+            free ((*regex)[i].replace);
+            free ((*regex)[i].replace_escaped);
         }
         free (*regex);
         *regex = NULL;
@@ -701,7 +698,7 @@ trigger_regex_split (const char *str_regex,
 
         /* search the delimiter (which can be more than one char) */
         pos = weechat_utf8_next_char (ptr_regex);
-        while (pos[0] && (weechat_utf8_charcmp (ptr_regex, pos) == 0))
+        while (pos[0] && (weechat_string_charcmp (ptr_regex, pos) == 0))
         {
             pos = weechat_utf8_next_char (pos);
         }
@@ -749,8 +746,7 @@ trigger_regex_split (const char *str_regex,
         /* set regex (command "s" only) */
         if (command == TRIGGER_REGEX_COMMAND_REPLACE)
         {
-            if (str_regex_escaped)
-                free (str_regex_escaped);
+            free (str_regex_escaped);
             str_regex_escaped = weechat_string_convert_escaped_chars ((*regex)[index].str_regex);
             if (!str_regex_escaped)
                 goto memory_error;
@@ -828,10 +824,8 @@ memory_error:
     goto end;
 
 end:
-    if (delimiter)
-        free (delimiter);
-    if (str_regex_escaped)
-        free (str_regex_escaped);
+    free (delimiter);
+    free (str_regex_escaped);
     if (rc < 0)
         trigger_regex_free (regex_count, regex);
 
@@ -954,7 +948,7 @@ trigger_find_pos (struct t_trigger *trigger, struct t_trigger *list_triggers)
     for (ptr_trigger = list_triggers; ptr_trigger;
          ptr_trigger = ptr_trigger->next_trigger)
     {
-        if (weechat_strcasecmp (trigger->name, ptr_trigger->name) < 0)
+        if (weechat_strcmp (trigger->name, ptr_trigger->name) < 0)
             return ptr_trigger;
     }
 
@@ -1162,8 +1156,7 @@ trigger_rename (struct t_trigger *trigger, const char *name)
         }
     }
 
-    if (trigger->name)
-        free (trigger->name);
+    free (trigger->name);
     trigger->name = strdup (name);
 
     free (option_name);
@@ -1234,15 +1227,12 @@ trigger_free (struct t_trigger *trigger)
     /* free data */
     trigger_unhook (trigger);
     trigger_regex_free (&trigger->regex_count, &trigger->regex);
-    if (trigger->name)
-        free (trigger->name);
+    free (trigger->name);
     for (i = 0; i < TRIGGER_NUM_OPTIONS; i++)
     {
-        if (trigger->options[i])
-            weechat_config_option_free (trigger->options[i]);
+        weechat_config_option_free (trigger->options[i]);
     }
-    if (trigger->commands)
-        weechat_string_free_split (trigger->commands);
+    weechat_string_free_split (trigger->commands);
 
     free (trigger);
 
@@ -1276,13 +1266,13 @@ trigger_print_log ()
          ptr_trigger = ptr_trigger->next_trigger)
     {
         weechat_log_printf ("");
-        weechat_log_printf ("[trigger (addr:0x%lx)]", ptr_trigger);
-        weechat_log_printf ("  name. . . . . . . . . . : '%s'",  ptr_trigger->name);
+        weechat_log_printf ("[trigger (addr:%p)]", ptr_trigger);
+        weechat_log_printf ("  name. . . . . . . . . . : '%s'", ptr_trigger->name);
         weechat_log_printf ("  enabled . . . . . . . . : %d",
                             weechat_config_integer (ptr_trigger->options[TRIGGER_OPTION_ENABLED]));
         weechat_log_printf ("  hook . .  . . . . . . . : %d ('%s')",
-                            weechat_config_integer (ptr_trigger->options[TRIGGER_OPTION_HOOK]),
-                            trigger_hook_type_string[weechat_config_integer (ptr_trigger->options[TRIGGER_OPTION_HOOK])]);
+                            weechat_config_enum (ptr_trigger->options[TRIGGER_OPTION_HOOK]),
+                            trigger_hook_type_string[weechat_config_enum (ptr_trigger->options[TRIGGER_OPTION_HOOK])]);
         weechat_log_printf ("  arguments . . . . . . . : '%s'",
                             weechat_config_string (ptr_trigger->options[TRIGGER_OPTION_ARGUMENTS]));
         weechat_log_printf ("  conditions. . . . . . . : '%s'",
@@ -1292,39 +1282,39 @@ trigger_print_log ()
         weechat_log_printf ("  command . . . . . . . . : '%s'",
                             weechat_config_string (ptr_trigger->options[TRIGGER_OPTION_COMMAND]));
         weechat_log_printf ("  return_code . . . . . . : %d ('%s')",
-                            weechat_config_integer (ptr_trigger->options[TRIGGER_OPTION_RETURN_CODE]),
-                            trigger_return_code_string[weechat_config_integer (ptr_trigger->options[TRIGGER_OPTION_RETURN_CODE])]);
+                            weechat_config_enum (ptr_trigger->options[TRIGGER_OPTION_RETURN_CODE]),
+                            trigger_return_code_string[weechat_config_enum (ptr_trigger->options[TRIGGER_OPTION_RETURN_CODE])]);
         weechat_log_printf ("  post_action . . . . . . : %d ('%s')",
-                            weechat_config_integer (ptr_trigger->options[TRIGGER_OPTION_POST_ACTION]),
-                            trigger_post_action_string[weechat_config_integer (ptr_trigger->options[TRIGGER_OPTION_POST_ACTION])]);
-        weechat_log_printf ("  hooks_count . . . . . . : %d",    ptr_trigger->hooks_count);
-        weechat_log_printf ("  hooks . . . . . . . . . : 0x%lx", ptr_trigger->hooks);
+                            weechat_config_enum (ptr_trigger->options[TRIGGER_OPTION_POST_ACTION]),
+                            trigger_post_action_string[weechat_config_enum (ptr_trigger->options[TRIGGER_OPTION_POST_ACTION])]);
+        weechat_log_printf ("  hooks_count . . . . . . : %d", ptr_trigger->hooks_count);
+        weechat_log_printf ("  hooks . . . . . . . . . : %p", ptr_trigger->hooks);
         for (i = 0; i < ptr_trigger->hooks_count; i++)
         {
-            weechat_log_printf ("    hooks[%03d]. . . . . . : 0x%lx",
+            weechat_log_printf ("    hooks[%03d]. . . . . . : %p",
                                 i, ptr_trigger->hooks[i]);
         }
-        weechat_log_printf ("  hook_count_cb . . . . . : %llu",  ptr_trigger->hook_count_cb);
-        weechat_log_printf ("  hook_count_cmd. . . . . : %llu",  ptr_trigger->hook_count_cmd);
-        weechat_log_printf ("  hook_running. . . . . . : %d",    ptr_trigger->hook_running);
-        weechat_log_printf ("  hook_print_buffers. . . : '%s'",  ptr_trigger->hook_print_buffers);
-        weechat_log_printf ("  regex_count . . . . . . : %d",    ptr_trigger->regex_count);
-        weechat_log_printf ("  regex . . . . . . . . . : 0x%lx", ptr_trigger->regex);
+        weechat_log_printf ("  hook_count_cb . . . . . : %llu", ptr_trigger->hook_count_cb);
+        weechat_log_printf ("  hook_count_cmd. . . . . : %llu", ptr_trigger->hook_count_cmd);
+        weechat_log_printf ("  hook_running. . . . . . : %d", ptr_trigger->hook_running);
+        weechat_log_printf ("  hook_print_buffers. . . : '%s'", ptr_trigger->hook_print_buffers);
+        weechat_log_printf ("  regex_count . . . . . . : %d", ptr_trigger->regex_count);
+        weechat_log_printf ("  regex . . . . . . . . . : %p", ptr_trigger->regex);
         for (i = 0; i < ptr_trigger->regex_count; i++)
         {
             weechat_log_printf ("    regex[%03d].variable . . . : '%s'",
                                 i, ptr_trigger->regex[i].variable);
             weechat_log_printf ("    regex[%03d].str_regex. . . : '%s'",
                                 i, ptr_trigger->regex[i].str_regex);
-            weechat_log_printf ("    regex[%03d].regex. . . . . : 0x%lx",
+            weechat_log_printf ("    regex[%03d].regex. . . . . : %p",
                                 i, ptr_trigger->regex[i].regex);
             weechat_log_printf ("    regex[%03d].replace. . . . : '%s'",
                                 i, ptr_trigger->regex[i].replace);
             weechat_log_printf ("    regex[%03d].replace_escaped: '%s'",
                                 i, ptr_trigger->regex[i].replace_escaped);
         }
-        weechat_log_printf ("  commands_count. . . . . : %d",    ptr_trigger->commands_count);
-        weechat_log_printf ("  commands. . . . . . . . : 0x%lx", ptr_trigger->commands);
+        weechat_log_printf ("  commands_count. . . . . : %d", ptr_trigger->commands_count);
+        weechat_log_printf ("  commands. . . . . . . . : %p", ptr_trigger->commands);
         if (ptr_trigger->commands)
         {
             for (i = 0; ptr_trigger->commands[i]; i++)
@@ -1333,8 +1323,8 @@ trigger_print_log ()
                                     i, ptr_trigger->commands[i]);
             }
         }
-        weechat_log_printf ("  prev_trigger. . . . . . : 0x%lx", ptr_trigger->prev_trigger);
-        weechat_log_printf ("  next_trigger. . . . . . : 0x%lx", ptr_trigger->next_trigger);
+        weechat_log_printf ("  prev_trigger. . . . . . : %p", ptr_trigger->prev_trigger);
+        weechat_log_printf ("  next_trigger. . . . . . : %p", ptr_trigger->next_trigger);
     }
 }
 
@@ -1353,8 +1343,7 @@ trigger_debug_dump_cb (const void *pointer, void *data,
     (void) signal;
     (void) type_data;
 
-    if (!signal_data
-        || (weechat_strcasecmp ((char *)signal_data, TRIGGER_PLUGIN_NAME) == 0))
+    if (!signal_data || (strcmp ((char *)signal_data, TRIGGER_PLUGIN_NAME) == 0))
     {
         weechat_log_printf ("");
         weechat_log_printf ("***** \"%s\" plugin dump *****",
@@ -1382,6 +1371,8 @@ weechat_plugin_init (struct t_weechat_plugin *plugin, int argc, char *argv[])
     (void) argv;
 
     weechat_plugin = plugin;
+
+    trigger_enabled = 1;
 
     trigger_callback_init ();
 
@@ -1419,6 +1410,7 @@ weechat_plugin_end (struct t_weechat_plugin *plugin)
     trigger_free_all ();
     trigger_config_free ();
     trigger_callback_end ();
+    trigger_context_id = 0;
 
     return WEECHAT_RC_OK;
 }

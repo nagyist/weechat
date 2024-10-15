@@ -51,6 +51,7 @@ function weechat_list_remove(string $p0, string $p1): int {}
 function weechat_list_remove_all(string $p0): int {}
 function weechat_list_free(string $p0): int {}
 function weechat_config_new(string $p0, mixed $p1, string $p2): string {}
+function weechat_config_set_version(string $p0, int $p1, mixed $p2, string $p3): int {}
 function weechat_config_new_section(): string {}
 function weechat_config_search_section(string $p0, string $p1): string {}
 function weechat_config_new_option(): string {}
@@ -61,16 +62,25 @@ function weechat_config_option_set(string $p0, string $p1, int $p2): int {}
 function weechat_config_option_set_null(string $p0, int $p1): int {}
 function weechat_config_option_unset(string $p0): int {}
 function weechat_config_option_rename(string $p0, string $p1): int {}
+function weechat_config_option_get_string(string $p0, string $p1): string {}
+function weechat_config_option_get_pointer(string $p0, string $p1): string {}
 function weechat_config_option_is_null(string $p0): int {}
 function weechat_config_option_default_is_null(string $p0): int {}
 function weechat_config_boolean(string $p0): int {}
 function weechat_config_boolean_default(string $p0): int {}
+function weechat_config_boolean_inherited(string $p0): int {}
 function weechat_config_integer(string $p0): int {}
 function weechat_config_integer_default(string $p0): int {}
+function weechat_config_integer_inherited(string $p0): int {}
 function weechat_config_string(string $p0): string {}
 function weechat_config_string_default(string $p0): string {}
+function weechat_config_string_inherited(string $p0): string {}
 function weechat_config_color(string $p0): string {}
 function weechat_config_color_default(string $p0): string {}
+function weechat_config_color_inherited(string $p0): string {}
+function weechat_config_enum(string $p0): int {}
+function weechat_config_enum_default(string $p0): int {}
+function weechat_config_enum_inherited(string $p0): int {}
 function weechat_config_write_option(string $p0, string $p1): int {}
 function weechat_config_write_line(string $p0, string $p1, string $p2): int {}
 function weechat_config_write(string $p0): int {}
@@ -92,8 +102,10 @@ function weechat_prefix(string $p0): string {}
 function weechat_color(string $p0): string {}
 function weechat_print(string $p0, string $p1): int {}
 function weechat_print_date_tags(string $p0, int $p1, string $p2, string $p3): int {}
+function weechat_print_datetime_tags(string $p0, int $p1, int $p2, string $p3, string $p4): int {}
 function weechat_print_y(string $p0, int $p1, string $p2): int {}
 function weechat_print_y_date_tags(string $p0, int $p1, int $p2, string $p3, string $p4): int {}
+function weechat_print_y_datetime_tags(string $p0, int $p1, int $p2, int $p3, string $p4, string $p5): int {}
 function weechat_log_print(string $p0): int {}
 function weechat_hook_command(string $p0, string $p1, string $p2, string $p3, string $p4, mixed $p5, string $p6): string {}
 function weechat_hook_completion(string $p0, string $p1, mixed $p2, string $p3): string {}
@@ -104,6 +116,7 @@ function weechat_hook_timer(int $p0, int $p1, int $p2, mixed $p3, string $p4): s
 function weechat_hook_fd(int $p0, int $p1, int $p2, int $p3, mixed $p4, string $p5): string {}
 function weechat_hook_process(string $p0, int $p1, mixed $p2, string $p3): string {}
 function weechat_hook_process_hashtable(string $p0, array $p1, int $p2, mixed $p3, string $p4): string {}
+function weechat_hook_url(string $p0, array $p1, int $p2, mixed $p3, string $p4): string {}
 function weechat_hook_connect(): string {}
 function weechat_hook_line(string $p0, string $p1, string $p2, mixed $p3, string $p4): string {}
 function weechat_hook_print(string $p0, string $p1, string $p2, int $p3, mixed $p4, string $p5): string {}
@@ -136,6 +149,7 @@ function weechat_buffer_get_pointer(string $p0, string $p1): string {}
 function weechat_buffer_set(string $p0, string $p1, string $p2): int {}
 function weechat_buffer_string_replace_local_var(string $p0, string $p1): string {}
 function weechat_buffer_match_list(string $p0, string $p1): int {}
+function weechat_line_search_by_id(string $p0, int $p1): string {}
 function weechat_current_window(): string {}
 function weechat_window_search_with_buffer(string $p0): string {}
 function weechat_window_get_integer(string $p0, string $p1): int {}
@@ -205,6 +219,7 @@ function weechat_hdata_search(string $p0, string $p1, string $p2, array $p3, arr
 function weechat_hdata_char(string $p0, string $p1, string $p2): int {}
 function weechat_hdata_integer(string $p0, string $p1, string $p2): int {}
 function weechat_hdata_long(string $p0, string $p1, string $p2): int {}
+function weechat_hdata_longlong(string $p0, string $p1, string $p2): int {}
 function weechat_hdata_string(string $p0, string $p1, string $p2): string {}
 function weechat_hdata_pointer(string $p0, string $p1, string $p2): string {}
 function weechat_hdata_time(string $p0, string $p1, string $p2): int {}

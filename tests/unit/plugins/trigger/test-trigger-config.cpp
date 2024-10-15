@@ -1,7 +1,7 @@
 /*
  * test-trigger-config.cpp - test trigger configuration functions
  *
- * Copyright (C) 2021-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2021-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -26,7 +26,7 @@
 extern "C"
 {
 #include <stdio.h>
-#include "src/core/wee-hook.h"
+#include "src/core/core-hook.h"
 #include "src/plugins/trigger/trigger.h"
 }
 
@@ -188,13 +188,13 @@ TEST(TriggerConfig, DefaultTriggerCmdPass)
     WEE_CHECK_MODIFIER_INPUT("/quote pass ******",
                              "/quote pass secret");
 
-    /* /secure passphrase <pasphrase> */
+    /* /secure passphrase <passphrase> */
     WEE_CHECK_MODIFIER_INPUT("/secure passphrase",
                              "/secure passphrase");
     WEE_CHECK_MODIFIER_INPUT("/secure passphrase **********************",
                              "/secure passphrase this is the passphrase");
 
-    /* /secure decrypt <pasphrase> */
+    /* /secure decrypt <passphrase> */
     WEE_CHECK_MODIFIER_INPUT("/secure decrypt",
                              "/secure decrypt");
     WEE_CHECK_MODIFIER_INPUT("/secure decrypt **********************",

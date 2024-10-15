@@ -1,7 +1,7 @@
 /*
  * gui-curses-window.c - window display functions for Curses GUI
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -34,11 +34,11 @@
 #include <termios.h>
 
 #include "../../core/weechat.h"
-#include "../../core/wee-config.h"
-#include "../../core/wee-eval.h"
-#include "../../core/wee-hook.h"
-#include "../../core/wee-log.h"
-#include "../../core/wee-string.h"
+#include "../../core/core-config.h"
+#include "../../core/core-eval.h"
+#include "../../core/core-hook.h"
+#include "../../core/core-log.h"
+#include "../../core/core-string.h"
 #include "../../plugins/plugin.h"
 #include "../gui-window.h"
 #include "../gui-bar.h"
@@ -48,7 +48,6 @@
 #include "../gui-color.h"
 #include "../gui-cursor.h"
 #include "../gui-hotlist.h"
-#include "../gui-input.h"
 #include "../gui-key.h"
 #include "../gui-layout.h"
 #include "../gui-line.h"
@@ -56,6 +55,10 @@
 #include "../gui-mouse.h"
 #include "../gui-nicklist.h"
 #include "gui-curses.h"
+#include "gui-curses-chat.h"
+#include "gui-curses-color.h"
+#include "gui-curses-main.h"
+#include "gui-curses-window.h"
 
 
 #define GUI_WINDOW_MAX_SAVED_STYLES 32
@@ -825,7 +828,7 @@ gui_window_string_apply_color_fg_bg (unsigned char **string, WINDOW *window)
         }
     }
     /*
-     * note: the comma is an old separator not used any more
+     * note: the comma is an old separator not used anymore
      * (since WeeChat 2.6), but we still use it here so in case of /upgrade
      * this will not break colors in old messages
      */
@@ -1365,12 +1368,13 @@ gui_window_switch_to_buffer (struct t_gui_window *window,
         window->buffer->lines->last_read_line = window->buffer->lines->last_line;
     }
 
-    gui_input_move_to_buffer (old_buffer, window->buffer);
+    gui_buffer_input_move_to_buffer (old_buffer, window->buffer);
 
     if (old_buffer != buffer)
     {
-        (void) hook_signal_send ("buffer_switch",
-                                 WEECHAT_HOOK_SIGNAL_POINTER, buffer);
+        (void) gui_buffer_send_signal (buffer,
+                                       "buffer_switch",
+                                       WEECHAT_HOOK_SIGNAL_POINTER, buffer);
     }
 }
 
@@ -1407,7 +1411,7 @@ gui_window_switch (struct t_gui_window *window)
 
     old_window->refresh_needed = 1;
 
-    gui_input_move_to_buffer (old_window->buffer, window->buffer);
+    gui_buffer_input_move_to_buffer (old_window->buffer, window->buffer);
 
     (void) hook_signal_send ("window_switch",
                              WEECHAT_HOOK_SIGNAL_POINTER, gui_current_window);
@@ -1823,7 +1827,7 @@ gui_window_refresh_windows ()
 
     for (ptr_bar = gui_bars; ptr_bar; ptr_bar = ptr_bar->next_bar)
     {
-        if ((CONFIG_INTEGER(ptr_bar->options[GUI_BAR_OPTION_TYPE]) == GUI_BAR_TYPE_ROOT)
+        if ((CONFIG_ENUM(ptr_bar->options[GUI_BAR_OPTION_TYPE]) == GUI_BAR_TYPE_ROOT)
             && ptr_bar->bar_window
             && !CONFIG_BOOLEAN(ptr_bar->options[GUI_BAR_OPTION_HIDDEN]))
         {
@@ -2462,7 +2466,8 @@ gui_window_swap (struct t_gui_window *window, int direction)
 /*
  * Called when terminal size is modified.
  *
- * Argument full_refresh == 1 when Ctrl+L is pressed, or if terminal is resized.
+ * Argument full_refresh == 1 when ctrl-l is pressed, or if terminal is
+ * resized.
  */
 
 void
@@ -2585,17 +2590,6 @@ gui_window_set_title (const char *title)
     {
         printf ("\033&f0k%dD%s", (int)(strlen (new_title) + 1), new_title);
     }
-    /* the following terminals support the xterm escape codes */
-    else if ((strncmp (envterm, "xterm", 5) == 0)
-             || (strncmp (envterm, "rxvt", 4) == 0)
-             || (strncmp (envterm, "alacritty", 9) == 0)
-             || (strcmp (envterm, "Eterm") == 0)
-             || (strcmp (envterm, "aixterm") == 0)
-             || (strcmp (envterm, "iris-ansi") == 0)
-             || (strcmp (envterm, "dtterm") == 0))
-    {
-        printf ("\33]0;%s\7", new_title);
-    }
     else if ((strncmp (envterm, "screen", 6) == 0)
              || (strncmp (envterm, "tmux", 4) == 0))
     {
@@ -2628,6 +2622,11 @@ gui_window_set_title (const char *title)
         /* trying to set the title of a backgrounded xterm like terminal */
         printf ("\33]0;%s\7", new_title);
     }
+    else
+    {    /* we suppose all other terminals support the xterm escape codes */
+        printf ("\33]0;%s\7", new_title);
+    }
+
     fflush (stdout);
 
     free (new_title);
@@ -2647,7 +2646,7 @@ gui_window_send_clipboard (const char *storage_unit, const char *text)
     text_base64 = malloc ((length * 4) + 1);
     if (text_base64)
     {
-        if (string_base64_encode (text, length, text_base64) >= 0)
+        if (string_base64_encode (0, text, length, text_base64) >= 0)
         {
             fprintf (stderr, "\033]52;%s;%s\a",
                      (storage_unit) ? storage_unit : "",
@@ -2717,7 +2716,7 @@ void
 gui_window_objects_print_log (struct t_gui_window *window)
 {
     log_printf ("  window specific objects for Curses:");
-    log_printf ("    win_chat. . . . . . . : 0x%lx", GUI_WINDOW_OBJECTS(window)->win_chat);
-    log_printf ("    win_separator_horiz . : 0x%lx", GUI_WINDOW_OBJECTS(window)->win_separator_horiz);
-    log_printf ("    win_separator_vertic. : 0x%lx", GUI_WINDOW_OBJECTS(window)->win_separator_vertic);
+    log_printf ("    win_chat. . . . . . . : %p", GUI_WINDOW_OBJECTS(window)->win_chat);
+    log_printf ("    win_separator_horiz . : %p", GUI_WINDOW_OBJECTS(window)->win_separator_horiz);
+    log_printf ("    win_separator_vertic. : %p", GUI_WINDOW_OBJECTS(window)->win_separator_vertic);
 }

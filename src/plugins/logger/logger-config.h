@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -21,6 +21,7 @@
 #define WEECHAT_PLUGIN_LOGGER_CONFIG_H
 
 #define LOGGER_CONFIG_NAME "logger"
+#define LOGGER_CONFIG_PRIO_NAME (TO_STR(LOGGER_PLUGIN_PRIORITY) "|" LOGGER_CONFIG_NAME)
 
 extern struct t_config_option *logger_config_look_backlog;
 extern struct t_config_option *logger_config_look_backlog_conditions;
@@ -33,6 +34,7 @@ extern struct t_config_option *logger_config_file_color_lines;
 extern struct t_config_option *logger_config_file_flush_delay;
 extern struct t_config_option *logger_config_file_fsync;
 extern struct t_config_option *logger_config_file_info_lines;
+extern struct t_config_option *logger_config_file_log_conditions;
 extern struct t_config_option *logger_config_file_mask;
 extern struct t_config_option *logger_config_file_name_lower_case;
 extern struct t_config_option *logger_config_file_nick_prefix;

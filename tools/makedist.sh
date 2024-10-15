@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
 #
 # This file is part of WeeChat, the extensible chat client.
 #
@@ -19,22 +19,21 @@
 #
 
 #
-# Build gzip/bzip2/xz tarballs for WeeChat using git-archive.
+# Build compressed tarballs for WeeChat using git-archive.
 #
 # Syntax:  makedist.sh [<version> [<tree-ish> [<path>]]]
 #
 # Optional arguments:
 #
-#   version   WeeChat version, for example 1.6 or 1.7-dev
+#   version   WeeChat version, for example 4.0.0 or 4.1.0-dev
 #             defaults to current devel version (output of "version.sh devel-full")
-#   tree-ish  git tree-ish, example: v1.6
+#   tree-ish  git tree-ish, example: v4.0.0
 #             defaults to "HEAD"
 #   path      where to put packages
 #             defaults to current directory
 #
 
-# exit on any error
-set -e
+set -o errexit
 
 error ()
 {
@@ -43,38 +42,32 @@ error ()
 }
 
 # check git repository
-ROOT_DIR=$(git rev-parse --show-toplevel)
-if [ -z "${ROOT_DIR}" ] || [ ! -d "${ROOT_DIR}/.git" ]; then
+root_dir=$(git rev-parse --show-toplevel)
+if [ -z "${root_dir}" ] || [ ! -d "${root_dir}/.git" ]; then
     error "this script must be run from WeeChat git repository."
 fi
-cd "${ROOT_DIR}"
+cd "${root_dir}"
 
 # default values
-VERSION="$("${ROOT_DIR}/version.sh" devel-full)"
-TREEISH="HEAD"
-OUTPATH="$(pwd)"
+version="$("${root_dir}/version.sh" devel-full)"
+treeish="HEAD"
+outpath="$(pwd)"
 
 if [ $# -ge 1 ]; then
-    VERSION=$1
+    version=$1
 fi
 if [ $# -ge 2 ]; then
-    TREEISH=$2
+    treeish=$2
 fi
 if [ $# -ge 3 ]; then
-    OUTPATH=$(cd "$3"; pwd)
+    outpath=$(cd "$3"; pwd)
 fi
 
-PREFIX="weechat-${VERSION}/"
-FILE="${OUTPATH}/weechat-${VERSION}.tar"
+prefix="weechat-${version}/"
+file="${outpath}/weechat-${version}.tar"
 
-echo "Building package ${FILE}.gz"
-git archive --prefix="${PREFIX}" "${TREEISH}" | gzip -c >"${FILE}.gz"
+echo "Building package ${file}.gz"
+git archive --prefix="${prefix}" "${treeish}" | gzip -c >"${file}.gz"
 
-echo "Building package ${FILE}.bz2"
-git archive --prefix="${PREFIX}" "${TREEISH}" | bzip2 -c >"${FILE}.bz2"
-
-echo "Building package ${FILE}.xz"
-git archive --prefix="${PREFIX}" "${TREEISH}" | xz -c >"${FILE}.xz"
-
-echo "Building package ${FILE}.zst"
-git archive --prefix="${PREFIX}" "${TREEISH}" | zstd -c -15 >"${FILE}.zst"
+echo "Building package ${file}.xz"
+git archive --prefix="${prefix}" "${treeish}" | xz -c >"${file}.xz"

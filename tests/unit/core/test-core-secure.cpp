@@ -1,7 +1,7 @@
 /*
  * test-core-secure.cpp - test secured data functions
  *
- * Copyright (C) 2018-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2018-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -25,12 +25,14 @@ extern "C"
 {
 #include <string.h>
 #include <gcrypt.h>
-#include "src/core/wee-secure.h"
-#include "src/core/wee-string.h"
+#include "src/core/core-config-file.h"
+#include "src/core/core-crypto.h"
+#include "src/core/core-secure.h"
+#include "src/core/core-secure-config.h"
+#include "src/core/core-string.h"
 
 #define SECURE_PASSPHRASE "this_is_a_secret_passphrase"
 #define SECURE_PASSWORD "this_is_a_secret_password"
-#define TOTP_SECRET "secretpasswordbase32"
 
 extern int secure_derive_key (const char *salt, const char *passphrase,
                               unsigned char *key, int length_key);
@@ -88,17 +90,26 @@ TEST(CoreSecure, DeriveKey)
 TEST(CoreSecure, EncryptDecryptData)
 {
     const char *password = SECURE_PASSWORD;
-    int hash_algo, cipher, rc;
+    int i, j, hash_algo, cipher, rc;
     int length_password, length_encrypted_data, length_decrypted_data;
     char *encrypted_data, *decrypted_data;
 
     /* compute length of password, including the final \0 */
     length_password = strlen (password) + 1;
 
-    for (hash_algo = 0; secure_hash_algo_string[hash_algo]; hash_algo++)
+    for (i = 0; i <= secure_config_crypt_hash_algo->max; i++)
     {
-        for (cipher = 0; secure_cipher_string[cipher]; cipher++)
+        hash_algo = weecrypto_get_hash_algo (
+            secure_config_crypt_hash_algo->string_values[i]);
+        if (hash_algo == GCRY_MD_NONE)
+            continue;
+        for (j = 0; j <= secure_config_crypt_cipher->max; j++)
         {
+            cipher = weecrypto_get_cipher (
+                secure_config_crypt_cipher->string_values[j]);
+            if (cipher == GCRY_CIPHER_NONE)
+                continue;
+
             /* initialize data */
             encrypted_data = NULL;
             decrypted_data = NULL;
@@ -111,8 +122,8 @@ TEST(CoreSecure, EncryptDecryptData)
              */
             rc = secure_encrypt_data (password,
                                       length_password,
-                                      secure_hash_algo[hash_algo],
-                                      secure_cipher[cipher],
+                                      hash_algo,
+                                      cipher,
                                       SECURE_PASSPHRASE,
                                       &encrypted_data,
                                       &length_encrypted_data);
@@ -121,8 +132,8 @@ TEST(CoreSecure, EncryptDecryptData)
             /* decrypt the encrypted password */
             rc = secure_decrypt_data (encrypted_data,
                                       length_encrypted_data,
-                                      secure_hash_algo[hash_algo],
-                                      secure_cipher[cipher],
+                                      hash_algo,
+                                      cipher,
                                       SECURE_PASSPHRASE,
                                       &decrypted_data,
                                       &length_decrypted_data);

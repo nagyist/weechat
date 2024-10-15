@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -25,6 +25,7 @@
 extern struct t_gui_buffer *relay_buffer;
 extern int relay_buffer_selected_line;
 
+extern int relay_buffer_is_relay (struct t_gui_buffer *buffer);
 extern void relay_buffer_refresh (const char *hotlist);
 extern int relay_buffer_input_cb (const void *pointer, void *data,
                                   struct t_gui_buffer *buffer,

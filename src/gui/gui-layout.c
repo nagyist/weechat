@@ -1,7 +1,7 @@
 /*
  * gui-layout.c - layout functions (used by all GUI)
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -28,11 +28,12 @@
 #include <string.h>
 
 #include "../core/weechat.h"
-#include "../core/wee-config.h"
-#include "../core/wee-hdata.h"
-#include "../core/wee-infolist.h"
-#include "../core/wee-log.h"
-#include "../core/wee-string.h"
+#include "../core/core-config.h"
+#include "../core/core-hdata.h"
+#include "../core/core-hook.h"
+#include "../core/core-infolist.h"
+#include "../core/core-log.h"
+#include "../core/core-string.h"
 #include "../plugins/plugin.h"
 #include "gui-layout.h"
 #include "gui-buffer.h"
@@ -54,6 +55,9 @@ struct t_gui_layout *
 gui_layout_search (const char *name)
 {
     struct t_gui_layout *ptr_layout;
+
+    if (!name)
+        return NULL;
 
     for (ptr_layout = gui_layouts; ptr_layout;
          ptr_layout = ptr_layout->next_layout)
@@ -141,8 +145,7 @@ gui_layout_rename (struct t_gui_layout *layout, const char *new_name)
     if (!layout || !new_name || !new_name[0])
         return;
 
-    if (layout->name)
-        free (layout->name);
+    free (layout->name);
     layout->name = strdup (new_name);
 }
 
@@ -168,10 +171,8 @@ gui_layout_buffer_remove (struct t_gui_layout *layout,
         layout->last_layout_buffer = layout_buffer->prev_layout;
 
     /* free data */
-    if (layout_buffer->plugin_name)
-        free (layout_buffer->plugin_name);
-    if (layout_buffer->buffer_name)
-        free (layout_buffer->buffer_name);
+    free (layout_buffer->plugin_name);
+    free (layout_buffer->buffer_name);
 
     free (layout_buffer);
 }
@@ -261,7 +262,7 @@ gui_layout_buffer_get_number (struct t_gui_layout *layout,
     *layout_number = 0;
     *layout_number_merge_order = 0;
 
-    if (!layout)
+    if (!layout || !plugin_name || !buffer_name)
         return;
 
     old_number = -1;
@@ -278,8 +279,8 @@ gui_layout_buffer_get_number (struct t_gui_layout *layout,
         else
             merge_order++;
 
-        if ((string_strcasecmp (ptr_layout_buffer->plugin_name, plugin_name) == 0)
-            && (string_strcasecmp (ptr_layout_buffer->buffer_name, buffer_name) == 0))
+        if ((strcmp (ptr_layout_buffer->plugin_name, plugin_name) == 0)
+            && (strcmp (ptr_layout_buffer->buffer_name, buffer_name) == 0))
         {
             *layout_number = ptr_layout_buffer->number;
             *layout_number_merge_order = merge_order;
@@ -367,6 +368,9 @@ gui_layout_buffer_apply (struct t_gui_layout *layout)
             gui_buffer_set_active_buffer (ptr_buffer);
         }
     }
+
+    (void) hook_signal_send ("layout_buffers_applied",
+                             WEECHAT_HOOK_SIGNAL_STRING, layout->name);
 }
 
 /*
@@ -386,10 +390,8 @@ gui_layout_window_remove (struct t_gui_layout_window *layout_window)
         gui_layout_window_remove (layout_window->child2);
 
     /* free data */
-    if (layout_window->plugin_name)
-        free (layout_window->plugin_name);
-    if (layout_window->buffer_name)
-        free (layout_window->buffer_name);
+    free (layout_window->plugin_name);
+    free (layout_window->buffer_name);
 
     free (layout_window);
 }
@@ -756,6 +758,9 @@ gui_layout_window_apply (struct t_gui_layout *layout,
     gui_layout_window_assign_all_buffers ();
 
     gui_window_switch ((ptr_current_window) ? ptr_current_window : old_window);
+
+    (void) hook_signal_send ("layout_windows_applied",
+                             WEECHAT_HOOK_SIGNAL_STRING, layout->name);
 }
 
 /*
@@ -767,7 +772,7 @@ gui_layout_store_on_exit ()
 {
     struct t_gui_layout *ptr_layout;
 
-    if (CONFIG_BOOLEAN(config_look_save_layout_on_exit) == CONFIG_LOOK_SAVE_LAYOUT_ON_EXIT_NONE)
+    if (CONFIG_ENUM(config_look_save_layout_on_exit) == CONFIG_LOOK_SAVE_LAYOUT_ON_EXIT_NONE)
         return;
 
     ptr_layout = gui_layout_current;
@@ -785,7 +790,7 @@ gui_layout_store_on_exit ()
     }
 
     /* store current layout */
-    switch (CONFIG_BOOLEAN(config_look_save_layout_on_exit))
+    switch (CONFIG_ENUM(config_look_save_layout_on_exit))
     {
         case CONFIG_LOOK_SAVE_LAYOUT_ON_EXIT_BUFFERS:
             gui_layout_buffer_store (ptr_layout);
@@ -824,8 +829,7 @@ gui_layout_free (struct t_gui_layout *layout)
     gui_layout_window_remove (layout->layout_windows);
 
     /* free data */
-    if (layout->name)
-        free (layout->name);
+    free (layout->name);
 
     free (layout);
 }
@@ -1086,19 +1090,19 @@ gui_layout_print_log_window (struct t_gui_layout_window *layout_window,
                              int level)
 {
     log_printf ("");
-    log_printf ("  [layout window (addr:0x%lx) (%s) (level %d)]",
+    log_printf ("  [layout window (addr:%p) (%s) (level %d)]",
                 layout_window,
                 (layout_window->plugin_name) ? "leaf" : "node",
                 level);
 
-    log_printf ("    internal_id. . . . . : %d",    layout_window->internal_id);
-    log_printf ("    parent_node. . . . . : 0x%lx", layout_window->parent_node);
-    log_printf ("    split_pct. . . . . . : %d",    layout_window->split_pct);
-    log_printf ("    split_horiz. . . . . : %d",    layout_window->split_horiz);
-    log_printf ("    child1 . . . . . . . : 0x%lx", layout_window->child1);
-    log_printf ("    child2 . . . . . . . : 0x%lx", layout_window->child2);
-    log_printf ("    plugin_name. . . . . : '%s'",  layout_window->plugin_name);
-    log_printf ("    buffer_name. . . . . : '%s'",  layout_window->buffer_name);
+    log_printf ("    internal_id. . . . . : %d", layout_window->internal_id);
+    log_printf ("    parent_node. . . . . : %p", layout_window->parent_node);
+    log_printf ("    split_pct. . . . . . : %d", layout_window->split_pct);
+    log_printf ("    split_horiz. . . . . : %d", layout_window->split_horiz);
+    log_printf ("    child1 . . . . . . . : %p", layout_window->child1);
+    log_printf ("    child2 . . . . . . . : %p", layout_window->child2);
+    log_printf ("    plugin_name. . . . . : '%s'", layout_window->plugin_name);
+    log_printf ("    buffer_name. . . . . : '%s'", layout_window->buffer_name);
 
     if (layout_window->child1)
         gui_layout_print_log_window (layout_window->child1, level + 1);
@@ -1118,30 +1122,30 @@ gui_layout_print_log ()
     struct t_gui_layout_buffer *ptr_layout_buffer;
 
     log_printf ("");
-    log_printf ("gui_layouts . . . . . . . . . : 0x%lx", gui_layouts);
-    log_printf ("last_gui_layout . . . . . . . : 0x%lx", last_gui_layout);
-    log_printf ("gui_layout_current. . . . . . : 0x%lx", gui_layout_current);
+    log_printf ("gui_layouts . . . . . . . . . : %p", gui_layouts);
+    log_printf ("last_gui_layout . . . . . . . : %p", last_gui_layout);
+    log_printf ("gui_layout_current. . . . . . : %p", gui_layout_current);
 
     for (ptr_layout = gui_layouts; ptr_layout;
          ptr_layout = ptr_layout->next_layout)
     {
         log_printf ("");
-        log_printf ("[layout \"%s\" (addr:0x%lx)]", ptr_layout->name, ptr_layout);
-        log_printf ("  layout_buffers . . . . : 0x%lx", ptr_layout->layout_buffers);
-        log_printf ("  last_layout_buffer . . : 0x%lx", ptr_layout->last_layout_buffer);
-        log_printf ("  layout_windows . . . . : 0x%lx", ptr_layout->layout_windows);
-        log_printf ("  internal_id. . . . . . : %d",    ptr_layout->internal_id);
-        log_printf ("  internal_id_current_win: %d",    ptr_layout->internal_id_current_window);
+        log_printf ("[layout \"%s\" (addr:%p)]", ptr_layout->name, ptr_layout);
+        log_printf ("  layout_buffers . . . . : %p", ptr_layout->layout_buffers);
+        log_printf ("  last_layout_buffer . . : %p", ptr_layout->last_layout_buffer);
+        log_printf ("  layout_windows . . . . : %p", ptr_layout->layout_windows);
+        log_printf ("  internal_id. . . . . . : %d", ptr_layout->internal_id);
+        log_printf ("  internal_id_current_win: %d", ptr_layout->internal_id_current_window);
         for (ptr_layout_buffer = ptr_layout->layout_buffers; ptr_layout_buffer;
              ptr_layout_buffer = ptr_layout_buffer->next_layout)
         {
             log_printf ("");
-            log_printf ("  [layout buffer (addr:0x%lx)]",   ptr_layout_buffer);
-            log_printf ("    plugin_name. . . . . : '%s'",  ptr_layout_buffer->plugin_name);
-            log_printf ("    buffer_name. . . . . : '%s'",  ptr_layout_buffer->buffer_name);
-            log_printf ("    number . . . . . . . : %d",    ptr_layout_buffer->number);
-            log_printf ("    prev_layout. . . . . : 0x%lx", ptr_layout_buffer->prev_layout);
-            log_printf ("    next_layout. . . . . : 0x%lx", ptr_layout_buffer->next_layout);
+            log_printf ("  [layout buffer (addr:%p)]", ptr_layout_buffer);
+            log_printf ("    plugin_name. . . . . : '%s'", ptr_layout_buffer->plugin_name);
+            log_printf ("    buffer_name. . . . . : '%s'", ptr_layout_buffer->buffer_name);
+            log_printf ("    number . . . . . . . : %d", ptr_layout_buffer->number);
+            log_printf ("    prev_layout. . . . . : %p", ptr_layout_buffer->prev_layout);
+            log_printf ("    next_layout. . . . . : %p", ptr_layout_buffer->next_layout);
         }
         if (ptr_layout->layout_windows)
             gui_layout_print_log_window (ptr_layout->layout_windows, 0);

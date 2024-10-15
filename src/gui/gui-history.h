@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -37,6 +37,8 @@ extern void gui_history_buffer_add (struct t_gui_buffer *buffer,
                                     const char *string);
 extern void gui_history_global_add (const char *string);
 extern void gui_history_add (struct t_gui_buffer *buffer, const char *string);
+extern int gui_history_search (struct t_gui_buffer *buffer,
+                               struct t_gui_history *history);
 extern void gui_history_global_free ();
 extern void gui_history_buffer_free (struct t_gui_buffer *buffer);
 extern struct t_hdata *gui_history_hdata_history_cb (const void *pointer,

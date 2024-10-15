@@ -1,7 +1,7 @@
 /*
  * fset-command.c - Fast Set command
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -81,7 +81,7 @@ fset_command_fset (const void *pointer, void *data,
                    struct t_gui_buffer *buffer, int argc,
                    char **argv, char **argv_eol)
 {
-    int num_options, line, value, i, with_help, min, max, format_number;
+    int num_options, line, value, i, with_help, min, max, format_number, count;
     char str_command[512], str_number[64];
     const char *ptr_filename;
     struct t_fset_option *ptr_fset_option;
@@ -108,13 +108,13 @@ fset_command_fset (const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "-bar") == 0)
+    if (weechat_strcmp (argv[1], "-bar") == 0)
     {
         fset_add_bar ();
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "-refresh") == 0)
+    if (weechat_strcmp (argv[1], "-refresh") == 0)
     {
         fset_option_get_options ();
         fset_buffer_refresh (0);
@@ -122,7 +122,7 @@ fset_command_fset (const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "-up") == 0)
+    if (weechat_strcmp (argv[1], "-up") == 0)
     {
         if (fset_buffer)
         {
@@ -143,7 +143,7 @@ fset_command_fset (const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "-down") == 0)
+    if (weechat_strcmp (argv[1], "-down") == 0)
     {
         if (fset_buffer)
         {
@@ -164,7 +164,7 @@ fset_command_fset (const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "-left") == 0)
+    if (weechat_strcmp (argv[1], "-left") == 0)
     {
         if (fset_buffer)
         {
@@ -188,7 +188,7 @@ fset_command_fset (const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "-right") == 0)
+    if (weechat_strcmp (argv[1], "-right") == 0)
     {
         if (fset_buffer)
         {
@@ -212,13 +212,13 @@ fset_command_fset (const void *pointer, void *data,
         return WEECHAT_RC_OK;
     }
 
-    if (weechat_strcasecmp (argv[1], "-go") == 0)
+    if (weechat_strcmp (argv[1], "-go") == 0)
     {
         if (fset_buffer)
         {
             if (argc < 3)
                 WEECHAT_COMMAND_ERROR;
-            if (weechat_strcasecmp (argv[2], "end") == 0)
+            if (weechat_strcmp (argv[2], "end") == 0)
                 line = weechat_arraylist_size (fset_options) - 1;
             else
                 line = fset_command_get_int_arg (argc, argv, 2, -1);
@@ -233,7 +233,7 @@ fset_command_fset (const void *pointer, void *data,
 
     if (argv[1][0] == '-')
     {
-        if (weechat_strcasecmp (argv[1], "-toggle") == 0)
+        if (weechat_strcmp (argv[1], "-toggle") == 0)
         {
             if (fset_option_count_marked > 0)
             {
@@ -257,7 +257,7 @@ fset_command_fset (const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "-add") == 0)
+        if (weechat_strcmp (argv[1], "-add") == 0)
         {
             value = fset_command_get_int_arg (argc, argv, 2, 0);
             if (value == 0)
@@ -282,7 +282,8 @@ fset_command_fset (const void *pointer, void *data,
                 fset_command_get_option (&ptr_fset_option, &ptr_option);
                 if (ptr_fset_option &&
                     ((ptr_fset_option->type == FSET_OPTION_TYPE_INTEGER)
-                     || (ptr_fset_option->type == FSET_OPTION_TYPE_COLOR)))
+                     || (ptr_fset_option->type == FSET_OPTION_TYPE_COLOR)
+                     || (ptr_fset_option->type == FSET_OPTION_TYPE_ENUM)))
                 {
                     fset_option_add_value (ptr_fset_option, ptr_option, value);
                 }
@@ -295,7 +296,7 @@ fset_command_fset (const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "-reset") == 0)
+        if (weechat_strcmp (argv[1], "-reset") == 0)
         {
             if (fset_option_count_marked > 0)
             {
@@ -319,7 +320,7 @@ fset_command_fset (const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "-unset") == 0)
+        if (weechat_strcmp (argv[1], "-unset") == 0)
         {
             if (fset_option_count_marked > 0)
             {
@@ -343,35 +344,35 @@ fset_command_fset (const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "-set") == 0)
+        if (weechat_strcmp (argv[1], "-set") == 0)
         {
             fset_command_get_option (&ptr_fset_option, &ptr_option);
             fset_option_set (ptr_fset_option, ptr_option, buffer, 0);
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "-setnew") == 0)
+        if (weechat_strcmp (argv[1], "-setnew") == 0)
         {
             fset_command_get_option (&ptr_fset_option, &ptr_option);
             fset_option_set (ptr_fset_option, ptr_option, buffer, -1);
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "-append") == 0)
+        if (weechat_strcmp (argv[1], "-append") == 0)
         {
             fset_command_get_option (&ptr_fset_option, &ptr_option);
             fset_option_set (ptr_fset_option, ptr_option, buffer, 1);
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "-mark") == 0)
+        if (weechat_strcmp (argv[1], "-mark") == 0)
         {
             fset_command_get_option (&ptr_fset_option, &ptr_option);
             fset_option_toggle_mark (ptr_fset_option, ptr_option);
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "-format") == 0)
+        if (weechat_strcmp (argv[1], "-format") == 0)
         {
             min = weechat_hdata_integer (fset_hdata_config_option,
                                          fset_config_look_format_number,
@@ -388,20 +389,20 @@ fset_command_fset (const void *pointer, void *data,
             return WEECHAT_RC_OK;
         }
 
-        if (weechat_strcasecmp (argv[1], "-export") == 0)
+        if (weechat_strcmp (argv[1], "-export") == 0)
         {
             if (argc < 3)
                 WEECHAT_COMMAND_ERROR;
             with_help = weechat_config_boolean (fset_config_look_export_help_default);
             ptr_filename = argv_eol[2];
-            if (weechat_strcasecmp (argv[2], "-help") == 0)
+            if (weechat_strcmp (argv[2], "-help") == 0)
             {
                 with_help = 1;
                 if (argc < 4)
                     WEECHAT_COMMAND_ERROR;
                 ptr_filename = argv_eol[3];
             }
-            else if (weechat_strcasecmp (argv[2], "-nohelp") == 0)
+            else if (weechat_strcmp (argv[2], "-nohelp") == 0)
             {
                 with_help = 0;
                 if (argc < 4)
@@ -415,10 +416,39 @@ fset_command_fset (const void *pointer, void *data,
                                 _("%s%s: there are no options displayed, "
                                   "unable to export."),
                                 weechat_prefix ("error"), FSET_PLUGIN_NAME);
-                return WEECHAT_RC_OK;
+                return WEECHAT_RC_ERROR;
             }
             if (!fset_option_export (ptr_filename, with_help))
                 WEECHAT_COMMAND_ERROR;
+            return WEECHAT_RC_OK;
+        }
+
+        if (weechat_strcmp (argv[1], "-import") == 0)
+        {
+            if (argc < 3)
+                WEECHAT_COMMAND_ERROR;
+            count = fset_option_import (argv_eol[2]);
+            switch (count)
+            {
+                case -2:
+                    weechat_printf (NULL,
+                        _("%s%s: not enough memory"),
+                        weechat_prefix ("error"), FSET_PLUGIN_NAME);
+                    return WEECHAT_RC_ERROR;
+                case -1:
+                    weechat_printf (NULL,
+                                    _("%s%s: file \"%s\" not found"),
+                                    weechat_prefix ("error"), FSET_PLUGIN_NAME,
+                                    argv_eol[2]);
+                    return WEECHAT_RC_ERROR;
+                default:
+                    weechat_printf (NULL,
+                                    NG_("%d command executed in file \"%s\"",
+                                        "%d commands executed in file \"%s\"",
+                                        count),
+                                    count, argv_eol[2]);
+                    break;
+            }
             return WEECHAT_RC_OK;
         }
 
@@ -454,7 +484,6 @@ fset_command_run_set_cb (const void *pointer, void *data,
     /* make C compiler happy */
     (void) pointer;
     (void) data;
-    (void) buffer;
 
     /* ignore /set command if issued on fset buffer */
     if (fset_buffer && (buffer == fset_buffer))
@@ -483,8 +512,8 @@ fset_command_run_set_cb (const void *pointer, void *data,
      * (we must not catch that in fset!)
      */
     if ((argc > 1)
-        && ((weechat_strcasecmp (argv[1], "diff") == 0)
-            || (weechat_strcasecmp (argv[1], "env") == 0)))
+        && ((weechat_strcmp (argv[1], "diff") == 0)
+            || (weechat_strcmp (argv[1], "env") == 0)))
     {
         goto end;
     }
@@ -528,23 +557,17 @@ fset_command_run_set_cb (const void *pointer, void *data,
                                                  eval_extra_vars,
                                                  eval_options);
         condition_ok = (result && (strcmp (result, "1") == 0));
-        if (result)
-            free (result);
+        free (result);
     }
-    if (eval_extra_vars)
-        weechat_hashtable_free (eval_extra_vars);
-    if (eval_options)
-        weechat_hashtable_free (eval_options);
+    weechat_hashtable_free (eval_extra_vars);
+    weechat_hashtable_free (eval_options);
 
     /* check condition to trigger the fset buffer */
     if (condition_ok)
     {
-        if (old_options)
-            weechat_arraylist_free (old_options);
-        if (old_max_length)
-            free (old_max_length);
-        if (old_filter)
-            free (old_filter);
+        weechat_arraylist_free (old_options);
+        free (old_max_length);
+        free (old_filter);
 
         if (!fset_buffer)
             fset_buffer_open ();
@@ -563,16 +586,51 @@ fset_command_run_set_cb (const void *pointer, void *data,
         free (fset_option_max_length);
         fset_option_max_length = old_max_length;
         fset_option_set_filter (old_filter);
-        if (old_filter)
-            free (old_filter);
+        free (old_filter);
         fset_buffer_selected_line = old_buffer_selected_line;
     }
 
 end:
-    if (argv)
-        weechat_string_free_split (argv);
-
+    weechat_string_free_split (argv);
     return rc;
+}
+
+/*
+ * Hooks execution of command "/key".
+ */
+
+int
+fset_command_run_key_cb (const void *pointer, void *data,
+                         struct t_gui_buffer *buffer, const char *command)
+{
+    const char *ptr_args;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) buffer;
+
+    if (strncmp (command, "/key", 4) != 0)
+        return WEECHAT_RC_OK;
+
+    ptr_args = strchr (command,  ' ');
+    while (ptr_args && (ptr_args[0] == ' '))
+    {
+        ptr_args++;
+    }
+
+    if (!ptr_args || !ptr_args[0])
+    {
+        fset_option_filter_options ("weechat.key*");
+        if (!fset_buffer)
+            fset_buffer_open ();
+        fset_buffer_set_localvar_filter ();
+        fset_buffer_refresh (1);
+        weechat_buffer_set (fset_buffer, "display", "1");
+        return WEECHAT_RC_OK_EAT;
+    }
+
+    return WEECHAT_RC_OK;
 }
 
 /*
@@ -585,6 +643,7 @@ fset_command_init ()
     weechat_hook_command (
         "fset",
         N_("fast set WeeChat and plugins options"),
+        /* TRANSLATORS: only text between angle brackets (eg: "<name>") may be translated */
         N_("-bar"
            " || -refresh"
            " || -up|-down [<number>]"
@@ -600,193 +659,137 @@ fset_command_init ()
            " || -mark"
            " || -format"
            " || -export [-help|-nohelp] <filename>"
+           " || -import <filename>"
            " || <filter>"),
-        N_("       -bar: add the help bar\n"
-           "   -refresh: refresh list of options, then whole screen "
-           "(command: /window refresh)\n"
-           "        -up: move the selected line up by \"number\" lines\n"
-           "      -down: move the selected line down by \"number\" lines\n"
-           "      -left: scroll the fset buffer by \"percent\" of width "
-           "on the left\n"
-           "     -right: scroll the fset buffer by \"percent\" of width "
-           "on the right\n"
-           "        -go: select a line by number, first line number is 0 "
-           "(\"end\" to select the last line)\n"
-           "    -toggle: toggle the boolean value\n"
-           "       -add: add \"value\" (which can be a negative number) "
-           "for integers and colors, set/append to value for other types "
-           "(set for a negative value, append for a positive value)\n"
-           "     -reset: reset the value of option\n"
-           "     -unset: unset the option\n"
-           "       -set: add the /set command in input to edit the value of "
-           "option (move the cursor at the beginning of value)\n"
-           "    -setnew: add the /set command in input to edit a new value "
-           "for the option\n"
-           "    -append: add the /set command to append something in the value "
-           "of option (move the cursor at the end of value)\n"
-           "      -mark: toggle mark\n"
-           "    -format: switch to the next available format\n"
-           "    -export: export the options and values displayed in a file "
-           "(each line has format: \"/set name value\" or \"/unset name\")\n"
-           "      -help: force writing of help on options in exported file "
-           "(see /help fset.look.export_help_default)\n"
-           "    -nohelp: do not write help on options in exported file "
-           "(see /help fset.look.export_help_default)\n"
-           "     filter: set a new filter to see only matching options (this "
-           "filter can be used as input in fset buffer as well); allowed "
-           "formats are:\n"
-           "               *       show all options (no filter)\n"
-           "               xxx     show only options with \"xxx\" in name\n"
-           "               f:xxx   show only configuration file \"xxx\"\n"
-           "               t:xxx   show only type \"xxx\" (bool/int/str/col)\n"
-           "               d       show only changed options\n"
-           "               d:xxx   show only changed options with \"xxx\" in "
-           "name\n"
-           "               d=xxx   show only changed options with \"xxx\" in "
-           "value\n"
-           "               d==xxx  show only changed options with exact value "
-           "\"xxx\"\n"
-           "               h=xxx   show only options with \"xxx\" in "
-           "description (translated)\n"
-           "               he=xxx  show only options with \"xxx\" in "
-           "description (in English)\n"
-           "               =xxx    show only options with \"xxx\" in value\n"
-           "               ==xxx   show only options with exact value \"xxx\"\n"
-           "               c:xxx   show only options matching the evaluated "
-           "condition \"xxx\", using following variables: file, section, "
-           "option, name, parent_name, type, type_en, type_short "
-           "(bool/int/str/col), type_tiny (b/i/s/c), default_value, "
-           "default_value_undef, value, quoted_value, value_undef, "
-           "value_changed, parent_value, min, max, description, description2, "
-           "description_en, description_en2, string_values\n"
-           "\n"
-           "The lines with options are displayed using string evaluation "
-           "(see /help eval for the format), with these options:\n"
-           "  - fset.format.option1: first format for an option\n"
-           "  - fset.format.option2: second format for an option\n"
-           "\n"
-           "The following variables can be used in these options:\n"
-           "  - option data, with color and padded by spaces on the right:\n"
-           "    - ${file}: configuration file (for example \"weechat\" or "
-           "\"irc\")\n"
-           "    - ${section}: section\n"
-           "    - ${option}: option name\n"
-           "    - ${name}: full option name (file.section.option)\n"
-           "    - ${parent_name}: parent option name\n"
-           "    - ${type}: option type (translated)\n"
-           "    - ${type_en}: option type (in English)\n"
-           "    - ${type_short}: short option type (bool/int/str/col)\n"
-           "    - ${type_tiny}: tiny option type (b/i/s/c)\n"
-           "    - ${default_value}: option default value\n"
-           "    - ${default_value_undef}: \"1\" if default value is null, "
-           "otherwise \"0\"\n"
-           "    - ${value}: option value\n"
-           "    - ${value_undef}: \"1\" if value is null, otherwise \"0\"\n"
-           "    - ${value_changed}: \"1\" if value is different from default "
-           "value, otherwise \"0\"\n"
-           "    - ${value2}: option value, with inherited value if null\n"
-           "    - ${parent_value}: parent option value\n"
-           "    - ${min}: min value\n"
-           "    - ${max}: max value\n"
-           "    - ${description}: option description (translated)\n"
-           "    - ${description2}: option description (translated), "
-           "\"(no description)\" (translated) if there's no description\n"
-           "    - ${description_en}: option description (in English)\n"
-           "    - ${description_en2}: option description (in English), "
-           "\"(no description)\" if there's no description\n"
-           "    - ${string_values}: string values allowed for set of an "
-           "integer option using strings\n"
-           "    - ${marked}: \"1\" if option is marked, otherwise \"0\"\n"
-           "    - ${index}: index of option in list\n"
-           "  - option data, with color but no spaces:\n"
-           "    - same names prefixed by underscore, for example: ${_name}, "
-           "${_type}, ...\n"
-           "  - option data, raw format (no colors/spaces):\n"
-           "    - same names prefixed by two underscores, for example: "
-           "${__name}, ${__type}, ...\n"
-           "  - option data, only spaces:\n"
-           "    - same names prefixed with \"empty_\", for example: "
-           "${empty_name}, ${empty_type}\n"
-           "  - other data:\n"
-           "    - ${selected_line}: \"1\" if the line is selected, "
-           "otherwise \"0\"\n"
-           "    - ${newline}: insert a new line at point, so the option is "
-           "displayed on multiple lines\n"
-           "\n"
-           "Keys and input to move in on fset buffer:\n"
-           "  up                        move one line up\n"
-           "  down                      move one line down\n"
-           "  pgup                      move one page up\n"
-           "  pgdn                      move one page down\n"
-           "  alt-home          <<      move to first line\n"
-           "  alt-end           >>      move to last line\n"
-           "  F11               <       scroll horizontally on the left\n"
-           "  F12               >       scroll horizontally on the right\n"
-           "\n"
-           "Keys and input to set options on fset buffer:\n"
-           "  alt+space         t       toggle boolean value\n"
-           "  alt+'-'           -       subtract 1 from value for integer/color, "
-           "set value for other types\n"
-           "  alt+'+'           +       add 1 to value for integer/color, append "
-           "to value for other types\n"
-           "  alt+f, alt+r      r       reset value\n"
-           "  alt+f, alt+u      u       unset value\n"
-           "  alt+enter         s       set value\n"
-           "  alt+f, alt+n      n       set new value\n"
-           "  alt+f, alt+a      a       append to value\n"
-           "  alt+','           ,       mark/unmark option\n"
-           "  shift+up                  move one line up and mark/unmark option\n"
-           "  shift+down                mark/unmark option and move one line down\n"
-           "                    m:xxx   mark options displayed that are "
-           "matching filter \"xxx\" (any filter on option or value is allowed, "
-           "see filters above)\n"
-           "                    u:xxx   unmark options displayed that are "
-           "matching filter \"xxx\" (any filter on option or value is allowed, "
-           "see filters above)\n"
-           "\n"
-           "Other keys and input on fset buffer:\n"
-           "  ctrl+L                    refresh options and whole screen "
-           "(command: /fset -refresh)\n"
-           "                    $       refresh options (keep marked options)\n"
-           "                    $$      refresh options (unmark all options)\n"
-           "  alt+p             p       toggle plugin description options "
-           "(plugins.desc.*)\n"
-           "  alt+v             v       toggle help bar\n"
-           "                    s:x,y   sort options by fields x,y "
-           "(see /help fset.look.sort)\n"
-           "                    s:      reset sort to its default value "
-           "(see /help fset.look.sort)\n"
-           "                    w:xxx   export options in file \"xxx\"\n"
-           "                    w-:xxx  export options in file \"xxx\" without help\n"
-           "                    w+:xxx  export options in file \"xxx\" with help\n"
-           "  ctrl+X            x       switch the format used to display options\n"
-           "                    q       close fset buffer\n"
-           "\n"
-           "Mouse actions on fset buffer:\n"
-           "  wheel up/down                   move line up/down\n"
-           "  left button                     move line here\n"
-           "  right button                    toggle boolean (on/off) or "
-           "edit the option value\n"
-           "  right button + drag left/right  increase/decrease value "
-           "for integer/color, set/append to value for other types\n"
-           "  right button + drag up/down     mark/unmark multiple options\n"
-           "\n"
-           "Note: if input has one or more leading spaces, the following text "
-           "is interpreted as a filter, without the spaces. For example "
-           "\" q\" searches all options with \"q\" inside name while \"q\" "
-           "closes the fset buffer.\n"
-           "\n"
-           "Examples:\n"
-           "  show IRC options changed:\n"
-           "    /fset d:irc.*\n"
-           "  show all options with \"nicklist\" in name:\n"
-           "    /fset nicklist\n"
-           "  show all values which contain \"red\":\n"
-           "    /fset =red\n"
-           "  show all values which are exactly \"red\":\n"
-           "    /fset ==red\n"
-           "  show all integer options in irc plugin:\n"
-           "    /fset c:${file} == irc && ${type_en} == integer"),
+        WEECHAT_CMD_ARGS_DESC(
+            N_("raw[-bar]: add the help bar"),
+            N_("raw[-refresh]: refresh list of options, then whole screen "
+               "(command: /window refresh)"),
+            N_("raw[-up]: move the selected line up by \"number\" lines"),
+            N_("raw[-down]: move the selected line down by \"number\" lines"),
+            N_("raw[-left]: scroll the buffer by \"percent\" of width on the left"),
+            N_("raw[-right]: scroll the buffer by \"percent\" of width on the right"),
+            N_("raw[-go]: select a line by number, first line number is 0 "
+               "(\"end\" to select the last line)"),
+            N_("raw[-toggle]: toggle the boolean value"),
+            N_("raw[-add]: add \"value\" (which can be a negative number) "
+               "for integers, colors and enums, set/append to value for other types "
+               "(set for a negative value, append for a positive value)"),
+            N_("raw[-reset]: reset the value of option"),
+            N_("raw[-unset]: unset the option"),
+            N_("raw[-set]: add the /set command in input to edit the value of "
+               "option (move the cursor at the beginning of value)"),
+            N_("raw[-setnew]: add the /set command in input to edit a new value "
+               "for the option"),
+            N_("raw[-append]: add the /set command to append something in the value "
+               "of option (move the cursor at the end of value)"),
+            N_("raw[-mark]: toggle mark"),
+            N_("raw[-format]: switch to the next available format"),
+            N_("raw[-export]: export the options and values displayed to a file "
+               "(each line has format: \"/set name value\" or \"/unset name\")"),
+            N_("raw[-import]: import the options from a file "
+               "(all lines containing commands are executed)"),
+            N_("raw[-help]: force writing of help on options in exported file "
+               "(see /help fset.look.export_help_default)"),
+            N_("raw[-nohelp]: do not write help on options in exported file "
+               "(see /help fset.look.export_help_default)"),
+            N_("filter: set a new filter to see only matching options (this "
+               "filter can be used as input in fset buffer as well); allowed "
+               "formats are:"),
+            N_("> `*`: show all options (no filter)"),
+            N_("> `xxx`: show only options with \"xxx\" in name"),
+            N_("> `f:xxx`: show only configuration file \"xxx\""),
+            N_("> `t:xxx`: show only type \"xxx\" (bool/int/str/col/enum "
+               "or boolean/integer/string/color/enum)"),
+            N_("> `d`: show only changed options"),
+            N_("> `d:xxx`: show only changed options with \"xxx\" in "
+               "name"),
+            N_("> `d=xxx`: show only changed options with \"xxx\" in "
+               "value"),
+            N_("> `d==xxx`: show only changed options with exact value "
+               "\"xxx\""),
+            N_("> `h=xxx`: show only options with \"xxx\" in "
+               "description (translated)"),
+            N_("> `he=xxx`: show only options with \"xxx\" in "
+               "description (in English)"),
+            N_("> `=xxx`: show only options with \"xxx\" in value"),
+            N_("> `==xxx`: show only options with exact value \"xxx\""),
+            N_("> `c:xxx`: show only options matching the evaluated "
+               "condition \"xxx\", using following variables: file, section, "
+               "option, name, parent_name, type, type_en, type_short "
+               "(bool/int/str/col/enum), type_tiny (b/i/s/c/e), default_value, "
+               "default_value_undef, value, quoted_value, value_undef, "
+               "value_changed, parent_value, min, max, description, description2, "
+               "description_en, description_en2, string_values, allowed_values"),
+            "",
+            N_("The lines with options are displayed using string evaluation "
+               "(see /help eval for the format), with these options:"),
+            N_("  - fset.format.option1: first format for an option"),
+            N_("  - fset.format.option2: second format for an option"),
+            "",
+            N_("The following variables can be used in these options:"),
+            N_("  - option data, with color and padded by spaces on the right:"),
+            N_("    - ${file}: configuration file (for example \"weechat\" or "
+               "\"irc\")"),
+            N_("    - ${section}: section"),
+            N_("    - ${option}: option name"),
+            N_("    - ${name}: full option name (file.section.option)"),
+            N_("    - ${parent_name}: parent option name"),
+            N_("    - ${type}: option type (translated)"),
+            N_("    - ${type_en}: option type (in English)"),
+            N_("    - ${type_short}: short option type (bool/int/str/col/enum)"),
+            N_("    - ${type_tiny}: tiny option type (b/i/s/c/e)"),
+            N_("    - ${default_value}: option default value"),
+            N_("    - ${default_value_undef}: \"1\" if default value is null, "
+               "otherwise \"0\""),
+            N_("    - ${value}: option value"),
+            N_("    - ${value_undef}: \"1\" if value is null, otherwise \"0\""),
+            N_("    - ${value_changed}: \"1\" if value is different from default "
+               "value, otherwise \"0\""),
+            N_("    - ${value2}: option value, with inherited value if null"),
+            N_("    - ${parent_value}: parent option value"),
+            N_("    - ${min}: min value"),
+            N_("    - ${max}: max value"),
+            N_("    - ${description}: option description (translated)"),
+            N_("    - ${description2}: option description (translated), "
+               "\"(no description)\" (translated) if there's no description"),
+            N_("    - ${description_en}: option description (in English)"),
+            N_("    - ${description_en2}: option description (in English), "
+               "\"(no description)\" if there's no description"),
+            N_("    - ${string_values}: string values allowed for set of an enum "
+               "option"),
+            N_("    - ${allowed_values}: allowed values"),
+            N_("    - ${marked}: \"1\" if option is marked, otherwise \"0\""),
+            N_("    - ${index}: index of option in list"),
+            N_("  - option data, with color but no spaces:"),
+            N_("    - same names prefixed by underscore, for example: ${_name}, "
+               "${_type}, ..."),
+            N_("  - option data, raw format (no colors/spaces):"),
+            N_("    - same names prefixed by two underscores, for example: "
+               "${__name}, ${__type}, ..."),
+            N_("  - option data, only spaces:"),
+            N_("    - same names prefixed with \"empty_\", for example: "
+               "${empty_name}, ${empty_type}"),
+            N_("  - other data:"),
+            N_("    - ${selected_line}: \"1\" if the line is selected, "
+               "otherwise \"0\""),
+            N_("    - ${newline}: insert a new line at point, so the option is "
+               "displayed on multiple lines"),
+            "",
+            N_("For keys, input and mouse actions on the buffer, "
+               "see key bindings in User's guide."),
+            "",
+            N_("Note: if input has one or more leading spaces, the following text "
+               "is interpreted as a filter, without the spaces. For example "
+               "\" q\" searches all options with \"q\" inside name while \"q\" "
+               "closes the fset buffer."),
+            "",
+            N_("Examples:"),
+            AI("  /fset d:irc.*"),
+            AI("  /fset nicklist"),
+            AI("  /fset =red"),
+            AI("  /fset ==red"),
+            AI("  /fset c:${file} == irc && ${type_en} == integer")),
         "-bar"
         " || -refresh"
         " || -up 1|2|3|4|5"
@@ -804,7 +807,9 @@ fset_command_init ()
         " || -mark"
         " || -format"
         " || -export -help|-nohelp|%(filename) %(filename)"
+        " || -import %(filename)"
         " || *|c:|f:|s:|d|d:|d=|d==|=|==|%(fset_options)",
         &fset_command_fset, NULL, NULL);
     weechat_hook_command_run ("/set", &fset_command_run_set_cb, NULL, NULL);
+    weechat_hook_command_run ("/key", &fset_command_run_key_cb, NULL, NULL);
 }

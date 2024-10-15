@@ -2,17 +2,11 @@
 :author: Sébastien Helleu
 :email: flashcode@flashtux.org
 :lang: en
-:toc: left
-:toclevels: 3
-:sectnums:
-:docinfo1:
-
 
 This manual documents WeeChat chat client, it is part of WeeChat.
 
 Latest version of this document can be found on
-https://weechat.org/doc/[this page ^↗^,window=_blank].
-
+https://weechat.org/doc/[this page ^↗^^].
 
 [[introduction]]
 == Introduction
@@ -32,7 +26,7 @@ This manual documents WeeChat internals:
 == Repositories
 
 WeeChat repositories are on GitHub organization
-https://github.com/weechat[weechat ^↗^,window=_blank].
+https://github.com/weechat[weechat ^↗^^].
 
 List of repositories:
 
@@ -43,7 +37,7 @@ scripts::
     the _official_ scripts submitted on weechat.org
 
 weechat.org::
-    source of https://weechat.org/[WeeChat website ^↗^,window=_blank]
+    source of https://weechat.org/[WeeChat website ^↗^^]
 
 weercd::
     IRC testing server
@@ -118,94 +112,97 @@ WeeChat "core" is located in following directories:
 
 [width="100%",cols="2m,3",options="header"]
 |===
-| Path/file                       | Description
-| core/                           | Core functions: entry point, internal structures.
-|    wee-arraylist.c              | Array lists.
-|    wee-backtrace.c              | Display a backtrace after a crash.
-|    wee-calc.c                   | Calculate result of expressions.
-|    wee-command.c                | WeeChat core commands.
-|    wee-completion.c             | Default completions.
-|    wee-config-file.c            | Configuration file management.
-|    wee-config.c                 | Configuration options for WeeChat core (file weechat.conf).
-|    wee-crypto.c                 | Cryptographic functions.
-|    wee-debug.c                  | Some debug functions.
-|    wee-dir.c                    | Directory/file functions.
-|    wee-eval.c                   | Evaluation of expressions with references to internal vars.
-|    wee-hashtable.c              | Hashtables.
-|    wee-hdata.c                  | Hdata (direct access to data using hashtables).
-|    wee-hook.c                   | Hooks.
-|    wee-infolist.c               | Infolists (lists with objects data).
-|    wee-input.c                  | Input of commands/text.
-|    wee-list.c                   | Sorted lists.
-|    wee-log.c                    | Write to WeeChat log file (weechat.log).
-|    wee-network.c                | Network functions (connection to servers/proxies).
-|    wee-proxy.c                  | Proxy management.
-|    wee-secure.c                 | Secured data functions.
-|    wee-secure-buffer.c          | Secured data buffer.
-|    wee-secure-config.c          | Secured data options (file sec.conf).
-|    wee-signal.c                 | Signal functions.
-|    wee-string.c                 | Functions on strings.
-|    wee-upgrade-file.c           | Internal upgrade system.
-|    wee-upgrade.c                | Upgrade for WeeChat core (buffers, lines, history, ...).
-|    wee-url.c                    | URL transfer (using libcurl).
-|    wee-utf8.c                   | UTF-8 functions.
-|    wee-util.c                   | Some other functions.
-|    wee-version.c                | Functions for WeeChat version.
-|    weechat.c                    | Main functions: command line options, startup.
-|    hook/                        | Hook functions.
-|       wee-hook-command-run.c    | Hook "command_run".
-|       wee-hook-command.c        | Hook "command".
-|       wee-hook-completion.c     | Hook "completion".
-|       wee-hook-config.c         | Hook "config".
-|       wee-hook-connect.c        | Hook "connect".
-|       wee-hook-fd.c             | Hook "fd".
-|       wee-hook-focus.c          | Hook "focus".
-|       wee-hook-hdata.c          | Hook "hdata".
-|       wee-hook-hsignal.c        | Hook "hsignal".
-|       wee-hook-info-hashtable.c | Hook "info_hashtable".
-|       wee-hook-info.c           | Hook "info".
-|       wee-hook-infolist.c       | Hook "infolist".
-|       wee-hook-line.c           | Hook "line".
-|       wee-hook-modifier.c       | Hook "modifier".
-|       wee-hook-print.c          | Hook "print".
-|       wee-hook-process.c        | Hook "process".
-|       wee-hook-signal.c         | Hook "signal".
-|       wee-hook-timer.c          | Hook "timer".
-| gui/                            | Functions for buffers, windows, ... (used by all interfaces).
-|    gui-bar-item.c               | Bar items.
-|    gui-bar-window.c             | Bar windows.
-|    gui-bar.c                    | Bars.
-|    gui-buffer.c                 | Buffers.
-|    gui-chat.c                   | Chat functions (display message, ...).
-|    gui-color.c                  | Color functions.
-|    gui-completion.c             | Completion on command line.
-|    gui-cursor.c                 | Cursor mode (free movement of cursor).
-|    gui-filter.c                 | Filters.
-|    gui-focus.c                  | Functions about focus (for cursor mode and mouse).
-|    gui-history.c                | Commands/text saved in buffers.
-|    gui-hotlist.c                | Hotlist management (list of buffers with activity).
-|    gui-input.c                  | Input functions (input bar).
-|    gui-key.c                    | Keyboard functions.
-|    gui-layout.c                 | Layout.
-|    gui-line.c                   | Lines in buffers.
-|    gui-mouse.c                  | Mouse.
-|    gui-nick.c                   | Nick functions.
-|    gui-nicklist.c               | Nicklist in buffers.
-|    gui-window.c                 | Windows.
-|    curses/                      | Curses interface.
-|       gui-curses-bar-window.c   | Display in bar windows.
-|       gui-curses-chat.c         | Display in chat area (messages).
-|       gui-curses-color.c        | Color functions.
-|       gui-curses-key.c          | Keyboard functions (default keys, read of input).
-|       gui-curses-main.c         | WeeChat main loop (waiting for keyboard/network events).
-|       gui-curses-mouse.c        | Mouse.
-|       gui-curses-term.c         | Functions about terminal.
-|       gui-curses-window.c       | Windows.
-|       headless/                 | Headless mode (no interface).
-|          main.c                 | Entry point for headless mode.
-|          ncurses-fake.c         | Fake ncurses library.
-|       normal/                   | Curses interface.
-|          main.c                 | Entry point for Curses interface.
+| Path/file                     | Description
+| core/                         | Core functions: entry point, internal structures.
+|    core-arraylist.c           | Array lists.
+|    core-backtrace.c           | Display a backtrace after a crash.
+|    core-calc.c                | Calculate result of expressions.
+|    core-command.c             | WeeChat core commands.
+|    core-completion.c          | Default completions.
+|    core-config-file.c         | Configuration file management.
+|    core-config.c              | Configuration options for WeeChat core (file weechat.conf).
+|    core-crypto.c              | Cryptographic functions.
+|    core-debug.c               | Some debug functions.
+|    core-doc.c                 | Build of files for documentation.
+|    core-dir.c                 | Directory/file functions.
+|    core-eval.c                | Evaluation of expressions with references to internal vars.
+|    core-hashtable.c           | Hashtables.
+|    core-hdata.c               | Hdata (direct access to data using hashtables).
+|    core-hook.c                | Hooks.
+|    core-infolist.c            | Infolists (lists with objects data).
+|    core-input.c               | Input of commands/text.
+|    core-list.c                | Sorted lists.
+|    core-log.c                 | Write to WeeChat log file (weechat.log).
+|    core-network.c             | Network functions (connection to servers/proxies).
+|    core-proxy.c               | Proxy management.
+|    core-secure.c              | Secured data functions.
+|    core-secure-buffer.c       | Secured data buffer.
+|    core-secure-config.c       | Secured data options (file sec.conf).
+|    core-signal.c              | Signal functions.
+|    core-string.c              | Functions on strings.
+|    core-sys.c                 | System functions.
+|    core-upgrade-file.c        | Internal upgrade system.
+|    core-upgrade.c             | Upgrade for WeeChat core (buffers, lines, history, ...).
+|    core-url.c                 | URL transfer (using libcurl).
+|    core-utf8.c                | UTF-8 functions.
+|    core-util.c                | Some other functions.
+|    core-version.c             | Functions for WeeChat version.
+|    weechat.c                  | Main functions: command line options, startup.
+|    hook/                      | Hook functions.
+|       hook-command-run.c      | Hook "command_run".
+|       hook-command.c          | Hook "command".
+|       hook-completion.c       | Hook "completion".
+|       hook-config.c           | Hook "config".
+|       hook-connect.c          | Hook "connect".
+|       hook-fd.c               | Hook "fd".
+|       hook-focus.c            | Hook "focus".
+|       hook-hdata.c            | Hook "hdata".
+|       hook-hsignal.c          | Hook "hsignal".
+|       hook-info-hashtable.c   | Hook "info_hashtable".
+|       hook-info.c             | Hook "info".
+|       hook-infolist.c         | Hook "infolist".
+|       hook-line.c             | Hook "line".
+|       hook-modifier.c         | Hook "modifier".
+|       hook-print.c            | Hook "print".
+|       hook-process.c          | Hook "process".
+|       hook-signal.c           | Hook "signal".
+|       hook-timer.c            | Hook "timer".
+|       hook-url.c              | Hook "url".
+| gui/                          | Functions for buffers, windows, ... (used by all interfaces).
+|    gui-bar-item.c             | Bar items.
+|    gui-bar-window.c           | Bar windows.
+|    gui-bar.c                  | Bars.
+|    gui-buffer.c               | Buffers.
+|    gui-chat.c                 | Chat functions (display message, ...).
+|    gui-color.c                | Color functions.
+|    gui-completion.c           | Completion on command line.
+|    gui-cursor.c               | Cursor mode (free movement of cursor).
+|    gui-filter.c               | Filters.
+|    gui-focus.c                | Functions about focus (for cursor mode and mouse).
+|    gui-history.c              | Commands/text saved in buffers.
+|    gui-hotlist.c              | Hotlist management (list of buffers with activity).
+|    gui-input.c                | Input functions (input bar).
+|    gui-key.c                  | Keyboard functions.
+|    gui-layout.c               | Layout.
+|    gui-line.c                 | Lines in buffers.
+|    gui-mouse.c                | Mouse.
+|    gui-nick.c                 | Nick functions.
+|    gui-nicklist.c             | Nicklist in buffers.
+|    gui-window.c               | Windows.
+|    curses/                    | Curses interface.
+|       gui-curses-bar-window.c | Display in bar windows.
+|       gui-curses-chat.c       | Display in chat area (messages).
+|       gui-curses-color.c      | Color functions.
+|       gui-curses-key.c        | Keyboard functions (default keys, read of input).
+|       gui-curses-main.c       | WeeChat main loop (waiting for keyboard/network events).
+|       gui-curses-mouse.c      | Mouse.
+|       gui-curses-term.c       | Functions about terminal.
+|       gui-curses-window.c     | Windows.
+|       headless/               | Headless mode (no interface).
+|          main.c               | Entry point for headless mode.
+|          ncurses-fake.c       | Fake ncurses library.
+|       normal/                 | Curses interface.
+|          main.c               | Entry point for Curses interface.
 |===
 
 [[sources_plugins]]
@@ -213,177 +210,190 @@ WeeChat "core" is located in following directories:
 
 [width="100%",cols="2m,3",options="header"]
 |===
-| Path/file                         | Description
-| plugins/                          | Root of plugins.
-|    plugin.c                       | Plugins management (load/unload dynamic C libraries).
-|    plugin-api.c                   | Extra functions for plugin API (wrapper around WeeChat core functions).
-|    plugin-api-info.c              | Extra info/infolist functions for plugin API.
-|    plugin-config.c                | Plugin configuration options (file plugins.conf).
-|    plugin-script.c                | Common functions used by script plugins.
-|    plugin-script-api.c            | Script API functions: wrappers around some plugin API functions.
-|    plugin-script-config.c         | Script plugin configuration options (files python.conf, perl.conf, ...).
-|    weechat-plugin.h               | Header designed to be distributed with WeeChat plugins, in order to compile them.
-|    alias/                         | Alias plugin.
-|       alias.c                     | Main alias functions.
-|       alias-command.c             | Alias commands.
-|       alias-completion.c          | Alias completions.
-|       alias-config.c              | Alias config options (file alias.conf).
-|       alias-info.c                | Alias info/infolists/hdata.
-|    spell/                         | Spell checker plugin.
-|       spell.c                     | Main spell checker functions.
-|       spell-bar-item.c            | Spell checker bar items.
-|       spell-command.c             | Spell checker commands.
-|       spell-completion.c          | Spell checker completions.
-|       spell-config.c              | Spell checker config options (file spell.conf).
-|       spell-info.c                | Spell checker info/infolists/hdata.
-|       spell-speller.c             | Spellers management.
-|    buflist/                       | Buflist plugin.
-|       buflist.c                   | Main buflist functions.
-|       buflist-bar-item.c          | Buflist bar items.
-|       buflist-command.c           | Buflist commands.
-|       buflist-config.c            | Buflist config options (file buflist.conf).
-|       buflist-info.c              | Buflist info/infolists/hdata.
-|       buflist-mouse.c             | Buflist mouse actions.
-|    charset/                       | Charset plugin.
-|       charset.c                   | Charset functions.
-|    exec/                          | Exec plugin.
-|       exec.c                      | Main exec functions.
-|       exec-buffer.c               | Exec buffer.
-|       exec-command.c              | Exec commands.
-|       exec-completion.c           | Exec completions.
-|       exec-config.c               | Exec config options (file exec.conf).
-|    fifo/                          | Fifo plugin.
-|       fifo.c                      | Main fifo functions.
-|       fifo-command.c              | Fifo commands.
-|       fifo-config.c               | Fifo config options (file fifo.conf).
-|       fifo-info.c                 | Fifo info/infolists/hdata.
-|    fset/                          | Fset plugin.
-|       fset.c                      | Main fset functions.
-|       fset-bar-item.c             | Fset bar items.
-|       fset-buffer.c               | Fset buffer.
-|       fset-command.c              | Fset commands.
-|       fset-completion.c           | Fset completions.
-|       fset-config.c               | Fset config options (file fset.conf).
-|       fset-info.c                 | Fset info/infolists/hdata.
-|       fset-mouse.c                | Fset mouse actions.
-|       fset-option.c               | Fset options management.
-|    guile/                         | Guile (scheme) plugin.
-|       weechat-guile.c             | Main guile functions (load/unload scripts, execute guile code).
-|       weechat-guile-api.c         | Guile scripting API functions.
-|    irc/                           | IRC (Internet Relay Chat) plugin.
-|       irc.c                       | Main IRC functions.
-|       irc-bar-item.c              | IRC bar items.
-|       irc-buffer.c                | IRC buffers.
-|       irc-channel.c               | IRC channels.
-|       irc-color.c                 | IRC colors.
-|       irc-command.c               | IRC commands.
-|       irc-completion.c            | IRC completions.
-|       irc-config.c                | IRC config options (file irc.conf).
-|       irc-ctcp.c                  | IRC CTCP.
-|       irc-debug.c                 | IRC debug functions.
-|       irc-ignore.c                | IRC Ignore.
-|       irc-info.c                  | IRC info/infolists/hdata.
-|       irc-input.c                 | Input of commands/text.
-|       irc-join.c                  | Functions for list of channels to join.
-|       irc-message.c               | Functions to manipulate IRC messages.
-|       irc-mode.c                  | Functions about channel/nick modes.
-|       irc-modelist.c              | IRC channel mode lists (+b, +e, +I, ...).
-|       irc-msgbuffer.c             | Target buffer for IRC messages.
-|       irc-nick.c                  | IRC nicks.
-|       irc-notify.c                | IRC notify lists.
-|       irc-protocol.c              | IRC protocol (RFCs 1459/2810/2811/2812/2813).
-|       irc-raw.c                   | IRC raw buffer.
-|       irc-redirect.c              | Redirection of IRC command output.
-|       irc-sasl.c                  | SASL authentication with IRC server.
-|       irc-server.c                | I/O communication with IRC server.
-|       irc-tag.c                   | Functions to manipulate IRC message tags.
-|       irc-typing.c                | Typing status.
-|       irc-upgrade.c               | Save/restore of IRC data when upgrading WeeChat.
-|    javascript/                    | JavaScript plugin.
-|       weechat-js.cpp              | Main JavaScript functions (load/unload scripts, execute JavaScript code).
-|       weechat-js-api.cpp          | JavaScript scripting API functions.
-|       weechat-js-v8.cpp           | JavaScript v8 functions.
-|    logger/                        | Logger plugin.
-|       logger.c                    | Main logger functions.
-|       logger-backlog.c            | Logger backlog functions.
-|       logger-buffer.c             | Logger buffer list management.
-|       logger-command.c            | Logger commands.
-|       logger-config.c             | Logger config options (file logger.conf).
-|       logger-info.c               | Logger info/infolists/hdata.
-|       logger-tail.c               | Functions to get last lines of a file.
-|    lua/                           | Lua plugin.
-|       weechat-lua.c               | Main lua functions (load/unload scripts, execute lua code).
-|       weechat-lua-api.c           | Lua scripting API functions.
-|    perl/                          | Perl plugin.
-|       weechat-perl.c              | Main perl functions (load/unload scripts, execute perl code).
-|       weechat-perl-api.c          | Perl scripting API functions.
-|    php/                           | PHP plugin.
-|       weechat-php.c               | Main PHP functions (load/unload scripts, execute PHP code).
-|       weechat-php-api.c           | PHP scripting API functions.
-|    python/                        | Python plugin.
-|       weechat-python.c            | Main python functions (load/unload scripts, execute python code).
-|       weechat-python-api.c        | Python scripting API functions.
-|    relay/                         | Relay plugin (IRC proxy and relay for remote interfaces).
-|       relay.c                     | Main relay functions.
-|       relay-auth.c                | Clients authentication.
-|       relay-buffer.c              | Relay buffer.
-|       relay-client.c              | Clients of relay.
-|       relay-command.c             | Relay commands.
-|       relay-completion.c          | Relay completions.
-|       relay-config.c              | Relay config options (file relay.conf).
-|       relay-info.c                | Relay info/infolists/hdata.
-|       relay-network.c             | Network functions for relay.
-|       relay-raw.c                 | Relay raw buffer.
-|       relay-server.c              | Relay server.
-|       relay-upgrade.c             | Save/restore of relay data when upgrading WeeChat.
-|       relay-websocket.c           | WebSocket server functions (RFC 6455).
-|       irc/                        | IRC proxy.
-|          relay-irc.c              | Main IRC proxy functions.
-|       weechat/                    | Relay for remote interfaces.
-|          relay-weechat.c          | Relay for remote interfaces (main functions).
-|          relay-weechat-msg.c      | Send binary messages to clients.
-|          relay-weechat-nicklist.c | Nicklist functions.
-|          relay-weechat-protocol.c | Read commands from clients.
-|    ruby/                          | Ruby plugin.
-|       weechat-ruby.c              | Main ruby functions (load/unload scripts, execute ruby code).
-|       weechat-ruby-api.c          | Ruby scripting API functions.
-|    script/                        | Script manager.
-|       script.c                    | Main functions for script manager.
-|       script-action.c             | Actions on scripts (load/unload, install/remove, ...).
-|       script-buffer.c             | Buffer for script manager.
-|       script-command.c            | Commands for script manager.
-|       script-completion.c         | Completions for script manager.
-|       script-config.c             | Config options for script manager (file script.conf).
-|       script-info.c               | Script manager info/infolists/hdata.
-|       script-mouse.c              | Script mouse actions.
-|       script-repo.c               | Download and read repository file.
-|    tcl/                           | Tcl plugin.
-|       weechat-tcl.c               | Main tcl functions (load/unload scripts, execute tcl code).
-|       weechat-tcl-api.c           | Tcl scripting API functions.
-|    trigger/                       | Trigger plugin.
-|       trigger.c                   | Main trigger functions.
-|       trigger-buffer.c            | Trigger buffer.
-|       trigger-callback.c          | Trigger callbacks.
-|       trigger-command.c           | Trigger commands.
-|       trigger-completion.c        | Trigger completions.
-|       trigger-config.c            | Trigger config options (file trigger.conf).
-|    typing/                        | Typing plugin.
-|       typing.c                    | Main typing functions.
-|       typing-bar-item.c           | Typing bar items.
-|       typing-config.c             | Typing config options (file typing.conf).
-|       typing-status.c             | Messages typing status on buffers.
-|    xfer/                          | Xfer plugin (IRC DCC file/chat).
-|       xfer.c                      | Main xfer functions.
-|       xfer-buffer.c               | Xfer buffer.
-|       xfer-chat.c                 | DCC chat.
-|       xfer-command.c              | Xfer commands.
-|       xfer-completion.c           | Xfer completions.
-|       xfer-config.c               | Xfer config options (file xfer.conf).
-|       xfer-dcc.c                  | DCC file transfer.
-|       xfer-file.c                 | File functions for xfer.
-|       xfer-info.c                 | Xfer info/infolists/hdata.
-|       xfer-network.c              | Network functions for xfer.
-|       xfer-upgrade.c              | Save/restore of xfer data when upgrading WeeChat.
+| Path/file                          | Description
+| plugins/                           | Root of plugins.
+|    plugin.c                        | Plugins management (load/unload dynamic C libraries).
+|    plugin-api.c                    | Extra functions for plugin API (wrapper around WeeChat core functions).
+|    plugin-api-info.c               | Extra info/infolist functions for plugin API.
+|    plugin-config.c                 | Plugin configuration options (file plugins.conf).
+|    plugin-script.c                 | Common functions used by script plugins.
+|    plugin-script-api.c             | Script API functions: wrappers around some plugin API functions.
+|    plugin-script-config.c          | Script plugin configuration options (files python.conf, perl.conf, ...).
+|    weechat-plugin.h                | Header designed to be distributed with WeeChat plugins, in order to compile them.
+|    alias/                          | Alias plugin.
+|       alias.c                      | Main alias functions.
+|       alias-command.c              | Alias commands.
+|       alias-completion.c           | Alias completions.
+|       alias-config.c               | Alias config options (file alias.conf).
+|       alias-info.c                 | Alias info/infolists/hdata.
+|    spell/                          | Spell checker plugin.
+|       spell.c                      | Main spell checker functions.
+|       spell-bar-item.c             | Spell checker bar items.
+|       spell-command.c              | Spell checker commands.
+|       spell-completion.c           | Spell checker completions.
+|       spell-config.c               | Spell checker config options (file spell.conf).
+|       spell-info.c                 | Spell checker info/infolists/hdata.
+|       spell-speller.c              | Spellers management.
+|    buflist/                        | Buflist plugin.
+|       buflist.c                    | Main buflist functions.
+|       buflist-bar-item.c           | Buflist bar items.
+|       buflist-command.c            | Buflist commands.
+|       buflist-completion.c         | Buflist completions.
+|       buflist-config.c             | Buflist config options (file buflist.conf).
+|       buflist-info.c               | Buflist info/infolists/hdata.
+|       buflist-mouse.c              | Buflist mouse actions.
+|    charset/                        | Charset plugin.
+|       charset.c                    | Charset functions.
+|    exec/                           | Exec plugin.
+|       exec.c                       | Main exec functions.
+|       exec-buffer.c                | Exec buffer.
+|       exec-command.c               | Exec commands.
+|       exec-completion.c            | Exec completions.
+|       exec-config.c                | Exec config options (file exec.conf).
+|    fifo/                           | Fifo plugin.
+|       fifo.c                       | Main fifo functions.
+|       fifo-command.c               | Fifo commands.
+|       fifo-config.c                | Fifo config options (file fifo.conf).
+|       fifo-info.c                  | Fifo info/infolists/hdata.
+|    fset/                           | Fset plugin.
+|       fset.c                       | Main fset functions.
+|       fset-bar-item.c              | Fset bar items.
+|       fset-buffer.c                | Fset buffer.
+|       fset-command.c               | Fset commands.
+|       fset-completion.c            | Fset completions.
+|       fset-config.c                | Fset config options (file fset.conf).
+|       fset-info.c                  | Fset info/infolists/hdata.
+|       fset-mouse.c                 | Fset mouse actions.
+|       fset-option.c                | Fset options management.
+|    guile/                          | Guile (scheme) plugin.
+|       weechat-guile.c              | Main guile functions (load/unload scripts, execute guile code).
+|       weechat-guile-api.c          | Guile scripting API functions.
+|    irc/                            | IRC (Internet Relay Chat) plugin.
+|       irc.c                        | Main IRC functions.
+|       irc-bar-item.c               | IRC bar items.
+|       irc-batch.c                  | IRC batched events.
+|       irc-buffer.c                 | IRC buffers.
+|       irc-channel.c                | IRC channels.
+|       irc-color.c                  | IRC colors.
+|       irc-command.c                | IRC commands.
+|       irc-completion.c             | IRC completions.
+|       irc-config.c                 | IRC config options (file irc.conf).
+|       irc-ctcp.c                   | IRC CTCP.
+|       irc-debug.c                  | IRC debug functions.
+|       irc-ignore.c                 | IRC Ignore.
+|       irc-info.c                   | IRC info/infolists/hdata.
+|       irc-input.c                  | Input of commands/text.
+|       irc-join.c                   | Functions for list of channels to join.
+|       irc-list.c                   | Buffer for reply to /list command.
+|       irc-message.c                | Functions to manipulate IRC messages.
+|       irc-mode.c                   | Functions about channel/nick modes.
+|       irc-modelist.c               | IRC channel mode lists (+b, +e, +I, ...).
+|       irc-msgbuffer.c              | Target buffer for IRC messages.
+|       irc-nick.c                   | IRC nicks.
+|       irc-notify.c                 | IRC notify lists.
+|       irc-protocol.c               | IRC protocol (RFCs 1459/2810/2811/2812/2813/7194).
+|       irc-raw.c                    | IRC raw buffer.
+|       irc-redirect.c               | Redirection of IRC command output.
+|       irc-sasl.c                   | SASL authentication with IRC server.
+|       irc-server.c                 | I/O communication with IRC server.
+|       irc-tag.c                    | Functions to manipulate IRC message tags.
+|       irc-typing.c                 | Typing status.
+|       irc-upgrade.c                | Save/restore of IRC data when upgrading WeeChat.
+|    javascript/                     | JavaScript plugin.
+|       weechat-js.cpp               | Main JavaScript functions (load/unload scripts, execute JavaScript code).
+|       weechat-js-api.cpp           | JavaScript scripting API functions.
+|       weechat-js-v8.cpp            | JavaScript v8 functions.
+|    logger/                         | Logger plugin.
+|       logger.c                     | Main logger functions.
+|       logger-backlog.c             | Logger backlog functions.
+|       logger-buffer.c              | Logger buffer list management.
+|       logger-command.c             | Logger commands.
+|       logger-config.c              | Logger config options (file logger.conf).
+|       logger-info.c                | Logger info/infolists/hdata.
+|       logger-tail.c                | Functions to get last lines of a file.
+|    lua/                            | Lua plugin.
+|       weechat-lua.c                | Main lua functions (load/unload scripts, execute lua code).
+|       weechat-lua-api.c            | Lua scripting API functions.
+|    perl/                           | Perl plugin.
+|       weechat-perl.c               | Main perl functions (load/unload scripts, execute perl code).
+|       weechat-perl-api.c           | Perl scripting API functions.
+|    php/                            | PHP plugin.
+|       weechat-php.c                | Main PHP functions (load/unload scripts, execute PHP code).
+|       weechat-php-api.c            | PHP scripting API functions.
+|    python/                         | Python plugin.
+|       weechat-python.c             | Main python functions (load/unload scripts, execute python code).
+|       weechat-python-api.c         | Python scripting API functions.
+|    relay/                          | Relay plugin (IRC proxy and relay for remote interfaces).
+|       relay.c                      | Main relay functions.
+|       relay-auth.c                 | Clients authentication.
+|       relay-bar-item.c             | Relay bar items.
+|       relay-buffer.c               | Relay buffer.
+|       relay-client.c               | Clients of relay.
+|       relay-command.c              | Relay commands.
+|       relay-completion.c           | Relay completions.
+|       relay-config.c               | Relay config options (file relay.conf).
+|       relay-http.c                 | HTTP functions.
+|       relay-info.c                 | Relay info/infolists/hdata.
+|       relay-network.c              | Network functions for relay.
+|       relay-raw.c                  | Relay raw buffer.
+|       relay-remote.c               | Relay remote.
+|       relay-server.c               | Relay server.
+|       relay-upgrade.c              | Save/restore of relay data when upgrading WeeChat.
+|       relay-websocket.c            | WebSocket server functions (RFC 6455).
+|       api/                         | Relay for remote interfaces (using HTTP REST API).
+|          relay-api.c               | Main API functions for HTTP REST API.
+|          relay-api-msg.c           | Send JSON messages to clients.
+|          relay-api-protocol.c      | HTTP REST API protocol.
+|          remote/                   | Relay remote functions, specific to API.
+|             relay-remote-event.c   | Process events received from relay remote.
+|             relay-remote-network.c | Network functions for relay remote.
+|       irc/                         | IRC proxy.
+|          relay-irc.c               | Main IRC proxy functions.
+|       weechat/                     | Relay for remote interfaces (using "weechat" binary protocol).
+|          relay-weechat.c           | Relay for remote interfaces (main functions).
+|          relay-weechat-msg.c       | Send binary messages to clients.
+|          relay-weechat-nicklist.c  | Nicklist functions.
+|          relay-weechat-protocol.c  | Read commands from clients.
+|    ruby/                           | Ruby plugin.
+|       weechat-ruby.c               | Main ruby functions (load/unload scripts, execute ruby code).
+|       weechat-ruby-api.c           | Ruby scripting API functions.
+|    script/                         | Script manager.
+|       script.c                     | Main functions for script manager.
+|       script-action.c              | Actions on scripts (load/unload, install/remove, ...).
+|       script-buffer.c              | Buffer for script manager.
+|       script-command.c             | Commands for script manager.
+|       script-completion.c          | Completions for script manager.
+|       script-config.c              | Config options for script manager (file script.conf).
+|       script-info.c                | Script manager info/infolists/hdata.
+|       script-mouse.c               | Script mouse actions.
+|       script-repo.c                | Download and read repository file.
+|    tcl/                            | Tcl plugin.
+|       weechat-tcl.c                | Main tcl functions (load/unload scripts, execute tcl code).
+|       weechat-tcl-api.c            | Tcl scripting API functions.
+|    trigger/                        | Trigger plugin.
+|       trigger.c                    | Main trigger functions.
+|       trigger-buffer.c             | Trigger buffer.
+|       trigger-callback.c           | Trigger callbacks.
+|       trigger-command.c            | Trigger commands.
+|       trigger-completion.c         | Trigger completions.
+|       trigger-config.c             | Trigger config options (file trigger.conf).
+|    typing/                         | Typing plugin.
+|       typing.c                     | Main typing functions.
+|       typing-bar-item.c            | Typing bar items.
+|       typing-config.c              | Typing config options (file typing.conf).
+|       typing-status.c              | Messages typing status on buffers.
+|    xfer/                           | Xfer plugin (IRC DCC file/chat).
+|       xfer.c                       | Main xfer functions.
+|       xfer-buffer.c                | Xfer buffer.
+|       xfer-chat.c                  | DCC chat.
+|       xfer-command.c               | Xfer commands.
+|       xfer-completion.c            | Xfer completions.
+|       xfer-config.c                | Xfer config options (file xfer.conf).
+|       xfer-dcc.c                   | DCC file transfer.
+|       xfer-file.c                  | File functions for xfer.
+|       xfer-info.c                  | Xfer info/infolists/hdata.
+|       xfer-network.c               | Network functions for xfer.
+|       xfer-upgrade.c               | Save/restore of xfer data when upgrading WeeChat.
 |===
 
 [[sources_tests]]
@@ -391,74 +401,121 @@ WeeChat "core" is located in following directories:
 
 [width="100%",cols="2m,3",options="header"]
 |===
-| Path/file                           | Description
-| tests/                              | Root of tests.
-|    tests.cpp                        | Program used to run all tests.
-|    scripts/                         | Root of scripting API tests.
-|       test-scripts.cpp              | Program used to run the scripting API tests.
-|       python/                       | Python scripts to generate and run the scripting API tests.
-|          testapigen.py              | Python script generating scripts in all languages to test the scripting API.
-|          testapi.py                 | Python script with scripting API tests, used by script testapigen.py.
-|          unparse.py                 | Convert Python code to other languages, used by script testapigen.py.
-|    unit/                            | Root of unit tests.
-|       test-plugins.cpp              | Tests: plugins.
-|       core/                         | Root of unit tests for core.
-|          test-core-arraylist.cpp    | Tests: arraylists.
-|          test-core-calc.cpp         | Tests: calculation of expressions.
-|          test-core-command.cpp      | Tests: commands.
-|          test-core-config-file.cpp  | Tests: configuration files.
-|          test-core-crypto.cpp       | Tests: cryptographic functions.
-|          test-core-dir.cpp          | Tests: directory/file functions.
-|          test-core-eval.cpp         | Tests: evaluation of expressions.
-|          test-core-hashtble.cpp     | Tests: hashtables.
-|          test-core-hdata.cpp        | Tests: hdata.
-|          test-core-hook.cpp         | Tests: hooks.
-|          test-core-infolist.cpp     | Tests: infolists.
-|          test-core-list.cpp         | Tests: lists.
-|          test-core-network.cpp      | Tests: network functions.
-|          test-core-secure.cpp       | Tests: secured data.
-|          test-core-signal.cpp       | Tests: signals.
-|          test-core-string.cpp       | Tests: strings.
-|          test-core-url.cpp          | Tests: URLs.
-|          test-core-utf8.cpp         | Tests: UTF-8.
-|          test-core-util.cpp         | Tests: utility functions.
-|       gui/                          | Root of unit tests for interfaces.
-|          test-gui-bar-window.cpp    | Tests: bar window functions.
-|          test-gui-buffer.cpp        | Tests: buffer functions.
-|          test-gui-chat.cpp          | Tests: chat functions.
-|          test-gui-color.cpp         | Tests: colors.
-|          test-gui-filter.cpp        | Tests: filters.
-|          test-gui-input.cpp         | Tests: input functions.
-|          test-gui-line.cpp          | Tests: lines.
-|          test-gui-nick.cpp          | Tests: nicks.
-|       plugins/                      | Root of unit tests for plugins.
-|          irc/                       | Root of unit tests for IRC plugin.
-|             test-irc-buffer.cpp     | Tests: IRC buffers.
-|             test-irc-channel.cpp    | Tests: IRC channels.
-|             test-irc-color.cpp      | Tests: IRC colors.
-|             test-irc-config.cpp     | Tests: IRC configuration.
-|             test-irc-ignore.cpp     | Tests: IRC ignores.
-|             test-irc-join.cpp       | Tests: IRC join functions.
-|             test-irc-message.cpp    | Tests: IRC messages.
-|             test-irc-mode.cpp       | Tests: IRC modes.
-|             test-irc-nick.cpp       | Tests: IRC nicks.
-|             test-irc-protocol.cpp   | Tests: IRC protocol.
-|             test-irc-sasl.cpp       | Tests: SASL authentication with IRC protocol.
-|             test-irc-server.cpp     | Tests: IRC server.
-|             test-irc-tag.cpp        | Tests: IRC message tags.
-|          logger/                    | Root of unit tests for logger plugin.
-|             test-logger-backlog.cpp | Tests: logger backlog.
-|          trigger/                   | Root of unit tests for trigger plugin.
-|             test-trigger.cpp        | Tests: triggers.
-|             test-trigger-config.cpp | Tests: trigger configuration.
-|          typing/                    | Root of unit tests for typing plugin.
-|             test-typing.cpp         | Tests: typing.
-|             test-typing-status.cpp  | Tests: typing status.
-|          relay/                     | Root of unit tests for Relay plugin.
-|             test-relay-auth.cpp     | Tests: clients authentication.
-|          xfer/                      | Root of unit tests for Xfer plugin.
-|             test-xfer-file.cpp      | Tests: file functions.
-|             test-xfer-network.cpp   | Tests: network functions.
+| Path/file                                  | Description
+| tests/                                     | Root of tests.
+|    tests.cpp                               | Program used to run all tests.
+|    tests-record.cpp                        | Record and search in messages displayed.
+|    scripts/                                | Root of scripting API tests.
+|       test-scripts.cpp                     | Program used to run the scripting API tests.
+|       python/                              | Python scripts to generate and run the scripting API tests.
+|          testapigen.py                     | Python script generating scripts in all languages to test the scripting API.
+|          testapi.py                        | Python script with scripting API tests, used by script testapigen.py.
+|          unparse.py                        | Convert Python code to other languages, used by script testapigen.py.
+|    unit/                                   | Root of unit tests.
+|       test-plugins.cpp                     | Tests: plugins.
+|       test-plugin-api-info.cpp             | Tests: plugin API info functions.
+|       test-plugin-config.cpp               | Tests: plugin config functions.
+|       core/                                | Root of unit tests for core.
+|          test-core-arraylist.cpp           | Tests: arraylists.
+|          test-core-calc.cpp                | Tests: calculation of expressions.
+|          test-core-command.cpp             | Tests: commands.
+|          test-core-config-file.cpp         | Tests: configuration files.
+|          test-core-crypto.cpp              | Tests: cryptographic functions.
+|          test-core-dir.cpp                 | Tests: directory/file functions.
+|          test-core-eval.cpp                | Tests: evaluation of expressions.
+|          test-core-hashtable.cpp           | Tests: hashtables.
+|          test-core-hdata.cpp               | Tests: hdata.
+|          test-core-hook.cpp                | Tests: hooks.
+|          test-core-infolist.cpp            | Tests: infolists.
+|          test-core-input.cpp               | Tests: input functions.
+|          test-core-list.cpp                | Tests: lists.
+|          test-core-network.cpp             | Tests: network functions.
+|          test-core-secure.cpp              | Tests: secured data.
+|          test-core-signal.cpp              | Tests: signals.
+|          test-core-string.cpp              | Tests: strings.
+|          test-core-url.cpp                 | Tests: URLs.
+|          test-core-utf8.cpp                | Tests: UTF-8.
+|          test-core-util.cpp                | Tests: utility functions.
+|          test-core-sys.cpp                 | Tests: system functions.
+|          hook/                             | Root of unit tests for hooks.
+|             test-hook-command.cpp          | Tests: hooks "command".
+|             test-hook-command-run.cpp      | Tests: hooks "command_run".
+|             test-hook-completion.cpp       | Tests: hooks "completion".
+|             test-hook-config.cpp           | Tests: hooks "config".
+|             test-hook-connect.cpp          | Tests: hooks "connect".
+|             test-hook-fd.cpp               | Tests: hooks "fd".
+|             test-hook-focus.cpp            | Tests: hooks "focus".
+|             test-hook-hdata.cpp            | Tests: hooks "hdata".
+|             test-hook-hsignal.cpp          | Tests: hooks "hsignal".
+|             test-hook-info-hashtable.cpp   | Tests: hooks "info_hashtable".
+|             test-hook-info.cpp             | Tests: hooks "info".
+|             test-hook-infolist.cpp         | Tests: hooks "infolist".
+|             test-hook-line.cpp             | Tests: hooks "line".
+|             test-hook-modifier.cpp         | Tests: hooks "modifier".
+|             test-hook-print.cpp            | Tests: hooks "print".
+|             test-hook-process.cpp          | Tests: hooks "process".
+|             test-hook-signal.cpp           | Tests: hooks "signal".
+|             test-hook-timer.cpp            | Tests: hooks "timer".
+|             test-hook-url.cpp              | Tests: hooks "url".
+|       gui/                                 | Root of unit tests for interfaces.
+|          test-gui-bar-window.cpp           | Tests: bar window functions.
+|          test-gui-buffer.cpp               | Tests: buffer functions.
+|          test-gui-chat.cpp                 | Tests: chat functions.
+|          test-gui-color.cpp                | Tests: colors.
+|          test-gui-filter.cpp               | Tests: filters.
+|          test-gui-hotlist.cpp              | Tests: hotlist functions.
+|          test-gui-input.cpp                | Tests: input functions.
+|          test-gui-key.cpp                  | Tests: keys.
+|          test-gui-line.cpp                 | Tests: lines.
+|          test-gui-nick.cpp                 | Tests: nicks.
+|          test-gui-nicklist.cpp             | Tests: nicklist functions.
+|          curses/                           | Root of unit tests for Curses interface.
+|             test-gui-curses-mouse.cpp      | Tests: mouse (Curses interface).
+|       plugins/                             | Root of unit tests for plugins.
+|          irc/                              | Root of unit tests for IRC plugin.
+|             test-irc-batch.cpp             | Tests: IRC batched events.
+|             test-irc-buffer.cpp            | Tests: IRC buffers.
+|             test-irc-channel.cpp           | Tests: IRC channels.
+|             test-irc-color.cpp             | Tests: IRC colors.
+|             test-irc-command.cpp           | Tests: IRC commands.
+|             test-irc-config.cpp            | Tests: IRC configuration.
+|             test-irc-ctcp.cpp              | Tests: IRC CTCP.
+|             test-irc-ignore.cpp            | Tests: IRC ignores.
+|             test-irc-info.cpp              | Tests: IRC info.
+|             test-irc-join.cpp              | Tests: IRC join functions.
+|             test-irc-list.cpp              | Tests: IRC buffer for reply to /list command.
+|             test-irc-message.cpp           | Tests: IRC messages.
+|             test-irc-mode.cpp              | Tests: IRC modes.
+|             test-irc-nick.cpp              | Tests: IRC nicks.
+|             test-irc-protocol.cpp          | Tests: IRC protocol.
+|             test-irc-sasl.cpp              | Tests: SASL authentication with IRC protocol.
+|             test-irc-server.cpp            | Tests: IRC server.
+|             test-irc-tag.cpp               | Tests: IRC message tags.
+|          logger/                           | Root of unit tests for logger plugin.
+|             test-logger.cpp                | Tests: logger.
+|             test-logger-backlog.cpp        | Tests: logger backlog.
+|             test-logger-tail.cpp           | Tests: logger tail functions.
+|          trigger/                          | Root of unit tests for trigger plugin.
+|             test-trigger.cpp               | Tests: triggers.
+|             test-trigger-config.cpp        | Tests: trigger configuration.
+|          typing/                           | Root of unit tests for typing plugin.
+|             test-typing.cpp                | Tests: typing.
+|             test-typing-status.cpp         | Tests: typing status.
+|          relay/                            | Root of unit tests for Relay plugin.
+|             test-relay-auth.cpp            | Tests: clients authentication.
+|             test-relay-http.cpp            | Tests: HTTP functions for Relay plugin.
+|             test-relay-raw.cpp             | Tests: raw messages functions for Relay plugin.
+|             test-relay-remote.cpp          | Tests: remote functions for Relay plugin.
+|             test-relay-websocket.cpp       | Tests: websocket functions for Relay plugin.
+|             api/                           | Root of unit tests for Relay "api" protocol.
+|                test-relay-api.cpp          | Tests: Relay "api" protocol: general functions.
+|                test-relay-api-msg.cpp      | Tests: Relay "api" protocol: messages.
+|                test-relay-api-protocol.cpp | Tests: Relay "api" protocol: protocol.
+|             irc/                           | Root of unit tests for Relay "irc" protocol.
+|                test-relay-irc.cpp          | Tests: Relay "irc" protocol.
+|          xfer/                             | Root of unit tests for Xfer plugin.
+|             test-xfer-file.cpp             | Tests: file functions.
+|             test-xfer-network.cpp          | Tests: network functions.
 |===
 
 [[documentation_translations]]
@@ -471,28 +528,17 @@ Documentation files:
 | Path/file                                     | Description
 | doc/                                          | Documentation.
 |    docinfo.html                               | Asciidoctor style.
-|    docgen.py                                  | Python script to build auto-generated files in _includes/_ directory (see below).
 |    XX/                                        | Documentation for language XX (languages: en, fr, de, it, ...).
 |       weechat.1.XX.adoc                       | Man page (`man weechat`).
-|       weechat_dev.XX.adoc                     | link:weechat_dev.en.html[Developer's guide ^↗^,window=_blank] (this document).
-|       weechat_faq.XX.adoc                     | link:weechat_faq.en.html[FAQ ^↗^,window=_blank].
-|       weechat_plugin_api.XX.adoc              | link:weechat_plugin_api.en.html[Plugin API reference ^↗^,window=_blank].
-|       weechat_quickstart.XX.adoc              | link:weechat_quickstart.en.html[Quickstart guide ^↗^,window=_blank].
-|       weechat_relay_protocol.XX.adoc          | link:weechat_relay_protocol.en.html[Relay protocol ^↗^,window=_blank] (for remote interfaces).
-|       weechat_scripting.XX.adoc               | link:weechat_scripting.en.html[Scripting guide ^↗^,window=_blank].
-|       weechat_user.XX.adoc                    | link:weechat_user.en.html[User's guide ^↗^,window=_blank].
+|       weechat_dev.XX.adoc                     | link:weechat_dev.en.html[Developer's guide ^↗^^] (this document).
+|       weechat_faq.XX.adoc                     | link:weechat_faq.en.html[FAQ ^↗^^].
+|       weechat_plugin_api.XX.adoc              | link:weechat_plugin_api.en.html[Plugin API reference ^↗^^].
+|       weechat_quickstart.XX.adoc              | link:weechat_quickstart.en.html[Quickstart guide ^↗^^].
+|       weechat_relay_api.XX.adoc               | link:weechat_relay_api.en.html[Relay "api" protocol ^↗^^] (for remote interfaces).
+|       weechat_relay_weechat.XX.adoc           | link:weechat_relay_weechat.en.html[Relay "weechat" protocol ^↗^^] (for remote interfaces).
+|       weechat_scripting.XX.adoc               | link:weechat_scripting.en.html[Scripting guide ^↗^^].
+|       weechat_user.XX.adoc                    | link:weechat_user.en.html[User's guide ^↗^^].
 |       includes/                               | Files included in documentation.
-|          autogen_api_completions.XX.adoc      | Auto-generated file for Plugin API reference: completions (do *NEVER* update manually!).
-|          autogen_api_hdata.XX.adoc            | Auto-generated file for Plugin API reference: hdata (do *NEVER* update manually!).
-|          autogen_api_infolists.XX.adoc        | Auto-generated file for Plugin API reference: infolists (do *NEVER* update manually!).
-|          autogen_api_infos.XX.adoc            | Auto-generated file for Plugin API reference: infos (do *NEVER* update manually!).
-|          autogen_api_infos_hashtable.XX.adoc  | Auto-generated file for Plugin API reference: infos hashtable (do *NEVER* update manually!).
-|          autogen_api_plugins_priority.XX.adoc | Auto-generated file for Plugin API reference: plugins priority (do *NEVER* update manually!).
-|          autogen_api_url_options.XX.adoc      | Auto-generated file for Plugin API reference: URL options (do *NEVER* update manually!).
-|          autogen_user_commands.XX.adoc        | Auto-generated file for User's guide: commands (do *NEVER* update manually!).
-|          autogen_user_default_aliases.XX.adoc | Auto-generated file for User's guide: default aliases (do *NEVER* update manually!).
-|          autogen_user_irc_colors.XX.adoc      | Auto-generated file for User's guide: IRC colors (do *NEVER* update manually!).
-|          autogen_user_options.XX.adoc         | Auto-generated file for User's guide: configuration options (do *NEVER* update manually!).
 |          cmdline_options.XX.adoc              | Command-line options (file included in man pages and user's guide).
 |          man.XX.adoc                          | Part of man pages: plugin options, files and copyright.
 |===
@@ -530,7 +576,7 @@ Example in C:
 /*
  * weechat.c - core functions for WeeChat
  *
- * Copyright (C) 2022 Your Name <your@email.com>
+ * Copyright (C) 2024 Your Name <your@email.com>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -554,9 +600,8 @@ Example in C:
 
 Some basic rules you *must* follow when you write C code:
 
-* Use 4 spaces for indentation. Don't use tabs, they are evil.
-* Try to not exceed 80 chars by line, except if this is needed to increase
-  readability.
+* Use 4 spaces for indentation (no tabs).
+* Try to not exceed 80 chars by line, except if this is needed to increase readability.
 * Use comments `+/* comment */+` (not C99-style comments like `+// comment+`).
 * Add a comment before any function, to explain what it does (always use a
   multi-line comment, even if description is very short).
@@ -745,7 +790,7 @@ new_hook_fd = malloc (sizeof (*new_hook_fd));
 [[coding_python_style]]
 === Python style
 
-See https://www.python.org/dev/peps/pep-0008/[PEP 8 ^↗^,window=_blank].
+See https://www.python.org/dev/peps/pep-0008/[PEP 8 ^↗^^].
 
 [[core_internals]]
 == Core internals
@@ -768,7 +813,7 @@ Examples:
 [width="100%",cols="2m,3",options="header"]
 |===
 | Directory           | Files
-| src/core/           | weechat.c, wee-backtrace.c, wee-command.c, ...
+| src/core/           | weechat.c, core-backtrace.c, core-command.c, ...
 | src/gui/            | gui-bar.c, gui-bar-item.c, gui-bar-window.c, ...
 | src/gui/curses/     | gui-curses-bar.c, gui-curses-bar-window.c, gui-curses-chat.c, ...
 | src/plugins/        | plugin.c, plugin-api.c, plugin-api-info.c, plugin-config.c, plugin-script.c, ...
@@ -776,8 +821,8 @@ Examples:
 | src/plugins/python/ | weechat-python.c, weechat-python-api.c, ...
 |===
 
-The headers of C files have same name as file, for example _wee-command.h_ for
-file _wee-command.c_.
+The headers of C files have same name as file, for example _core-command.h_ for
+file _core-command.c_.
 
 [[naming_convention_structures]]
 ==== Structures
@@ -1004,16 +1049,16 @@ _src/gui/gui-color.h_):
 | 14   | weechat.color.chat_nick
 | 15   | weechat.color.chat_nick_self
 | 16   | weechat.color.chat_nick_other
-| 17   | _(not used any more since WeeChat 0.3.4)_
-| 18   | _(not used any more since WeeChat 0.3.4)_
-| 19   | _(not used any more since WeeChat 0.3.4)_
-| 20   | _(not used any more since WeeChat 0.3.4)_
-| 21   | _(not used any more since WeeChat 0.3.4)_
-| 22   | _(not used any more since WeeChat 0.3.4)_
-| 23   | _(not used any more since WeeChat 0.3.4)_
-| 24   | _(not used any more since WeeChat 0.3.4)_
-| 25   | _(not used any more since WeeChat 0.3.4)_
-| 26   | _(not used any more since WeeChat 0.3.4)_
+| 17   | _(not used anymore since WeeChat 0.3.4)_
+| 18   | _(not used anymore since WeeChat 0.3.4)_
+| 19   | _(not used anymore since WeeChat 0.3.4)_
+| 20   | _(not used anymore since WeeChat 0.3.4)_
+| 21   | _(not used anymore since WeeChat 0.3.4)_
+| 22   | _(not used anymore since WeeChat 0.3.4)_
+| 23   | _(not used anymore since WeeChat 0.3.4)_
+| 24   | _(not used anymore since WeeChat 0.3.4)_
+| 25   | _(not used anymore since WeeChat 0.3.4)_
+| 26   | _(not used anymore since WeeChat 0.3.4)_
 | 27   | weechat.color.chat_host
 | 28   | weechat.color.chat_delimiters
 | 29   | weechat.color.chat_highlight
@@ -1032,6 +1077,8 @@ _src/gui/gui-color.h_):
 | 42   | weechat.color.emphasized _(WeeChat ≥ 0.4.2)_
 | 43   | weechat.color.chat_day_change _(WeeChat ≥ 0.4.2)_
 | 44   | weechat.color.chat_value_null _(WeeChat ≥ 1.4)_
+| 45   | weechat.color.chat_status_disabled _(WeeChat ≥ 4.0.0)_
+| 46   | weechat.color.chat_status_enabled _(WeeChat ≥ 4.0.0)_
 |===
 
 WeeChat colors are:
@@ -1125,7 +1172,7 @@ server->hook_timer_sasl = weechat_hook_timer (timeout * 1000,
 [[git_repository]]
 === Git repository
 
-Git repository is on https://github.com/weechat/weechat[GitHub ^↗^,window=_blank].
+Git repository is on https://github.com/weechat/weechat[GitHub ^↗^^].
 
 Any patch for bug or new feature must be done on master branch, preferred way
 is a GitHub pull request. A patch can also be sent by e-mail
@@ -1144,15 +1191,15 @@ Where _component_ is one of following:
 | Component | Files | Description
 
 | core
-| AUTHORS.adoc +
-  ChangeLog.adoc +
-  Contributing.adoc +
+| AUTHORS.md +
+  CHANGELOG.md +
+  CONTRIBUTING.md +
   .github/FUNDING.yml +
   .github/ISSUE_TEMPLATE/* +
   icons/* +
   po/* +
-  README.adoc +
-  ReleaseNotes.adoc +
+  README.md +
+  UPGRADING.md +
   src/core/* +
   src/gui/* +
   version.sh +
@@ -1160,14 +1207,10 @@ Where _component_ is one of following:
 | WeeChat core
 
 | build
-| autogen.sh +
-  CMakeLists.txt +
+| CMakeLists.txt +
   cmake/* +
-  configure.ac +
-  Makefile.am +
   tools/* +
-  weechat.cygport.in +
-  weechat.spec
+  weechat.cygport.in
 | Build
 
 | ci
@@ -1213,8 +1256,9 @@ Where _component_ is one of following:
 | Plugin API reference
 
 | doc/relay
-| doc/xx/weechat_relay_protocol.xx.adoc
-| Relay protocol
+| doc/xx/weechat_relay_api.xx.adoc +
+  doc/xx/weechat_relay_weechat.xx.adoc
+| Relay protocols
 
 | doc/dev
 | doc/xx/weechat_dev.en.adoc
@@ -1258,9 +1302,10 @@ Gettext files are in directory _po/_.
 If you want to initialize a new language, use command `msginit`. For example to
 create a file which is ready to translate to Dutch:
 
+[source,shell]
 ----
-$ cd po
-$ msginit -i weechat.pot -l nl_NL -o nl.po
+cd po
+msginit -i weechat.pot -l nl_NL -o nl.po
 ----
 
 Base language for WeeChat is English, so you must of course perfectly understand
@@ -1269,33 +1314,22 @@ English in order to translate to your language.
 After changes in sources, you can regenerate all translations files: run this
 command in the CMake "build" directory:
 
+[source,shell]
 ----
-$ make translations && make update-po
+make translations && make update-po
 ----
 
 Then you can edit .po files (if you can translate in a language).
 
 When done, you *have* to check your file with
-https://github.com/flashcode/msgcheck[msgcheck ^↗^,window=_blank]:
+https://github.com/flashcode/msgcheck[msgcheck ^↗^^]:
 
+[source,shell]
 ----
-$ msgcheck.py xx.po
+msgcheck.py xx.po
 ----
 
 And then you can recompile WeeChat to use the new translations.
-
-[[build_autogen_files]]
-===== Build auto-generated files
-
-Files named `+autogen_*+` in directory _doc/XX/includes/_ are auto-generated by
-script _doc/docgen.py_.
-
-You can rebuild auto-generated files directly in your WeeChat sources by
-running WeeChat in a temporary directory and loading the script:
-
-----
-weechat -t -r "/python load /path/to/weechat/doc/docgen.py;/docgen;/quit"
-----
 
 [[asciidoc]]
 ==== Asciidoc
@@ -1329,5 +1363,5 @@ warnings, ... These words must be kept unchanged:
 When there is a name after `+<<link_name>>+`, then you must translate it:
 
 ----
-<<link_name,this text must be translated>>
+<<link_name,this text should be translated>>
 ----

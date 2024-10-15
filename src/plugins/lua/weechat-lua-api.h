@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2006-2007 Emmanuel Bouthenot <kolter@openics.org>
- * Copyright (C) 2006-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2006-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -22,7 +22,6 @@
 #define WEECHAT_PLUGIN_LUA_API_H
 
 extern struct luaL_Reg weechat_lua_api_funcs[];
-extern struct t_lua_const weechat_lua_api_consts[];
 
 extern int weechat_lua_api_buffer_input_data_cb (const void *pointer,
                                                  void *data,

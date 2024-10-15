@@ -1,7 +1,7 @@
 /*
  * script-mouse.c - mouse actions for script
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -39,7 +39,6 @@ script_mouse_focus_chat_cb (const void *pointer, void *data,
 {
     const char *buffer;
     int rc;
-    unsigned long value;
     struct t_gui_buffer *ptr_buffer;
     long x;
     char *error, str_date[64];
@@ -57,11 +56,9 @@ script_mouse_focus_chat_cb (const void *pointer, void *data,
     if (!buffer)
         return info;
 
-    rc = sscanf (buffer, "%lx", &value);
+    rc = sscanf (buffer, "%p", &ptr_buffer);
     if ((rc == EOF) || (rc == 0))
         return info;
-
-    ptr_buffer = (struct t_gui_buffer *)value;
 
     if (!ptr_buffer || (ptr_buffer != script_buffer))
         return info;
@@ -135,21 +132,21 @@ script_mouse_init ()
     weechat_hashtable_set (
         keys,
         "@chat(" SCRIPT_PLUGIN_NAME "." SCRIPT_BUFFER_NAME "):button1",
-        "/window ${_window_number};/script go ${_chat_line_y}");
+        "/window ${_window_number};/script -go ${_chat_line_y}");
     weechat_hashtable_set (
         keys,
         "@chat(" SCRIPT_PLUGIN_NAME "." SCRIPT_BUFFER_NAME "):button2",
         "/window ${_window_number};"
-        "/script go ${_chat_line_y};"
+        "/script -go ${_chat_line_y};"
         "/script installremove -q ${script_name_with_extension}");
     weechat_hashtable_set (
         keys,
         "@chat(" SCRIPT_PLUGIN_NAME "." SCRIPT_BUFFER_NAME "):wheelup",
-        "/script up 5");
+        "/script -up 5");
     weechat_hashtable_set (
         keys,
         "@chat(" SCRIPT_PLUGIN_NAME "." SCRIPT_BUFFER_NAME "):wheeldown",
-        "/script down 5");
+        "/script -down 5");
     weechat_hashtable_set (keys, "__quiet", "1");
     weechat_key_bind ("mouse", keys);
 

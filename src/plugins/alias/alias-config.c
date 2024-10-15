@@ -1,7 +1,7 @@
 /*
  * alias-config.c - alias configuration options (file alias.conf)
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -25,6 +25,7 @@
 
 #include "../weechat-plugin.h"
 #include "alias.h"
+#include "alias-config.h"
 
 
 struct t_config_file *alias_config_file = NULL;
@@ -32,39 +33,39 @@ struct t_config_section *alias_config_section_cmd = NULL;
 struct t_config_section *alias_config_section_completion = NULL;
 
 char *alias_default[][3] =
-{ { "AAWAY",   "allserv /away",        NULL            },
-  { "ANICK",   "allserv /nick",        NULL            },
-  { "BEEP",    "print -beep",          NULL            },
-  { "BYE",     "quit",                 NULL            },
-  { "C",       "buffer clear",         NULL            },
-  { "CL",      "buffer clear",         NULL            },
-  { "CLOSE",   "buffer close",         NULL            },
-  { "CHAT",    "dcc chat",             NULL            },
-  { "EXIT",    "quit",                 NULL            },
-  { "IG",      "ignore",               NULL            },
-  { "J",       "join",                 NULL            },
-  { "K",       "kick",                 NULL            },
-  { "KB",      "kickban",              NULL            },
-  { "LEAVE",   "part",                 NULL            },
-  { "M",       "msg",                  NULL            },
-  { "MUB",     "unban *",              NULL            },
-  { "MSGBUF",  "command -buffer $1 * /input send $2-",
+{ { "aaway",   "allserv /away",        NULL            },
+  { "anick",   "allserv /nick",        NULL            },
+  { "beep",    "print -beep",          NULL            },
+  { "bye",     "quit",                 NULL            },
+  { "c",       "buffer clear",         NULL            },
+  { "cl",      "buffer clear",         NULL            },
+  { "close",   "buffer close",         NULL            },
+  { "chat",    "dcc chat",             NULL            },
+  { "exit",    "quit",                 NULL            },
+  { "ig",      "ignore",               NULL            },
+  { "j",       "join",                 NULL            },
+  { "k",       "kick",                 NULL            },
+  { "kb",      "kickban",              NULL            },
+  { "leave",   "part",                 NULL            },
+  { "m",       "msg",                  NULL            },
+  { "mub",     "unban *",              NULL            },
+  { "msgbuf",  "command -buffer $1 * /input send $2-",
     "%(buffers_plugins_names)"                         },
-  { "N",       "names",                NULL            },
-  { "Q",       "query",                NULL            },
-  { "REDRAW",  "window refresh",       NULL            },
-  { "SAY",     "msg *",                NULL            },
-  { "SIGNOFF", "quit",                 NULL            },
-  { "T",       "topic",                NULL            },
-  { "UB",      "unban",                NULL            },
-  { "UMODE",   "mode $nick",           NULL            },
-  { "V",       "command core version", NULL            },
-  { "W",       "who",                  NULL            },
-  { "WC",      "window close",         NULL            },
-  { "WI",      "whois",                NULL            },
-  { "WII",     "whois $1 $1",          NULL            },
-  { "WM",      "window merge",         NULL            },
-  { "WW",      "whowas",               NULL            },
+  { "n",       "names",                NULL            },
+  { "q",       "query",                NULL            },
+  { "redraw",  "window refresh",       NULL            },
+  { "say",     "msg *",                NULL            },
+  { "signoff", "quit",                 NULL            },
+  { "t",       "topic",                NULL            },
+  { "ub",      "unban",                NULL            },
+  { "umode",   "mode $nick",           NULL            },
+  { "v",       "command core version", NULL            },
+  { "w",       "who",                  NULL            },
+  { "wc",      "window close",         NULL            },
+  { "wi",      "whois",                NULL            },
+  { "wii",     "whois $1 $1",          NULL            },
+  { "wm",      "window merge",         NULL            },
+  { "ww",      "whowas",               NULL            },
   { NULL,      NULL,                   NULL            },
 };
 
@@ -112,11 +113,9 @@ alias_config_cmd_delete_cb (const void *pointer, void *data,
                                                           weechat_config_option_get_pointer (option, "name"));
 
     ptr_alias = alias_search (weechat_config_option_get_pointer (option, "name"));
-    if (ptr_alias)
-        alias_free (ptr_alias);
+    alias_free (ptr_alias);
 
-    if (ptr_option_completion)
-        weechat_config_option_free (ptr_option_completion);
+    weechat_config_option_free (ptr_option_completion);
 }
 
 /*
@@ -249,8 +248,7 @@ alias_config_cmd_create_option_cb (const void *pointer, void *data,
 
     /* create alias */
     ptr_alias = alias_search (option_name);
-    if (ptr_alias)
-        alias_free (ptr_alias);
+    alias_free (ptr_alias);
     if (value && value[0])
         rc = (alias_new (option_name, value, NULL)) ?
             WEECHAT_CONFIG_OPTION_SET_OK_SAME_VALUE : WEECHAT_CONFIG_OPTION_SET_ERROR;
@@ -356,6 +354,71 @@ alias_config_completion_create_option_cb (const void *pointer, void *data,
 }
 
 /*
+ * Updates options in configuration file while reading the file.
+ */
+
+struct t_hashtable *
+alias_config_update_cb (const void *pointer, void *data,
+                        struct t_config_file *config_file,
+                        int version_read,
+                        struct t_hashtable *data_read)
+{
+    const char *ptr_section, *ptr_option;
+    char *new_option;
+    int changes;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) config_file;
+
+    /* nothing to do if the config file is already up-to-date */
+    if (version_read >= ALIAS_CONFIG_VERSION)
+        return NULL;
+
+    changes = 0;
+
+    if (version_read < 2)
+    {
+        /*
+         * changes in v2 (WeeChat 4.0.0):
+         *   - aliases are in lower case by default
+         *     (default aliases and those created by users are automatically
+         *     converted to lower case)
+         */
+        ptr_section = weechat_hashtable_get (data_read, "section");
+        ptr_option = weechat_hashtable_get (data_read, "option");
+        if (ptr_section
+            && ptr_option
+            && ((strcmp (ptr_section, "cmd") == 0)
+                || (strcmp (ptr_section, "completion") == 0)))
+        {
+            /* convert alias name to lower case */
+            new_option = weechat_string_tolower (ptr_option);
+            if (new_option)
+            {
+                if (strcmp (ptr_option, new_option) != 0)
+                {
+                    if (strcmp (ptr_section, "cmd") == 0)
+                    {
+                        /* display message only for alias, not for completion */
+                        weechat_printf (
+                            NULL,
+                            _("Alias converted to lower case: \"%s\" => \"%s\""),
+                            ptr_option, new_option);
+                    }
+                    weechat_hashtable_set (data_read, "option", new_option);
+                    changes++;
+                }
+                free (new_option);
+            }
+        }
+    }
+
+    return (changes) ? data_read : NULL;
+}
+
+/*
  * Initializes alias configuration file.
  *
  * Returns:
@@ -366,32 +429,31 @@ alias_config_completion_create_option_cb (const void *pointer, void *data,
 int
 alias_config_init ()
 {
-    struct t_config_section *ptr_section;
-
-    alias_config_file = weechat_config_new (ALIAS_CONFIG_NAME,
+    alias_config_file = weechat_config_new (ALIAS_CONFIG_PRIO_NAME,
                                             &alias_config_reload, NULL, NULL);
     if (!alias_config_file)
         return 0;
 
+    if (!weechat_config_set_version (alias_config_file, ALIAS_CONFIG_VERSION,
+                                     &alias_config_update_cb, NULL, NULL))
+    {
+        weechat_config_free (alias_config_file);
+        alias_config_file = NULL;
+        return 0;
+    }
+
     /* cmd */
-    ptr_section = weechat_config_new_section (
+    alias_config_section_cmd = weechat_config_new_section (
         alias_config_file, "cmd",
         1, 1,
         NULL, NULL, NULL,
         NULL, NULL, NULL,
         &alias_config_cmd_write_default_cb, NULL, NULL,
         &alias_config_cmd_create_option_cb, NULL, NULL,
-                                              NULL, NULL, NULL);
-    if (!ptr_section)
-    {
-        weechat_config_free (alias_config_file);
-        alias_config_file = NULL;
-        return 0;
-    }
-    alias_config_section_cmd = ptr_section;
+        NULL, NULL, NULL);
 
     /* completion */
-    ptr_section = weechat_config_new_section (
+    alias_config_section_completion = weechat_config_new_section (
         alias_config_file, "completion",
         1, 1,
         NULL, NULL, NULL,
@@ -399,13 +461,6 @@ alias_config_init ()
         &alias_config_completion_write_default_cb, NULL, NULL,
         &alias_config_completion_create_option_cb, NULL, NULL,
         NULL, NULL, NULL);
-    if (!ptr_section)
-    {
-        weechat_config_free (alias_config_file);
-        alias_config_file = NULL;
-        return 0;
-    }
-    alias_config_section_completion = ptr_section;
 
     return 1;
 }

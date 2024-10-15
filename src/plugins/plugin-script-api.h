@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  * Copyright (C) 2012 Simon Arlott
  *
  * This file is part of WeeChat, the extensible chat client.
@@ -37,6 +37,17 @@ extern struct t_config_file *plugin_script_api_config_new (struct t_weechat_plug
                                                                                   struct t_config_file *config_file),
                                                            const char *function,
                                                            const char *data);
+extern int plugin_script_api_config_set_version (struct t_weechat_plugin *weechat_plugin,
+                                                 struct t_plugin_script *script,
+                                                 struct t_config_file *config_file,
+                                                 int version,
+                                                 struct t_hashtable *(*callback_update)(const void *pointer,
+                                                                                        void *data,
+                                                                                        struct t_config_file *config_file,
+                                                                                        int version_read,
+                                                                                        struct t_hashtable *data_read),
+                                                 const char *function,
+                                                 const char *data);
 extern struct t_config_section *plugin_script_api_config_new_section (struct t_weechat_plugin *weechat_plugin,
                                                                       struct t_plugin_script *script,
                                                                       struct t_config_file *config_file,
@@ -115,6 +126,12 @@ extern void plugin_script_api_printf_date_tags (struct t_weechat_plugin *weechat
                                                 struct t_gui_buffer *buffer,
                                                 time_t date, const char *tags,
                                                 const char *format, ...);
+extern void plugin_script_api_printf_datetime_tags (struct t_weechat_plugin *weechat_plugin,
+                                                    struct t_plugin_script *script,
+                                                    struct t_gui_buffer *buffer,
+                                                    time_t date, int date_usec,
+                                                    const char *tags,
+                                                    const char *format, ...);
 extern void plugin_script_api_printf_y (struct t_weechat_plugin *weechat_plugin,
                                         struct t_plugin_script *script,
                                         struct t_gui_buffer *buffer,
@@ -125,6 +142,13 @@ extern void plugin_script_api_printf_y_date_tags (struct t_weechat_plugin *weech
                                                   int y, time_t date,
                                                   const char *tags,
                                                   const char *format, ...);
+extern void plugin_script_api_printf_y_datetime_tags (struct t_weechat_plugin *weechat_plugin,
+                                                      struct t_plugin_script *script,
+                                                      struct t_gui_buffer *buffer,
+                                                      int y,
+                                                      time_t date, int date_usec,
+                                                      const char *tags,
+                                                      const char *format, ...);
 extern void plugin_script_api_log_printf (struct t_weechat_plugin *weechat_plugin,
                                           struct t_plugin_script *script,
                                           const char *format, ...);
@@ -192,6 +216,18 @@ extern struct t_hook *plugin_script_api_hook_process (struct t_weechat_plugin *w
                                                                       const char *err),
                                                       const char *function,
                                                       const char *data);
+extern struct t_hook *plugin_script_api_hook_url (struct t_weechat_plugin *weechat_plugin,
+                                                  struct t_plugin_script *script,
+                                                  const char *url,
+                                                  struct t_hashtable *options,
+                                                  int timeout,
+                                                  int (*callback)(const void *pointer,
+                                                                  void *data,
+                                                                  const char *url,
+                                                                  struct t_hashtable *options,
+                                                                  struct t_hashtable *output),
+                                                  const char *function,
+                                                  const char *data);
 extern struct t_hook *plugin_script_api_hook_connect (struct t_weechat_plugin *weechat_plugin,
                                                       struct t_plugin_script *script,
                                                       const char *proxy,
@@ -233,6 +269,7 @@ extern struct t_hook *plugin_script_api_hook_print (struct t_weechat_plugin *wee
                                                                     void *data,
                                                                     struct t_gui_buffer *buffer,
                                                                     time_t date,
+                                                                    int date_usec,
                                                                     int tags_count,
                                                                     const char **tags,
                                                                     int displayed,

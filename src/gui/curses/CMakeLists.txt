@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+# Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
 # Copyright (C) 2007-2008 Julien Louis <ptitlouis@sysif.net>
 # Copyright (C) 2009 Emmanuel Bouthenot <kolter@openics.org>
 #
@@ -45,10 +45,11 @@ endif()
 
 list(APPEND EXTRA_LIBS "m")
 
-list(APPEND EXTRA_LIBS ${CURL_LIBRARIES})
-
 list(APPEND EXTRA_LIBS ${ZLIB_LIBRARY})
-list(APPEND EXTRA_LIBS ${LIBZSTD_LDFLAGS})
+
+if(ENABLE_ZSTD)
+  list(APPEND EXTRA_LIBS ${LIBZSTD_LDFLAGS})
+endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   # link with resolv lib on macOS

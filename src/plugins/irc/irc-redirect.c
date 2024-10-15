@@ -1,7 +1,7 @@
 /*
  * irc-redirect.c - redirection of IRC command output
  *
- * Copyright (C) 2010-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2010-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -55,7 +55,7 @@ struct t_irc_redirect_pattern irc_redirect_patterns_default[] =
        *        stop: 323: end of /list
        *       extra: -
        */
-      "321",
+      "321,322",
       "323",
       NULL,
       NULL, NULL,
@@ -362,14 +362,10 @@ irc_redirect_pattern_free (struct t_irc_redirect_pattern *redirect_pattern)
         (redirect_pattern->next_redirect)->prev_redirect = redirect_pattern->prev_redirect;
 
     /* free data */
-    if (redirect_pattern->name)
-        free (redirect_pattern->name);
-    if (redirect_pattern->cmd_start)
-        free (redirect_pattern->cmd_start);
-    if (redirect_pattern->cmd_stop)
-        free (redirect_pattern->cmd_stop);
-    if (redirect_pattern->cmd_extra)
-        free (redirect_pattern->cmd_extra);
+    free (redirect_pattern->name);
+    free (redirect_pattern->cmd_start);
+    free (redirect_pattern->cmd_stop);
+    free (redirect_pattern->cmd_extra);
 
     free (redirect_pattern);
 
@@ -406,7 +402,7 @@ irc_redirect_new_with_commands (struct t_irc_server *server,
                                 const char *cmd_filter)
 {
     struct t_irc_redirect *new_redirect;
-    char **items[4], *pos, *error;
+    char **items[4], *item_upper, *pos, *error;
     int i, j, num_items[4];
     long value;
     struct t_hashtable *hash_cmd[4];
@@ -462,12 +458,17 @@ irc_redirect_new_with_commands (struct t_irc_server *server,
                     if (pos)
                     {
                         pos[0] = '\0';
+                        error = NULL;
                         value = strtol (pos + 1, &error, 10);
                         if (!error || error[0])
                             value = -1;
                     }
-                    weechat_string_toupper (items[i][j]);
-                    weechat_hashtable_set (hash_cmd[i], items[i][j], &value);
+                    item_upper = weechat_string_toupper (items[i][j]);
+                    if (item_upper)
+                    {
+                        weechat_hashtable_set (hash_cmd[i], item_upper, &value);
+                        free (item_upper);
+                    }
                 }
                 else
                 {
@@ -769,8 +770,7 @@ irc_redirect_stop (struct t_irc_redirect *redirect, const char *error)
                   redirect->signal, redirect->pattern);
         (void) weechat_hook_hsignal_send (signal_name, hashtable);
 
-        if (hashtable)
-            weechat_hashtable_free (hashtable);
+        weechat_hashtable_free (hashtable);
 
         irc_redirect_free (redirect);
     }
@@ -923,9 +923,7 @@ irc_redirect_message (struct t_irc_server *server, const char *message,
     }
 
 end:
-    if (arguments_argv)
-        weechat_string_free_split (arguments_argv);
-
+    weechat_string_free_split (arguments_argv);
     return rc;
 }
 
@@ -972,24 +970,15 @@ irc_redirect_free (struct t_irc_redirect *redirect)
     }
 
     /* free data */
-    if (redirect->pattern)
-        free (redirect->pattern);
-    if (redirect->signal)
-        free (redirect->signal);
-    if (redirect->string)
-        free (redirect->string);
-    if (redirect->command)
-        free (redirect->command);
-    if (redirect->cmd_start)
-        weechat_hashtable_free (redirect->cmd_start);
-    if (redirect->cmd_stop)
-        weechat_hashtable_free (redirect->cmd_stop);
-    if (redirect->cmd_extra)
-        weechat_hashtable_free (redirect->cmd_extra);
-    if (redirect->cmd_filter)
-        weechat_hashtable_free (redirect->cmd_filter);
-    if (redirect->output)
-        free (redirect->output);
+    free (redirect->pattern);
+    free (redirect->signal);
+    free (redirect->string);
+    free (redirect->command);
+    weechat_hashtable_free (redirect->cmd_start);
+    weechat_hashtable_free (redirect->cmd_stop);
+    weechat_hashtable_free (redirect->cmd_extra);
+    weechat_hashtable_free (redirect->cmd_filter);
+    free (redirect->output);
 
     free (redirect);
 
@@ -1196,15 +1185,15 @@ irc_redirect_pattern_print_log ()
          ptr_redirect_pattern = ptr_redirect_pattern->next_redirect)
     {
         weechat_log_printf ("");
-        weechat_log_printf ("[redirect_pattern (addr:0x%lx)]", ptr_redirect_pattern);
-        weechat_log_printf ("  name . . . . . . . . : '%s'",  ptr_redirect_pattern->name);
-        weechat_log_printf ("  temp_pattern . . . . : %d",    ptr_redirect_pattern->temp_pattern);
-        weechat_log_printf ("  timeout. . . . . . . : %d",    ptr_redirect_pattern->timeout);
-        weechat_log_printf ("  cmd_start. . . . . . : '%s'",  ptr_redirect_pattern->cmd_start);
-        weechat_log_printf ("  cmd_stop . . . . . . : '%s'",  ptr_redirect_pattern->cmd_stop);
-        weechat_log_printf ("  cmd_extra. . . . . . : '%s'",  ptr_redirect_pattern->cmd_extra);
-        weechat_log_printf ("  prev_redirect. . . . : 0x%lx", ptr_redirect_pattern->prev_redirect);
-        weechat_log_printf ("  next_redirect. . . . : 0x%lx", ptr_redirect_pattern->next_redirect);
+        weechat_log_printf ("[redirect_pattern (addr:%p)]", ptr_redirect_pattern);
+        weechat_log_printf ("  name . . . . . . . . : '%s'", ptr_redirect_pattern->name);
+        weechat_log_printf ("  temp_pattern . . . . : %d", ptr_redirect_pattern->temp_pattern);
+        weechat_log_printf ("  timeout. . . . . . . : %d", ptr_redirect_pattern->timeout);
+        weechat_log_printf ("  cmd_start. . . . . . : '%s'", ptr_redirect_pattern->cmd_start);
+        weechat_log_printf ("  cmd_stop . . . . . . : '%s'", ptr_redirect_pattern->cmd_stop);
+        weechat_log_printf ("  cmd_extra. . . . . . : '%s'", ptr_redirect_pattern->cmd_extra);
+        weechat_log_printf ("  prev_redirect. . . . : %p", ptr_redirect_pattern->prev_redirect);
+        weechat_log_printf ("  next_redirect. . . . : %p", ptr_redirect_pattern->next_redirect);
     }
 }
 
@@ -1221,36 +1210,36 @@ irc_redirect_print_log (struct t_irc_server *server)
          ptr_redirect = ptr_redirect->next_redirect)
     {
         weechat_log_printf ("");
-        weechat_log_printf ("  => redirect (addr:0x%lx):", ptr_redirect);
-        weechat_log_printf ("       server. . . . . . . : 0x%lx ('%s')",
+        weechat_log_printf ("  => redirect (addr:%p):", ptr_redirect);
+        weechat_log_printf ("       server. . . . . . . : %p ('%s')",
                             ptr_redirect->server, ptr_redirect->server->name);
-        weechat_log_printf ("       pattern . . . . . . : '%s'",  ptr_redirect->pattern);
-        weechat_log_printf ("       signal. . . . . . . : '%s'",  ptr_redirect->signal);
-        weechat_log_printf ("       count . . . . . . . : %d",    ptr_redirect->count);
-        weechat_log_printf ("       current_count . . . : %d",    ptr_redirect->current_count);
-        weechat_log_printf ("       string. . . . . . . : '%s'",  ptr_redirect->string);
-        weechat_log_printf ("       timeout . . . . . . : %d",    ptr_redirect->timeout);
-        weechat_log_printf ("       command . . . . . . : '%s'",  ptr_redirect->command);
-        weechat_log_printf ("       assigned_to_command : %d",    ptr_redirect->assigned_to_command);
-        weechat_log_printf ("       start_time. . . . . : %lld",  (long long)ptr_redirect->start_time);
-        weechat_log_printf ("       cmd_start . . . . . : 0x%lx (hashtable: '%s')",
+        weechat_log_printf ("       pattern . . . . . . : '%s'", ptr_redirect->pattern);
+        weechat_log_printf ("       signal. . . . . . . : '%s'", ptr_redirect->signal);
+        weechat_log_printf ("       count . . . . . . . : %d", ptr_redirect->count);
+        weechat_log_printf ("       current_count . . . : %d", ptr_redirect->current_count);
+        weechat_log_printf ("       string. . . . . . . : '%s'", ptr_redirect->string);
+        weechat_log_printf ("       timeout . . . . . . : %d", ptr_redirect->timeout);
+        weechat_log_printf ("       command . . . . . . : '%s'", ptr_redirect->command);
+        weechat_log_printf ("       assigned_to_command : %d", ptr_redirect->assigned_to_command);
+        weechat_log_printf ("       start_time. . . . . : %lld", (long long)ptr_redirect->start_time);
+        weechat_log_printf ("       cmd_start . . . . . : %p (hashtable: '%s')",
                             ptr_redirect->cmd_start,
                             weechat_hashtable_get_string (ptr_redirect->cmd_start, "keys_values"));
-        weechat_log_printf ("       cmd_stop. . . . . . : 0x%lx (hashtable: '%s')",
+        weechat_log_printf ("       cmd_stop. . . . . . : %p (hashtable: '%s')",
                             ptr_redirect->cmd_stop,
                             weechat_hashtable_get_string (ptr_redirect->cmd_stop, "keys_values"));
-        weechat_log_printf ("       cmd_extra . . . . . : 0x%lx (hashtable: '%s')",
+        weechat_log_printf ("       cmd_extra . . . . . : %p (hashtable: '%s')",
                             ptr_redirect->cmd_extra,
                             weechat_hashtable_get_string (ptr_redirect->cmd_extra, "keys_values"));
-        weechat_log_printf ("       cmd_start_received. : %d",    ptr_redirect->cmd_start_received);
-        weechat_log_printf ("       cmd_stop_received . : %d",    ptr_redirect->cmd_stop_received);
-        weechat_log_printf ("       cmd_filter. . . . . : 0x%lx (hashtable: '%s')",
+        weechat_log_printf ("       cmd_start_received. : %d", ptr_redirect->cmd_start_received);
+        weechat_log_printf ("       cmd_stop_received . : %d", ptr_redirect->cmd_stop_received);
+        weechat_log_printf ("       cmd_filter. . . . . : %p (hashtable: '%s')",
                             ptr_redirect->cmd_filter,
                             weechat_hashtable_get_string (ptr_redirect->cmd_filter, "keys_values"));
-        weechat_log_printf ("       output. . . . . . . : '%s'",  ptr_redirect->output);
-        weechat_log_printf ("       output_size . . . . : %d",    ptr_redirect->output_size);
-        weechat_log_printf ("       prev_redirect . . . : 0x%lx", ptr_redirect->prev_redirect);
-        weechat_log_printf ("       next_redirect . . . : 0x%lx", ptr_redirect->next_redirect);
+        weechat_log_printf ("       output. . . . . . . : '%s'", ptr_redirect->output);
+        weechat_log_printf ("       output_size . . . . : %d", ptr_redirect->output_size);
+        weechat_log_printf ("       prev_redirect . . . : %p", ptr_redirect->prev_redirect);
+        weechat_log_printf ("       next_redirect . . . : %p", ptr_redirect->next_redirect);
     }
 }
 
@@ -1305,6 +1294,7 @@ irc_redirect_pattern_hsignal_cb (const void *pointer, void *data,
     timeout = 0;
     if (str_timeout && str_timeout[0])
     {
+        error = NULL;
         number = (int)strtol (str_timeout, &error, 10);
         if (error && !error[0])
             timeout = number;
@@ -1375,6 +1365,7 @@ irc_redirect_command_hsignal_cb (const void *pointer, void *data,
     count = 1;
     if (str_count && str_count[0])
     {
+        error = NULL;
         number = (int)strtol (str_count, &error, 10);
         if (error && !error[0])
             count = number;
@@ -1383,6 +1374,7 @@ irc_redirect_command_hsignal_cb (const void *pointer, void *data,
     timeout = 0;
     if (str_timeout && str_timeout[0])
     {
+        error = NULL;
         number = (int)strtol (str_timeout, &error, 10);
         if (error && !error[0])
             timeout = number;

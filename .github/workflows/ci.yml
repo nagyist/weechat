@@ -1,65 +1,149 @@
 name: CI
 
 on:
-  - push
-  - pull_request
+  push:
+  pull_request:
+  schedule:
+    - cron: '22 9 * * 2'
 
 env:
-  WEECHAT_DEPENDENCIES: devscripts equivs python3-pip autopoint cmake ninja-build lcov pkg-config libncursesw5-dev gem2deb libperl-dev python3-dev libaspell-dev liblua5.3-dev tcl8.6-dev guile-3.0-dev libv8-dev libcurl4-gnutls-dev libgcrypt20-dev libgnutls28-dev libzstd-dev zlib1g-dev curl libcpputest-dev php8.0-dev libphp8.0-embed libargon2-dev libsodium-dev pylint python3-bandit asciidoctor ruby-pygments.rb
+  WEECHAT_DEPS_UBUNTU: >-
+    asciidoctor
+    cmake
+    curl
+    devscripts
+    equivs
+    flake8
+    gem2deb
+    guile-3.0-dev
+    lcov
+    libargon2-dev
+    libaspell-dev
+    libcjson-dev
+    libcpputest-dev
+    libcurl4-gnutls-dev
+    libgcrypt20-dev
+    libgnutls28-dev
+    liblua5.3-dev
+    libncurses-dev
+    libperl-dev
+    libphp-embed
+    libsodium-dev
+    libv8-dev
+    libzstd-dev
+    ninja-build
+    php-dev
+    pkgconf
+    pylint
+    python3-bandit
+    python3-dev
+    python3-pip
+    ruby-pygments.rb
+    shellcheck
+    tcl8.6-dev
+    zlib1g-dev
+  WEECHAT_DEPS_ROCKYLINUX: >-
+    asciidoctor
+    aspell-devel
+    cjson-devel
+    clang
+    cmake
+    cpputest-devel
+    gcc
+    gettext
+    glibc-langpack-en
+    gnutls-devel
+    guile30-devel
+    libcurl-devel
+    libgcrypt-devel
+    libzstd-devel
+    lua-devel
+    ncurses-devel
+    perl-devel
+    php-devel
+    php-embedded
+    python-devel
+    ruby-devel
+    sudo
+    tcl-devel
+    zlib-devel
+  WEECHAT_DEPS_FREEBSD: >-
+    aspell
+    cmake
+    cpputest
+    curl
+    gcc
+    gettext
+    git
+    gnutls
+    guile3
+    libargon2
+    libcjson
+    libgcrypt
+    libiconv
+    llvm
+    lua54
+    ncurses
+    perl5
+    php83
+    pkgconf
+    python3
+    ruby
+    rubygem-asciidoctor
+    sudo
+    tcl87
+    zstd
 
 jobs:
 
-  tests_linux:
+  tests_ubuntu:
 
     strategy:
       matrix:
         os:
           - ubuntu-22.04
         config:
-          - { name: "cmake_gcc", cc: "gcc", cxx: "g++", tool: "cmake", args: "" }
-          - { name: "cmake_gcc_ninja", cc: "gcc", cxx: "g++", tool: "cmake", args: "-G Ninja" }
-          - { name: "cmake_gcc_no_nls", cc: "gcc", cxx: "g++", tool: "cmake", args: "-DENABLE_NLS=OFF" }
-          - { name: "cmake_gcc_coverage", cc: "gcc", cxx: "g++", tool: "cmake", args: "-DENABLE_CODE_COVERAGE=ON" }
-          - { name: "cmake_clang", cc: "clang", cxx: "clang++", tool: "cmake", args: "" }
-          - { name: "autotools_gcc", cc: "gcc", cxx: "g++", tool: "autotools", args: "" }
-          - { name: "autotools_clang", cc: "clang", cxx: "clang++", tool: "autotools", args: "" }
+          - { name: "gcc", cc: "gcc", cxx: "g++", buildargs: "" }
+          - { name: "gcc_ninja", cc: "gcc", cxx: "g++", buildargs: "-G Ninja" }
+          - { name: "gcc_no_nls", cc: "gcc", cxx: "g++", buildargs: "-DENABLE_NLS=OFF -DENABLE_DOC=OFF" }
+          - { name: "gcc_no_zstd", cc: "gcc", cxx: "g++", buildargs: "-DENABLE_ZSTD=OFF -DENABLE_DOC=OFF" }
+          - { name: "gcc_no_cjson", cc: "gcc", cxx: "g++", buildargs: "-DENABLE_CJSON=OFF -DENABLE_DOC=OFF" }
+          - { name: "gcc_coverage", cc: "gcc", cxx: "g++", buildargs: "-DENABLE_CODE_COVERAGE=ON" }
+          - { name: "clang", cc: "clang", cxx: "clang++", buildargs: "" }
 
-    name: "Tests: ${{ matrix.config.name }} on ${{ matrix.os }}"
+    name: "${{ matrix.os }} (${{ matrix.config.name }})"
     runs-on: ${{ matrix.os }}
 
     steps:
 
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
-        sudo apt-add-repository --yes ppa:ondrej/php
         sudo apt-get update -qq
-        sudo apt-get --yes purge php8.1-dev
-        sudo apt-get --yes --no-install-recommends install ${{ env.WEECHAT_DEPENDENCIES }}
+        sudo apt-get --yes --no-install-recommends install ${{ env.WEECHAT_DEPS_UBUNTU }}
+        # uninstall php imagick as is causes a crash when loading php plugin (see #2009)
+        sudo apt-get --yes purge php8.1-imagick
         sudo -H pip3 install --ignore-installed msgcheck
 
     - name: Check gettext files
       run: msgcheck po/*.po
 
-    - name: Check Python scripts
-      run: |
-        pylint --additional-builtins=_ doc/docgen.py
-        pylint doc/python_stub.py
-        pylint tests/scripts/python/testapigen.py tests/scripts/python/testapi.py tests/scripts/python/unparse.py
-        bandit doc/docgen.py doc/python_stub.py
-        bandit tests/scripts/python/testapigen.py tests/scripts/python/testapi.py tests/scripts/python/unparse.py
+    - name: Check shell and Python scripts
+      run: ./tools/check_scripts.sh
 
     - name: Check Python stub file
-      run: ./doc/python_stub.py | diff src/plugins/python/weechat.pyi -
+      run: ./tools/generate_python_stub.py | diff src/plugins/python/weechat.pyi -
+
+    - name: Check Curl symbols
+      run: curl --silent --show-error --fail --retry 10 https://raw.githubusercontent.com/curl/curl/master/docs/libcurl/symbols-in-versions | ./tools/check_curl_symbols.py
 
     - name: Build and run tests
       env:
         CC: ${{ matrix.config.cc }}
         CXX: ${{ matrix.config.cxx }}
-        BUILDTOOL: ${{ matrix.config.tool }}
-        BUILDARGS: ${{ matrix.config.args }}
-      run: ./tools/build-test.sh
+        BUILDARGS: ${{ matrix.config.buildargs }}
+      run: ./tools/build_test.sh
 
     - name: Run WeeChat
       env:
@@ -67,13 +151,30 @@ jobs:
       run: |
         weechat --help
         weechat-curses --help
+        weechat --version
+        weechat --build-info
         weechat --colors
         weechat --license
-        weechat --version
         weechat --run-command "/debug dirs;/debug libs" --run-command "/quit"
 
+    - name: Test Relay OpenAPI
+      if: ${{ matrix.config.name == 'gcc' }}
+      env:
+        RELAY_PASSWORD: test
+      run: |
+        sudo -H pip3 install --ignore-installed schemathesis
+        weechat-headless \
+          --dir /tmp/weechat-test-api \
+          --run-command '/set relay.network.password "${{ env.RELAY_PASSWORD }}"' \
+          --run-command '/relay add api 9000' \
+          --daemon \
+        ;
+        sleep 5
+        ./tools/test_relay_api.sh http://localhost:9000
+        echo '*/quit' >/tmp/weechat-test-api/weechat_fifo_*
+
     - name: Code coverage
-      if: ${{ matrix.config.name == 'cmake_gcc_coverage' }}
+      if: ${{ matrix.config.name == 'gcc_coverage' }}
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       run: |
@@ -83,50 +184,6 @@ jobs:
         lcov --list coverage.info
         bash <(curl -s https://codecov.io/bash) -f coverage.info || echo 'Codecov error'
 
-  tests_macos:
-
-    strategy:
-      matrix:
-        os:
-          - macos-12
-          - macos-11
-        config:
-          - { name: "cmake_gcc", cc: "gcc", cxx: "g++" }
-          - { name: "cmake_clang", cc: "clang", cxx: "clang++" }
-
-    name: "Tests: ${{ matrix.config.name }} on ${{ matrix.os }}"
-    runs-on: ${{ matrix.os }}
-
-    steps:
-
-    - uses: actions/checkout@v2
-
-    - name: Install dependencies
-      run: |
-        brew update
-        brew install asciidoctor lua ruby
-
-    - name: Build
-      env:
-        CC: ${{ matrix.config.cc }}
-        CXX: ${{ matrix.config.cxx }}
-      run: |
-        mkdir build-tmp && cd build-tmp
-        cmake .. -DENABLE_MAN=ON -DENABLE_DOC=ON -DENABLE_PHP=OFF
-        make VERBOSE=1 -j2
-        sudo make install
-
-    - name: Run WeeChat
-      env:
-        TERM: xterm-256color
-      run: |
-        weechat --help
-        weechat-curses --help
-        weechat --colors
-        weechat --license
-        weechat --version
-        weechat --run-command "/debug dirs;/debug libs" --run-command "/quit"
-
   build_debian:
 
     strategy:
@@ -134,25 +191,23 @@ jobs:
         os:
           - ubuntu-22.04
 
-    name: "Build Debian on ${{ matrix.os }}"
+    name: "${{ matrix.os }} (build Debian)"
     runs-on: ${{ matrix.os }}
 
     steps:
 
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
-        sudo apt-add-repository --yes ppa:ondrej/php
         sudo apt-get update -qq
-        sudo apt-get --yes purge php8.1-dev
-        sudo apt-get --yes --no-install-recommends install ${{ env.WEECHAT_DEPENDENCIES }} php-dev
+        sudo apt-get --yes --no-install-recommends install ${{ env.WEECHAT_DEPS_UBUNTU }}
 
     - name: Test Debian patches
-      run: ./tools/build-debian.sh test-patches
+      run: ./tools/build_debian.sh test-patches
 
     - name: Build Debian packages
-      run: ./tools/build-debian.sh devel ubuntu/jammy
+      run: ./tools/build_debian.sh devel ubuntu/jammy
 
     - name: Install Debian packages
       run: sudo dpkg -i ../weechat-devel*.deb
@@ -164,4 +219,189 @@ jobs:
         weechat --help
         weechat-curses --help
         weechat --version
+        weechat --build-info
+        weechat --run-command "/debug dirs;/debug libs" --run-command "/quit"
+
+  codeql-analysis:
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-22.04
+
+    name: "${{ matrix.os }} (CodeQL)"
+    runs-on: ${{ matrix.os }}
+
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get --yes --no-install-recommends install ${{ env.WEECHAT_DEPS_UBUNTU }}
+        # uninstall php imagick as is causes a crash when loading php plugin (see #2009)
+        sudo apt-get --yes purge php8.1-imagick
+        sudo -H pip3 install --ignore-installed msgcheck
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: cpp
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:cpp"
+
+  tests_rockylinux:
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-22.04
+        config:
+          - { name: "gcc", cc: "gcc", cxx: "g++", buildargs: "" }
+          - { name: "clang", cc: "clang", cxx: "clang++", buildargs: "" }
+
+    name: "rockylinux-9 (${{ matrix.config.name }})"
+    runs-on: ${{ matrix.os }}
+    container:
+      image: rockylinux:9
+
+    steps:
+
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        dnf install -y epel-release
+        dnf config-manager --set-enabled crb
+        dnf install -y ${{ env.WEECHAT_DEPS_ROCKYLINUX }}
+
+    - name: Build and run tests
+      env:
+        CC: ${{ matrix.config.cc }}
+        CXX: ${{ matrix.config.cxx }}
+        BUILDARGS: ${{ matrix.config.buildargs }}
+      run: ./tools/build_test.sh
+
+    - name: Run WeeChat
+      env:
+        TERM: xterm-256color
+      run: |
+        weechat --help
+        weechat-curses --help
+        weechat --version
+        weechat --build-info
+        weechat --colors
+        weechat --license
+        weechat --run-command "/debug dirs;/debug libs" --run-command "/quit"
+
+  tests_freebsd:
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-22.04
+        config:
+          # - { name: "gcc", cc: "gcc", cxx: "g++", buildargs: "" }
+          - { name: "clang", cc: "clang", cxx: "clang++", buildargs: "" }
+
+    name: "freebsd-14 (${{ matrix.config.name }})"
+    runs-on: ${{ matrix.os }}
+
+    steps:
+
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies, build and run tests, run WeeChat
+      uses: vmactions/freebsd-vm@v1
+      env:
+        CC: ${{ matrix.config.cc }}
+        CXX: ${{ matrix.config.cxx }}
+        BUILDARGS: ${{ matrix.config.buildargs }}
+        TERM: xterm-256color
+      with:
+        envs: "CC CXX BUILDARGS TERM"
+        usesh: true
+        prepare: pkg install -y ${{ env.WEECHAT_DEPS_FREEBSD }}
+        run: |
+          ./tools/build_test.sh
+          weechat --help
+          weechat-curses --help
+          weechat --version
+          weechat --build-info
+          weechat --colors
+          weechat --license
+          weechat --run-command "/debug dirs;/debug libs" --run-command "/quit"
+
+  tests_macos:
+
+    strategy:
+      matrix:
+        os:
+          - macos-12
+        config:
+          - { name: "gcc", cc: "gcc", cxx: "g++" }
+          - { name: "clang", cc: "clang", cxx: "clang++" }
+
+    name: "${{ matrix.os }} (${{ matrix.config.name }})"
+    runs-on: ${{ matrix.os }}
+
+    steps:
+
+    - name: Setup Homebrew
+      id: setup-homebrew
+      uses: Homebrew/actions/setup-homebrew@master
+
+    - name: Install dependencies
+      run: |
+        brew update
+        # temporary fix, see: https://github.com/actions/setup-python/issues/577
+        rm -f \
+          /usr/local/bin/2to3 \
+          /usr/local/bin/idle3 \
+          /usr/local/bin/pydoc3 \
+          /usr/local/bin/python3 \
+          /usr/local/bin/python3-config \
+          /usr/local/bin/2to3-3.11 \
+          /usr/local/bin/idle3.11 \
+          /usr/local/bin/pydoc3.11 \
+          /usr/local/bin/python3.11 \
+          /usr/local/bin/python3.11-config \
+        ;
+        brew install asciidoctor cjson guile lua pkg-config ruby
+
+    - uses: actions/checkout@v4
+
+    - name: Build
+      env:
+        CC: ${{ matrix.config.cc }}
+        CXX: ${{ matrix.config.cxx }}
+      run: |
+        mkdir build-tmp && cd build-tmp
+        cmake .. -DENABLE_MAN=ON -DENABLE_DOC=ON -DENABLE_DOC_INCOMPLETE=ON -DENABLE_PHP=OFF
+        make VERBOSE=1 -j2
+        sudo make install
+
+    - name: Run WeeChat
+      env:
+        TERM: xterm-256color
+      run: |
+        weechat --help
+        weechat-curses --help
+        weechat --version
+        weechat --build-info
+        weechat --colors
+        weechat --license
         weechat --run-command "/debug dirs;/debug libs" --run-command "/quit"

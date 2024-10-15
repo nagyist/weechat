@@ -1,7 +1,7 @@
 /*
  * test-core-network.cpp - test network functions
  *
- * Copyright (C) 2021-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2021-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -23,7 +23,7 @@
 
 extern "C"
 {
-#include "src/core/wee-network.h"
+#include "src/core/core-network.h"
 
 extern int network_is_ip_address (const char *address);
 }

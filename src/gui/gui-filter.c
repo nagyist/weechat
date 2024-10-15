@@ -1,7 +1,7 @@
 /*
  * gui-filter.c - filter functions (used by all GUI)
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -29,12 +29,12 @@
 #include <regex.h>
 
 #include "../core/weechat.h"
-#include "../core/wee-config.h"
-#include "../core/wee-hdata.h"
-#include "../core/wee-hook.h"
-#include "../core/wee-infolist.h"
-#include "../core/wee-log.h"
-#include "../core/wee-string.h"
+#include "../core/core-config.h"
+#include "../core/core-hdata.h"
+#include "../core/core-hook.h"
+#include "../core/core-infolist.h"
+#include "../core/core-log.h"
+#include "../core/core-string.h"
 #include "../plugins/plugin.h"
 #include "gui-filter.h"
 #include "gui-buffer.h"
@@ -155,8 +155,9 @@ gui_filter_buffer (struct t_gui_buffer *buffer,
     if (buffer->lines->lines_hidden != lines_hidden)
     {
         buffer->lines->lines_hidden = lines_hidden;
-        (void) hook_signal_send ("buffer_lines_hidden",
-                                 WEECHAT_HOOK_SIGNAL_POINTER, buffer);
+        (void) gui_buffer_send_signal (buffer,
+                                       "buffer_lines_hidden",
+                                       WEECHAT_HOOK_SIGNAL_POINTER, buffer);
     }
 
     if (lines_changed)
@@ -292,7 +293,7 @@ gui_filter_find_pos (struct t_gui_filter *filter)
     for (ptr_filter = gui_filters; ptr_filter;
          ptr_filter = ptr_filter->next_filter)
     {
-        if (string_strcasecmp (filter->name, ptr_filter->name) < 0)
+        if (string_strcmp (filter->name, ptr_filter->name) < 0)
             return ptr_filter;
     }
 
@@ -363,7 +364,7 @@ gui_filter_new (int enabled, const char *name, const char *buffer_name,
 {
     struct t_gui_filter *new_filter;
     regex_t *regex1, *regex2;
-    char *pos_tab, *regex_prefix, buf[512], str_error[512];
+    char *pos_tab, *regex_prefix, buf[512], str_error[1024];
     const char *ptr_start_regex, *pos_regex_message;
     int rc;
 
@@ -444,8 +445,7 @@ gui_filter_new (int enabled, const char *name, const char *buffer_name,
                               _("invalid regular expression (%s)"),
                               buf);
                     gui_filter_new_error (name, str_error);
-                    if (regex_prefix)
-                        free (regex_prefix);
+                    free (regex_prefix);
                     if (regex1)
                     {
                         regfree (regex1);
@@ -457,8 +457,7 @@ gui_filter_new (int enabled, const char *name, const char *buffer_name,
             }
         }
 
-        if (regex_prefix)
-            free (regex_prefix);
+        free (regex_prefix);
     }
 
     /* create new filter */
@@ -539,18 +538,12 @@ gui_filter_free (struct t_gui_filter *filter)
                              WEECHAT_HOOK_SIGNAL_POINTER, filter);
 
     /* free data */
-    if (filter->name)
-        free (filter->name);
-    if (filter->buffer_name)
-        free (filter->buffer_name);
-    if (filter->buffers)
-        string_free_split (filter->buffers);
-    if (filter->tags)
-        free (filter->tags);
-    if (filter->tags_array)
-        string_free_split_tags (filter->tags_array);
-    if (filter->regex)
-        free (filter->regex);
+    free (filter->name);
+    free (filter->buffer_name);
+    string_free_split (filter->buffers);
+    free (filter->tags);
+    string_free_split_tags (filter->tags_array);
+    free (filter->regex);
     if (filter->regex_prefix)
     {
         regfree (filter->regex_prefix);
@@ -691,21 +684,21 @@ gui_filter_print_log ()
          ptr_filter = ptr_filter->next_filter)
     {
         log_printf ("");
-        log_printf ("[filter (addr:0x%lx)]", ptr_filter);
-        log_printf ("  enabled. . . . . . . . : %d",    ptr_filter->enabled);
-        log_printf ("  name . . . . . . . . . : '%s'",  ptr_filter->name);
-        log_printf ("  buffer_name. . . . . . : '%s'",  ptr_filter->buffer_name);
-        log_printf ("  num_buffers. . . . . . : %d",    ptr_filter->num_buffers);
-        log_printf ("  buffers. . . . . . . . : 0x%lx", ptr_filter->buffers);
+        log_printf ("[filter (addr:%p)]", ptr_filter);
+        log_printf ("  enabled. . . . . . . . : %d", ptr_filter->enabled);
+        log_printf ("  name . . . . . . . . . : '%s'", ptr_filter->name);
+        log_printf ("  buffer_name. . . . . . : '%s'", ptr_filter->buffer_name);
+        log_printf ("  num_buffers. . . . . . : %d", ptr_filter->num_buffers);
+        log_printf ("  buffers. . . . . . . . : %p", ptr_filter->buffers);
         for (i = 0; i < ptr_filter->num_buffers; i++)
         {
             log_printf ("  buffers[%03d] . . . . . : '%s'", i, ptr_filter->buffers[i]);
         }
-        log_printf ("  tags . . . . . . . . . : '%s'",  ptr_filter->tags);
-        log_printf ("  regex. . . . . . . . . : '%s'",  ptr_filter->regex);
-        log_printf ("  regex_prefix . . . . . : 0x%lx", ptr_filter->regex_prefix);
-        log_printf ("  regex_message. . . . . : 0x%lx", ptr_filter->regex_message);
-        log_printf ("  prev_filter. . . . . . : 0x%lx", ptr_filter->prev_filter);
-        log_printf ("  next_filter. . . . . . : 0x%lx", ptr_filter->next_filter);
+        log_printf ("  tags . . . . . . . . . : '%s'", ptr_filter->tags);
+        log_printf ("  regex. . . . . . . . . : '%s'", ptr_filter->regex);
+        log_printf ("  regex_prefix . . . . . : %p", ptr_filter->regex_prefix);
+        log_printf ("  regex_message. . . . . : %p", ptr_filter->regex_message);
+        log_printf ("  prev_filter. . . . . . : %p", ptr_filter->prev_filter);
+        log_printf ("  next_filter. . . . . . : %p", ptr_filter->next_filter);
     }
 }

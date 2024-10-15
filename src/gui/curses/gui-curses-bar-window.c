@@ -1,7 +1,7 @@
 /*
  * gui-curses-bar-window.c - bar window functions for Curses GUI
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -28,10 +28,10 @@
 #include <limits.h>
 
 #include "../../core/weechat.h"
-#include "../../core/wee-config.h"
-#include "../../core/wee-log.h"
-#include "../../core/wee-string.h"
-#include "../../core/wee-utf8.h"
+#include "../../core/core-config.h"
+#include "../../core/core-log.h"
+#include "../../core/core-string.h"
+#include "../../core/core-utf8.h"
 #include "../../plugins/plugin.h"
 #include "../gui-bar.h"
 #include "../gui-bar-item.h"
@@ -41,6 +41,9 @@
 #include "../gui-cursor.h"
 #include "../gui-window.h"
 #include "gui-curses.h"
+#include "gui-curses-bar-window.h"
+#include "gui-curses-color.h"
+#include "gui-curses-window.h"
 
 
 /*
@@ -125,7 +128,7 @@ gui_bar_window_create_win (struct t_gui_bar_window *bar_window)
 
         if (CONFIG_INTEGER(bar_window->bar->options[GUI_BAR_OPTION_SEPARATOR]))
         {
-            switch (CONFIG_INTEGER(bar_window->bar->options[GUI_BAR_OPTION_POSITION]))
+            switch (CONFIG_ENUM(bar_window->bar->options[GUI_BAR_OPTION_POSITION]))
             {
                 case GUI_BAR_POSITION_BOTTOM:
                     GUI_BAR_WINDOW_OBJECTS(bar_window)->win_separator =
@@ -181,7 +184,7 @@ gui_bar_window_print_string (struct t_gui_bar_window *bar_window,
 
     wmove (GUI_BAR_WINDOW_OBJECTS(bar_window)->win_bar, *y, *x);
 
-    color_bg = ((CONFIG_INTEGER(bar_window->bar->options[GUI_BAR_OPTION_TYPE]) != GUI_BAR_TYPE_ROOT)
+    color_bg = ((CONFIG_ENUM(bar_window->bar->options[GUI_BAR_OPTION_TYPE]) != GUI_BAR_TYPE_ROOT)
                 && (window != gui_current_window)) ?
         GUI_BAR_OPTION_COLOR_BG_INACTIVE : GUI_BAR_OPTION_COLOR_BG;
 
@@ -394,8 +397,7 @@ gui_bar_window_print_string (struct t_gui_bar_window *bar_window,
                                      (output) ? output : utf_char2);
                             if (reverse_video)
                                 wattroff (GUI_BAR_WINDOW_OBJECTS(bar_window)->win_bar, A_REVERSE);
-                            if (output)
-                                free (output);
+                            free (output);
 
                             if (gui_window_current_emphasis)
                             {
@@ -426,7 +428,7 @@ gui_bar_window_expand_spacers (const char *string, int length_on_screen,
                                int bar_window_width, int num_spacers)
 {
     int *spacers, index_spacer, i;
-    char **result, *result2, *next_char;
+    char **result, *next_char;
 
     if (!string || !string[0])
         return NULL;
@@ -517,11 +519,7 @@ gui_bar_window_expand_spacers (const char *string, int length_on_screen,
 
     free (spacers);
 
-    result2 = *result;
-
-    string_dyn_free (result, 0);
-
-    return result2;
+    return string_dyn_free (result, 0);
 }
 
 /*
@@ -557,7 +555,7 @@ gui_bar_window_draw (struct t_gui_bar_window *bar_window,
     if (!bar_window || (bar_window->x < 0) || (bar_window->y < 0))
         return;
 
-    color_bg = ((CONFIG_INTEGER(bar_window->bar->options[GUI_BAR_OPTION_TYPE]) != GUI_BAR_TYPE_ROOT)
+    color_bg = ((CONFIG_ENUM(bar_window->bar->options[GUI_BAR_OPTION_TYPE]) != GUI_BAR_TYPE_ROOT)
                 && (window != gui_current_window)) ?
         GUI_BAR_OPTION_COLOR_BG_INACTIVE : GUI_BAR_OPTION_COLOR_BG;
 
@@ -596,7 +594,7 @@ gui_bar_window_draw (struct t_gui_bar_window *bar_window,
 
     gui_window_current_emphasis = 0;
 
-    bar_position = CONFIG_INTEGER(bar_window->bar->options[GUI_BAR_OPTION_POSITION]);
+    bar_position = CONFIG_ENUM(bar_window->bar->options[GUI_BAR_OPTION_POSITION]);
     bar_filling = gui_bar_get_filling (bar_window->bar);
     bar_size = CONFIG_INTEGER(bar_window->bar->options[GUI_BAR_OPTION_SIZE]);
 
@@ -879,8 +877,7 @@ gui_bar_window_draw (struct t_gui_bar_window *bar_window,
                 }
             }
         }
-        if (items)
-            string_free_split (items);
+        string_free_split (items);
         free (content);
     }
     else
@@ -964,6 +961,6 @@ void
 gui_bar_window_objects_print_log (struct t_gui_bar_window *bar_window)
 {
     log_printf ("    bar window specific objects for Curses:");
-    log_printf ("      win_bar. . . . . . . : 0x%lx", GUI_BAR_WINDOW_OBJECTS(bar_window)->win_bar);
-    log_printf ("      win_separator. . . . : 0x%lx", GUI_BAR_WINDOW_OBJECTS(bar_window)->win_separator);
+    log_printf ("      win_bar. . . . . . . : %p", GUI_BAR_WINDOW_OBJECTS(bar_window)->win_bar);
+    log_printf ("      win_separator. . . . : %p", GUI_BAR_WINDOW_OBJECTS(bar_window)->win_separator);
 }

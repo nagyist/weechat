@@ -1,7 +1,7 @@
 /*
  * test-scripts.cpp - test scripting API
  *
- * Copyright (C) 2017-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2017-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -32,10 +32,10 @@ extern "C"
 #include <string.h>
 #include <sys/time.h>
 #include "src/core/weechat.h"
-#include "src/core/wee-hdata.h"
-#include "src/core/wee-string.h"
-#include "src/core/wee-hook.h"
-#include "src/core/wee-util.h"
+#include "src/core/core-hdata.h"
+#include "src/core/core-string.h"
+#include "src/core/core-hook.h"
+#include "src/core/core-util.h"
 #include "src/plugins/plugin.h"
 }
 
@@ -55,8 +55,9 @@ TEST_GROUP(Scripts)
 
     static int
     test_print_cb (const void *pointer, void *data, struct t_gui_buffer *buffer,
-                   time_t date, int tags_count, const char **tags, int displayed,
-                   int highlight, const char *prefix, const char *message)
+                   time_t date, int date_usec, int tags_count, const char **tags,
+                   int displayed, int highlight,
+                   const char *prefix, const char *message)
     {
         const char *pos;
         char *error;
@@ -67,6 +68,7 @@ TEST_GROUP(Scripts)
         (void) data;
         (void) buffer;
         (void) date;
+        (void) date_usec;
         (void) tags_count;
         (void) tags;
         (void) displayed;
@@ -125,25 +127,40 @@ TEST(Scripts, API)
 {
     char path_testapigen[PATH_MAX], path_testapi[PATH_MAX];
     char *path_testapi_output_dir, str_command[(PATH_MAX * 2) + 128];
-    char *test_scripts_dir, str_condition[128];
+    char *test_scripts_dir, str_condition[128], str_error[128];
     struct timeval time_start, time_end;
     long long diff;
     const char *ptr_test_scripts_dir;
     const char *languages[][2] = {
+#ifdef HAVE_PYTHON
         { "python",     "py"  },
+#endif
+#ifdef HAVE_PERL
         { "perl",       "pl"  },
+#endif
+#ifdef HAVE_RUBY
         { "ruby",       "rb"  },
+#endif
+#ifdef HAVE_LUA
         { "lua",        "lua" },
+#endif
+#ifdef HAVE_TCL
         { "tcl",        "tcl" },
+#endif
+#ifdef HAVE_GUILE
         { "guile",      "scm" },
+#endif
+#ifdef HAVE_JAVASCRIPT
         { "javascript", "js"  },
+#endif
+#ifdef HAVE_PHP
         { "php",        "php" },
+#endif
         { NULL,         NULL  }
     };
     int i, turnoff_memleak;
     struct t_hdata *hdata;
     void *plugins;
-
 
     printf ("...\n");
 
@@ -197,12 +214,18 @@ TEST(Scripts, API)
     /* test the scripting API */
     for (i = 0; languages[i][0]; i++)
     {
-        /* test if the plugin is loaded; if not, tests are skipped */
+        /* test if the plugin is loaded */
         snprintf (str_condition, sizeof (str_condition),
                   "${plugin.name} == %s",
                   languages[i][0]);
         if (!hdata_search (hdata, plugins, str_condition, NULL, NULL, NULL, 1))
-            continue;
+        {
+            /* plugin not loaded */
+            snprintf (str_error, sizeof (str_error),
+                      "Plugin \"%s\" is not loaded",
+                      languages[i][0]);
+            FAIL(str_error);
+        }
 
         /*
          * TODO: fix memory leaks in javascript plugin

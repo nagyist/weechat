@@ -1,7 +1,7 @@
 /*
  * test-core-signal.cpp - test util functions
  *
- * Copyright (C) 2021-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2021-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -29,7 +29,7 @@ extern "C"
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
-#include "src/core/wee-signal.h"
+#include "src/core/core-signal.h"
 }
 
 TEST_GROUP(CoreSignal)

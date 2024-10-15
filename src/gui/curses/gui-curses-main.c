@@ -1,7 +1,7 @@
 /*
  * gui-curses-main.c - main loop for Curses GUI
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -31,14 +31,14 @@
 #include <time.h>
 
 #include "../../core/weechat.h"
-#include "../../core/wee-command.h"
-#include "../../core/wee-config.h"
-#include "../../core/wee-hook.h"
-#include "../../core/wee-log.h"
-#include "../../core/wee-signal.h"
-#include "../../core/wee-string.h"
-#include "../../core/wee-utf8.h"
-#include "../../core/wee-version.h"
+#include "../../core/core-command.h"
+#include "../../core/core-config.h"
+#include "../../core/core-hook.h"
+#include "../../core/core-log.h"
+#include "../../core/core-signal.h"
+#include "../../core/core-string.h"
+#include "../../core/core-utf8.h"
+#include "../../core/core-version.h"
 #include "../../plugins/plugin.h"
 #include "../gui-main.h"
 #include "../gui-bar.h"
@@ -58,6 +58,9 @@
 #include "../gui-nicklist.h"
 #include "../gui-window.h"
 #include "gui-curses.h"
+#include "gui-curses-color.h"
+#include "gui-curses-key.h"
+#include "gui-curses-window.h"
 
 
 volatile sig_atomic_t gui_signal_sigwinch_received = 0;  /* sigwinch signal */
@@ -111,7 +114,7 @@ gui_main_get_password (const char **prompt, char *password, int size)
         /* enter */
         if (ch == '\n')
             break;
-        /* terminal lost or ctrl-C */
+        /* terminal lost or ctrl-c */
         if ((ch == ERR) || (ch == 3))
         {
             password[0] = 3;
@@ -160,11 +163,9 @@ void
 gui_main_init ()
 {
     struct t_gui_buffer *ptr_buffer;
-    struct t_gui_bar *ptr_bar;
-    struct t_gui_bar_window *ptr_bar_win;
     char title[256];
 
-    /* allow Ctrl-C to quit WeeChat in headless mode */
+    /* allow ctrl-c to quit WeeChat in headless mode */
     if (weechat_headless)
         signal_catch (SIGINT, &gui_main_signal_sigint);
 
@@ -235,24 +236,8 @@ gui_main_init ()
             }
         }
 
-        /*
-         * create bar windows for root bars (they were read from config,
-         * but no window was created, GUI was not initialized)
-         */
-        for (ptr_bar = gui_bars; ptr_bar; ptr_bar = ptr_bar->next_bar)
-        {
-            if ((CONFIG_INTEGER(ptr_bar->options[GUI_BAR_OPTION_TYPE]) == GUI_BAR_TYPE_ROOT)
-                && (!ptr_bar->bar_window))
-            {
-                gui_bar_window_new (ptr_bar, NULL);
-            }
-        }
-        for (ptr_bar_win = gui_windows->bar_windows;
-             ptr_bar_win; ptr_bar_win = ptr_bar_win->next_bar_window)
-        {
-            gui_bar_window_calculate_pos_size (ptr_bar_win, gui_windows);
-            gui_bar_window_create_win (ptr_bar_win);
-        }
+        /* switch to buffer */
+        gui_window_switch_to_buffer (gui_current_window, ptr_buffer, 0);
     }
 
     if (CONFIG_BOOLEAN(config_look_mouse))
@@ -472,8 +457,7 @@ gui_main_loop ()
     }
 
     /* remove keyboard hook */
-    if (hook_fd_keyboard)
-        unhook (hook_fd_keyboard);
+    unhook (hook_fd_keyboard);
 }
 
 /*
@@ -513,8 +497,7 @@ gui_main_end (int clean_exit)
         gui_filter_free_all ();
 
         /* free clipboard buffer */
-        if (gui_input_clipboard)
-            free (gui_input_clipboard);
+        free (gui_input_clipboard);
 
         /* delete layouts */
         gui_layout_remove_all ();

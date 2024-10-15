@@ -1,7 +1,7 @@
 /*
  * relay-info.c - info and infolist hooks for relay plugin
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -26,7 +26,65 @@
 #include "../weechat-plugin.h"
 #include "relay.h"
 #include "relay-client.h"
+#ifdef HAVE_CJSON
+#include "api/relay-api.h"
+#endif
 
+
+/*
+ * Returns WeeChat info "version".
+ */
+
+char *
+relay_info_info_relay_api_version_cb (const void *pointer, void *data,
+                                      const char *info_name,
+                                      const char *arguments)
+{
+#ifdef HAVE_CJSON
+    char version[128];
+#endif
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+    (void) arguments;
+
+#ifdef HAVE_CJSON
+    snprintf (version, sizeof (version), "%s", RELAY_API_VERSION_STR);
+    return strdup (version);
+#else
+    return NULL;
+#endif
+}
+
+/*
+ * Returns WeeChat info "version_number".
+ */
+
+char *
+relay_info_info_relay_api_version_number_cb (const void *pointer, void *data,
+                                             const char *info_name,
+                                             const char *arguments)
+{
+#ifdef HAVE_CJSON
+    char version_number[32];
+#endif
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+    (void) arguments;
+
+#ifdef HAVE_CJSON
+    snprintf (version_number, sizeof (version_number),
+              "%d", RELAY_API_VERSION_NUMBER);
+    return strdup (version_number);
+#else
+    return NULL;
+#endif
+}
 
 /*
  * Returns relay info "relay_client_count".
@@ -69,7 +127,7 @@ relay_info_info_relay_client_count_cb (const void *pointer, void *data,
             protocol = relay_protocol_search (items[0]);
             if (protocol < 0)
             {
-                status = relay_client_status_search (items[0]);
+                status = relay_status_search (items[0]);
                 if (status < 0)
                     goto end;
             }
@@ -86,7 +144,7 @@ relay_info_info_relay_client_count_cb (const void *pointer, void *data,
         }
         if (strcmp (items[1], "*") != 0)
         {
-            status = relay_client_status_search (items[1]);
+            status = relay_status_search (items[1]);
             if (status < 0)
                 goto end;
         }
@@ -106,8 +164,7 @@ relay_info_info_relay_client_count_cb (const void *pointer, void *data,
     ptr_count = str_count;
 
 end:
-    if (items)
-        weechat_string_free_split (items);
+    weechat_string_free_split (items);
 
     return (ptr_count) ? strdup (ptr_count) : NULL;
 }
@@ -174,6 +231,16 @@ relay_info_init ()
 {
     /* info hooks */
     weechat_hook_info (
+        "relay_api_version",
+        N_("relay API version"),
+        NULL,
+        &relay_info_info_relay_api_version_cb, NULL, NULL);
+    weechat_hook_info (
+        "relay_api_version_number",
+        N_("relay API version (as number)"),
+        NULL,
+        &relay_info_info_relay_api_version_number_cb, NULL, NULL);
+    weechat_hook_info (
         "relay_client_count",
         N_("number of clients for relay"),
         /* TRANSLATORS: please do not translate the status names, they must be used in English */
@@ -181,7 +248,6 @@ relay_info_init ()
            "means all; protocols: irc, weechat; statuses: connecting, "
            "waiting_auth, connected, auth_failed, disconnected)"),
         &relay_info_info_relay_client_count_cb, NULL, NULL);
-
     /* infolist hooks */
     weechat_hook_infolist (
         "relay", N_("list of relay clients"),

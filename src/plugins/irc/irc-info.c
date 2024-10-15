@@ -1,7 +1,7 @@
 /*
  * irc-info.c - info, infolist and hdata hooks for IRC plugin
  *
- * Copyright (C) 2003-2022 Sébastien Helleu <flashcode@flashtux.org>
+ * Copyright (C) 2003-2024 Sébastien Helleu <flashcode@flashtux.org>
  *
  * This file is part of WeeChat, the extensible chat client.
  *
@@ -25,10 +25,12 @@
 
 #include "../weechat-plugin.h"
 #include "irc.h"
+#include "irc-batch.h"
 #include "irc-channel.h"
 #include "irc-color.h"
 #include "irc-config.h"
 #include "irc-ignore.h"
+#include "irc-list.h"
 #include "irc-message.h"
 #include "irc-modelist.h"
 #include "irc-nick.h"
@@ -296,14 +298,15 @@ irc_info_info_irc_buffer_cb (const void *pointer, void *data,
 
     /* search for server or channel buffer */
     if (server && ptr_server && channel)
+    {
         ptr_channel = irc_channel_search (ptr_server, channel);
+        if (!ptr_channel)
+            ptr_server = NULL;
+    }
 
-    if (server)
-        free (server);
-    if (channel)
-        free (channel);
-    if (host)
-        free (host);
+    free (server);
+    free (channel);
+    free (host);
 
     if (ptr_channel)
     {
@@ -341,6 +344,9 @@ irc_info_info_irc_server_isupport_cb (const void *pointer, void *data,
     (void) pointer;
     (void) data;
     (void) info_name;
+
+    if (!arguments || !arguments[0])
+        return NULL;
 
     isupport_value = NULL;
     pos_comma = strchr (arguments, ',');
@@ -380,6 +386,9 @@ irc_info_info_irc_server_isupport_value_cb (const void *pointer, void *data,
     (void) data;
     (void) info_name;
 
+    if (!arguments || !arguments[0])
+        return NULL;
+
     isupport_value = NULL;
     pos_comma = strchr (arguments, ',');
     if (pos_comma)
@@ -398,6 +407,88 @@ irc_info_info_irc_server_isupport_value_cb (const void *pointer, void *data,
     }
 
     return (isupport_value) ? strdup (isupport_value) : NULL;
+}
+
+/*
+ * Returns IRC info "irc_server_cap".
+ */
+
+char *
+irc_info_info_irc_server_cap_cb (const void *pointer, void *data,
+                                 const char *info_name,
+                                 const char *arguments)
+{
+    char *pos_comma, *server;
+    int has_cap;
+    struct t_irc_server *ptr_server;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+
+    if (!arguments || !arguments[0])
+        return NULL;
+
+    has_cap = 0;
+    pos_comma = strchr (arguments, ',');
+    if (pos_comma)
+    {
+        server = weechat_strndup (arguments, pos_comma - arguments);
+        if (server)
+        {
+            ptr_server = irc_server_search (server);
+            if (ptr_server)
+            {
+                has_cap = weechat_hashtable_has_key (ptr_server->cap_list,
+                                                     pos_comma + 1);
+            }
+            free (server);
+        }
+    }
+
+    return (has_cap) ? strdup ("1") : NULL;
+}
+
+/*
+ * Returns IRC info "irc_server_cap_value".
+ */
+
+char *
+irc_info_info_irc_server_cap_value_cb (const void *pointer, void *data,
+                                       const char *info_name,
+                                       const char *arguments)
+{
+    char *pos_comma, *server;
+    const char *cap_value;
+    struct t_irc_server *ptr_server;
+
+    /* make C compiler happy */
+    (void) pointer;
+    (void) data;
+    (void) info_name;
+
+    if (!arguments || !arguments[0])
+        return NULL;
+
+    cap_value = NULL;
+    pos_comma = strchr (arguments, ',');
+    if (pos_comma)
+    {
+        server = weechat_strndup (arguments, pos_comma - arguments);
+        if (server)
+        {
+            ptr_server = irc_server_search (server);
+            if (ptr_server)
+            {
+                cap_value = weechat_hashtable_get (ptr_server->cap_list,
+                                                   pos_comma + 1);
+            }
+            free (server);
+        }
+    }
+
+    return (cap_value) ? strdup (cap_value) : NULL;
 }
 
 /*
@@ -548,7 +639,7 @@ irc_info_infolist_irc_server_cb (const void *pointer, void *data,
              ptr_server = ptr_server->next_server)
         {
             if (!arguments || !arguments[0]
-                || weechat_string_match (ptr_server->name, arguments, 0))
+                || weechat_string_match (ptr_server->name, arguments, 1))
             {
                 if (!irc_server_add_to_infolist (ptr_infolist, ptr_server, 0))
                 {
@@ -1063,7 +1154,7 @@ irc_info_infolist_irc_notify_cb (const void *pointer, void *data,
              ptr_server = ptr_server->next_server)
         {
             if (!arguments || !arguments[0]
-                || weechat_string_match (ptr_server->name, arguments, 0))
+                || weechat_string_match (ptr_server->name, arguments, 1))
             {
                 for (ptr_notify = ptr_server->notify_list; ptr_notify;
                      ptr_notify = ptr_notify->next_notify)
@@ -1171,10 +1262,20 @@ irc_info_init ()
         N_("server,feature"),
         &irc_info_info_irc_server_isupport_value_cb, NULL, NULL);
     weechat_hook_info (
+        "irc_server_cap",
+        N_("1 if capability is enabled in server"),
+        N_("server,capability"),
+        &irc_info_info_irc_server_cap_cb, NULL, NULL);
+    weechat_hook_info (
+        "irc_server_cap_value",
+        N_("value of capability, if enabled in server"),
+        N_("server,capability"),
+        &irc_info_info_irc_server_cap_value_cb, NULL, NULL);
+    weechat_hook_info (
         "irc_is_message_ignored",
         N_("1 if the nick is ignored (message is not displayed)"),
         N_("server,message (message is the raw IRC message)"),
-        &irc_info_info_irc_is_channel_cb, NULL, NULL);
+        &irc_info_info_irc_is_message_ignored_cb, NULL, NULL);
 
     /* info_hashtable hooks */
     weechat_hook_info_hashtable (
@@ -1294,4 +1395,13 @@ irc_info_init ()
     weechat_hook_hdata (
         "irc_server", N_("irc server"),
         &irc_server_hdata_server_cb, NULL, NULL);
+    weechat_hook_hdata (
+        "irc_batch", N_("irc batch"),
+        &irc_batch_hdata_batch_cb, NULL, NULL);
+    weechat_hook_hdata (
+        "irc_list_channel", N_("irc channel on /list buffer"),
+        &irc_list_hdata_list_channel_cb, NULL, NULL);
+    weechat_hook_hdata (
+        "irc_list", N_("irc data for /list buffer"),
+        &irc_list_hdata_list_cb, NULL, NULL);
 }
